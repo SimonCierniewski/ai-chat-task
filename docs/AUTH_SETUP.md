@@ -331,30 +331,50 @@ When a new user signs up, the system initializes their Zep memory collection for
 
 ### Trigger Methods
 
-#### 1. Supabase Database Webhook (Recommended)
+#### 1. Supabase Database Webhook (REQUIRED - Use This Option)
+
+**This is the primary method for ensuring profiles are created for all users.**
 
 Configure in Supabase Dashboard → Database → Webhooks:
 
+1. Go to **Database → Webhooks** in your Supabase Dashboard
+2. Click **Create a new hook**
+3. Configure as follows:
+
+```
+Name: on_user_signup
+Table: auth.users (or profiles if auth.users doesn't work)
+Events: INSERT
+Type: HTTP Request
+HTTP URL: https://your-api-domain.eu/auth/on-signup
+HTTP Method: POST
+HTTP Headers:
+  Content-Type: application/json
+  X-Webhook-Secret: your-secure-webhook-secret
+```
+
+**Important Notes:**
+- If `auth.users` table webhook fails, use `profiles` table instead
+- For local development, use a service like ngrok to expose your local API
+- Store the webhook secret in your API's environment variables
+
+The webhook payload will look like:
 ```json
 {
-  "name": "on_user_signup",
-  "table": "profiles",
-  "events": ["INSERT"],
-  "type": "http",
-  "http_request": {
-    "url": "https://api.yourdomain.eu/auth/on-signup",
-    "method": "POST",
-    "headers": {
-      "Content-Type": "application/json",
-      "X-Webhook-Secret": "your-webhook-secret"
-    }
-  }
+  "type": "INSERT",
+  "table": "auth.users",
+  "record": {
+    "id": "user-uuid",
+    "email": "user@example.com",
+    "created_at": "2024-01-01T00:00:00Z"
+  },
+  "old_record": null
 }
 ```
 
-#### 2. Client-Side Fallback
+#### 2. Client-Side Fallback (Secondary Option)
 
-If webhook is not configured, clients can call the endpoint after successful signup:
+Only use if webhook configuration fails. Clients can call the endpoint after successful signup:
 
 ```typescript
 // Admin Dashboard (Next.js)
@@ -575,8 +595,8 @@ curl http://localhost:3000/auth/zep-status/test-user-123 \
 - [ ] **Database**
   - [ ] Create profiles table
   - [ ] Set up RLS policies
-  - [ ] Create signup trigger
-  - [ ] Configure database webhook for on-signup (optional)
+  - [ ] Create signup trigger (may fail on auth.users - that's OK)
+  - [ ] **Configure database webhook for on-signup (REQUIRED - Option 1)**
   - [ ] Seed admin user
   
 - [ ] **API Integration**

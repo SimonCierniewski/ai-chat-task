@@ -117,7 +117,41 @@ WHERE routine_schema = 'public'
 AND routine_name IN ('promote_to_admin', 'is_admin', 'list_admins');
 ```
 
-### 2. Create Test Users
+### 2. Configure Database Webhook (REQUIRED)
+
+**This is critical for profile creation! Without this, the profiles table will remain empty.**
+
+1. **Go to Supabase Dashboard → Database → Webhooks**
+2. **Click "Create a new hook"**
+3. **Configure as follows:**
+
+```
+Name: on_user_signup
+Table: auth.users (or profiles if auth.users doesn't work)
+Events: INSERT
+Type: HTTP Request
+HTTP URL: https://your-api-url/auth/on-signup
+   - For local dev: Use ngrok (e.g., https://abc123.ngrok.io/auth/on-signup)
+   - For production: Your deployed API URL
+HTTP Method: POST
+HTTP Headers:
+  Content-Type: application/json
+  X-Webhook-Secret: your-secure-webhook-secret
+```
+
+4. **Add webhook secret to API environment:**
+```bash
+# In apps/api/.env.local
+WEBHOOK_SECRET=your-secure-webhook-secret
+```
+
+5. **Test webhook:**
+```bash
+# Sign up a new user and check if profile is created
+SELECT * FROM profiles ORDER BY created_at DESC LIMIT 5;
+```
+
+### 3. Create Test Users
 
 ```sql
 -- Check existing users
@@ -125,8 +159,13 @@ SELECT id, email, created_at
 FROM auth.users 
 ORDER BY created_at DESC;
 
--- Check profiles
+-- Check profiles (should have entries after webhook is configured)
 SELECT * FROM profiles;
+
+-- If profiles is empty, manually create for existing users:
+INSERT INTO profiles (user_id, role) 
+SELECT id, 'user' FROM auth.users 
+WHERE id NOT IN (SELECT user_id FROM profiles);
 
 -- Promote a user to admin (replace UUID)
 UPDATE profiles SET role = 'admin' WHERE user_id = 'UUID-HERE';
