@@ -215,6 +215,10 @@ RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.profiles (user_id, role)
   VALUES (NEW.id, 'user');
+  
+  -- Call API webhook to initialize Zep (Phase 1+)
+  -- Note: This requires pg_net extension or database webhook
+  -- Alternative: Use Supabase Database Webhook in Dashboard
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -319,6 +323,245 @@ async function isUserAdmin(userId: string) {
 }
 ```
 
+## 🔄 On-Signup Hook (Zep Initialization)
+
+### Overview
+
+When a new user signs up, the system initializes their Zep memory collection for storing chat history and facts. This is handled through an on-signup hook that can be triggered in multiple ways.
+
+### Trigger Methods
+
+#### 1. Supabase Database Webhook (Recommended)
+
+Configure in Supabase Dashboard → Database → Webhooks:
+
+```json
+{
+  "name": "on_user_signup",
+  "table": "profiles",
+  "events": ["INSERT"],
+  "type": "http",
+  "http_request": {
+    "url": "https://api.yourdomain.eu/auth/on-signup",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Webhook-Secret": "your-webhook-secret"
+    }
+  }
+}
+```
+
+#### 2. Client-Side Fallback
+
+If webhook is not configured, clients can call the endpoint after successful signup:
+
+```typescript
+// Admin Dashboard (Next.js)
+const { data: { user } } = await supabase.auth.signUp({
+  email: 'user@example.com',
+  password: 'password',
+});
+
+if (user) {
+  // Initialize Zep collection (non-blocking)
+  fetch(`${API_BASE_URL}/auth/on-signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: user.id,
+      email: user.email,
+      created_at: user.created_at,
+    }),
+  }).catch(console.error); // Don't block on failure
+}
+```
+
+```kotlin
+// Android App
+suspend fun onSignupSuccess(user: User) {
+  // Initialize Zep collection (non-blocking)
+  try {
+    apiClient.post("/auth/on-signup") {
+      setBody(OnSignupRequest(
+        user_id = user.id,
+        email = user.email,
+        created_at = user.createdAt
+      ))
+    }
+  } catch (e: Exception) {
+    // Log but don't fail signup
+    Log.w("Auth", "Failed to initialize Zep", e)
+  }
+}
+```
+
+#### 3. API-Side Auto-Creation
+
+The API automatically creates profiles and initializes Zep on first authenticated request:
+
+```typescript
+// In auth plugin (already implemented)
+const loadUserContext = async (payload: JWTPayload) => {
+  const profile = await profilesClient.getProfile(userId);
+  
+  if (!profile) {
+    // Auto-create profile
+    await profilesClient.createProfile(userId);
+    
+    // Initialize Zep (non-blocking)
+    zepClient.initializeUser(userId, payload.email)
+      .catch(err => logger.warn('Zep init failed', err));
+  }
+};
+```
+
+### API Endpoint
+
+**POST** `/auth/on-signup`
+
+```typescript
+// Request body
+{
+  "user_id": "uuid",      // Required
+  "email": "string",      // Optional
+  "created_at": "string"  // Optional
+}
+
+// Response
+{
+  "success": true,
+  "message": "User signup processed",
+  "zep_initialized": true  // false if Zep failed but signup succeeded
+}
+```
+
+### Implementation Details
+
+The on-signup hook:
+1. **Never blocks signup** - Returns success even if Zep fails
+2. **Idempotent** - Safe to call multiple times
+3. **Logs telemetry** - Records `zep_upsert` event with timing
+4. **Graceful degradation** - Works even if Zep is disabled
+
+### Phase 1 Behavior (Current)
+
+```typescript
+// Stub implementation in /apps/api/src/services/zep.ts
+async initializeUser(userId: string, email?: string) {
+  if (!this.enabled) {
+    // No Zep API key - skip initialization
+    return { success: true };
+  }
+  
+  // Simulate API calls (50-150ms delay)
+  // Phase 3 will implement actual Zep API calls:
+  // - POST /users to create user namespace
+  // - POST /collections to create default collection
+  
+  return {
+    success: true,
+    timings: { createUser: 75, createCollection: 85, total: 160 }
+  };
+}
+```
+
+### Phase 3 Implementation (Future)
+
+```typescript
+// Real Zep v3 API calls
+async initializeUser(userId: string, email?: string) {
+  // Create user namespace
+  await fetch(`${ZEP_BASE_URL}/users`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${ZEP_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      user_id: `user:${userId}`,
+      email,
+      metadata: {
+        created_at: new Date().toISOString(),
+        source: 'signup_hook',
+      },
+    }),
+  });
+  
+  // Create default collection for chat history
+  await fetch(`${ZEP_BASE_URL}/collections`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${ZEP_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: `user:${userId}:default`,
+      description: `Chat history for user ${userId}`,
+      metadata: {
+        user_id: userId,
+        type: 'chat_history',
+      },
+    }),
+  });
+}
+```
+
+### Telemetry Events
+
+The hook logs the following telemetry:
+
+```typescript
+{
+  type: 'zep_upsert',
+  user_id: 'uuid',
+  payload: {
+    operation: 'user_initialization',
+    success: true,
+    zep_ms: 160,  // Total Zep API time
+    error: null,  // Error message if failed
+  },
+  timestamp: '2024-01-01T00:00:00Z'
+}
+```
+
+### Error Handling
+
+Zep initialization failures are:
+- **Logged** but not exposed to users
+- **Non-blocking** for signup flow
+- **Retryable** on next user action
+- **Telemetry tracked** for monitoring
+
+### Testing
+
+```bash
+# Test on-signup hook directly
+curl -X POST http://localhost:3000/auth/on-signup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "test-user-123",
+    "email": "test@example.com"
+  }'
+
+# Response (success even if Zep disabled)
+{
+  "success": true,
+  "message": "User signup processed",
+  "zep_initialized": false
+}
+
+# Check Zep initialization status
+curl http://localhost:3000/auth/zep-status/test-user-123 \
+  -H "Authorization: Bearer $JWT_TOKEN"
+
+# Response
+{
+  "initialized": true,
+  "enabled": false  # true if ZEP_API_KEY is set
+}
+```
+
 ## 🚀 Implementation Checklist
 
 ### Phase 1 Setup Tasks
@@ -333,6 +576,7 @@ async function isUserAdmin(userId: string) {
   - [ ] Create profiles table
   - [ ] Set up RLS policies
   - [ ] Create signup trigger
+  - [ ] Configure database webhook for on-signup (optional)
   - [ ] Seed admin user
   
 - [ ] **API Integration**
@@ -340,6 +584,8 @@ async function isUserAdmin(userId: string) {
   - [ ] Implement JWT verification
   - [ ] Create auth middleware
   - [ ] Add role checking
+  - [ ] Set up on-signup hook endpoint
+  - [ ] Configure Zep client (stub for Phase 1)
   
 - [ ] **Admin App**
   - [ ] Configure Supabase client

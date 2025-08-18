@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import authPlugin from './plugins/auth';
 import corsPlugin from './plugins/cors';
+import authRoutes from './routes/auth';
 import { requireAdmin, requireAuth } from './utils/guards';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -50,6 +51,9 @@ export async function buildServer() {
     audience: process.env.SUPABASE_JWT_AUD,
     issuer: process.env.JWT_ISSUER,
   });
+
+  // Register auth routes (on-signup hook, etc.)
+  await fastify.register(authRoutes);
 
   // Health check endpoint (no auth required)
   fastify.get('/health', async (request, reply) => {

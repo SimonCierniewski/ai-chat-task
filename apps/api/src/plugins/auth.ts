@@ -24,7 +24,7 @@ const DEFAULT_OPTIONS: AuthPluginOptions = {
   audience: 'authenticated',
   issuer: 'https://pjktmicpanriimktvcam.supabase.co/auth/v1',
   cacheMaxAge: 600000, // 10 minutes
-  excludePaths: ['/health', '/metrics', '/', '/docs'],
+  excludePaths: ['/health', '/metrics', '/', '/docs', '/auth/on-signup'],
 };
 
 /**
