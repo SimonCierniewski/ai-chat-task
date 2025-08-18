@@ -186,18 +186,9 @@ HTTP/1.1 401 Unauthorized
 
 ### Test 3: Get Valid Token (via Supabase Dashboard)
 
-1. Go to Supabase Dashboard → Authentication → Users
-2. Create or select a user
-3. Generate a test token:
-
-```javascript
-// Run in browser console on Supabase Dashboard
-const { data: { session } } = await supabase.auth.signInWithPassword({
-  email: 'test@example.com',
-  password: 'test-password'
-});
-console.log('Token:', session.access_token);
-```
+1. Create user in http://localhost:3000/login
+2. Open developer tools and copy `Cookie` from Network log header
+3. Decode `Cookie` with https://www.urldecoder.org/ and copy `access_token` value
 
 Or use the Admin app to get a token (see Admin testing section).
 
