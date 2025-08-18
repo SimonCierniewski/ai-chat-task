@@ -92,6 +92,82 @@ pnpm build:all    # Build everything
 pnpm check:all    # Final verification
 ```
 
+## 🔐 Phase 1: Authentication Commands
+
+### Supabase Setup Verification
+
+```bash
+# Check if Supabase CLI is installed (optional for local dev)
+supabase --version
+
+# Start local Supabase (optional)
+supabase start
+
+# View local Supabase dashboard
+open http://localhost:54323
+
+# Check Inbucket for test emails (local only)
+open http://localhost:54324
+```
+
+### Environment Verification
+
+```bash
+# Verify all Phase 1 env vars are set (run in each app)
+cd apps/api && grep "PHASE 1" .env.example
+cd apps/admin && grep "PHASE 1" .env.example
+cd apps/android && grep "PHASE 1" .env.example
+
+# Test JWKS endpoint is accessible
+curl https://[PROJECT_REF].supabase.co/auth/v1/.well-known/jwks.json
+```
+
+### Auth Flow Testing
+
+```bash
+# API: Test JWT verification middleware (once implemented)
+curl -H "Authorization: Bearer [JWT_TOKEN]" http://localhost:3000/api/health
+
+# Admin: Test magic link request
+curl -X POST http://localhost:3001/api/auth/magic-link \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com"}'
+
+# Android: Test deep link handling
+adb shell am start -W -a android.intent.action.VIEW \
+  -d "myapp://auth/callback?token=test&type=magiclink" \
+  com.yourapp.package
+```
+
+### Database Verification
+
+```sql
+-- Connect to Supabase SQL Editor or psql
+-- Check profiles table exists
+SELECT * FROM profiles LIMIT 1;
+
+-- Check RLS policies
+SELECT schemaname, tablename, policyname 
+FROM pg_policies 
+WHERE tablename = 'profiles';
+
+-- Test trigger works (after user signup)
+SELECT * FROM auth.users;
+SELECT * FROM profiles;
+```
+
+### Role Management
+
+```bash
+# Promote user to admin (run in Supabase SQL Editor)
+UPDATE profiles 
+SET role = 'admin' 
+WHERE user_id = '[USER_UUID]';
+
+# Verify role in JWT claims (decode JWT at jwt.io)
+# Should see role in app_metadata or custom claims
+```
+
 ## 🎯 Script Behavior
 
 **Resilient by Design**: All scripts handle missing implementations gracefully:

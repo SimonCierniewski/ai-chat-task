@@ -70,6 +70,51 @@
 - Native: `local.properties` + `BuildConfig`
 - Never hardcode in source files
 
+## 📌 Phase 1: Authentication Variables
+
+### Required for Supabase Auth Setup
+
+#### API Service (`/apps/api`)
+```bash
+# Supabase Auth (Phase 1)
+SUPABASE_URL=https://xxxxxxxxxxxxxxxxxxxx.supabase.co
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # Service role key
+SUPABASE_JWT_SECRET=your-super-secret-jwt-secret-with-at-least-32-characters
+SUPABASE_JWT_AUD=authenticated
+SUPABASE_PROJECT_REF=xxxxxxxxxxxxxxxxxxxx
+
+# JWKS Configuration (Phase 1)
+JWKS_URI=https://xxxxxxxxxxxxxxxxxxxx.supabase.co/auth/v1/.well-known/jwks.json
+JWKS_CACHE_TIME=600000  # 10 minutes in ms
+```
+
+#### Admin Dashboard (`/apps/admin`)
+```bash
+# Supabase Auth (Phase 1)
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxxxxxxxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # Anon key only
+NEXT_PUBLIC_APP_URL=http://localhost:3001  # For auth redirects
+```
+
+#### Android App (`/apps/android`)
+```properties
+# In local.properties or build config
+supabase.url=https://xxxxxxxxxxxxxxxxxxxx.supabase.co
+supabase.anonKey=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx
+app.deeplink.scheme=myapp
+app.deeplink.host=auth
+```
+
+### Deep Link Configuration
+
+**Supabase Redirect URLs** (add in Dashboard → Authentication → URL Configuration):
+```
+http://localhost:3001/auth/callback     # Admin local dev
+https://admin.yourdomain.eu/auth/callback  # Admin production
+myapp://auth/callback                   # Android deep link
+http://localhost:8081/auth/callback     # Android dev (if using web view)
+```
+
 ## 🌍 EU Region Deployment
 
 ### Service Selection for GDPR Compliance
