@@ -1,0 +1,14 @@
+{
+  "name": "@prototype/admin",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Admin dashboard - web-based management interface",
+  "scripts": {
+    "dev": "echo 'TODO: Configure admin dev server (e.g., vite, next dev)'",
+    "build": "echo 'TODO: Configure admin build process'",
+    "preview": "echo 'TODO: Configure admin preview/production mode'"
+  },
+  "dependencies": {
+    "@prototype/shared": "workspace:*"
+  }
+}

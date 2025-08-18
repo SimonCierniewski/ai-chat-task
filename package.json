@@ -1,0 +1,27 @@
+{
+  "name": "@prototype/root",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Prototype monorepo - 3 apps + shared package",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @prototype/api dev",
+    "dev:admin": "pnpm --filter @prototype/admin dev",
+    "dev:android": "echo 'Android dev: Use Android Studio or ./gradlew from apps/android'",
+    "build:api": "pnpm --filter @prototype/api build",
+    "build:admin": "pnpm --filter @prototype/admin build",
+    "build:android": "echo 'Android build: Use ./gradlew build from apps/android'",
+    "build:shared": "pnpm --filter @prototype/shared build",
+    "lint": "echo 'TODO: Configure ESLint 9 flat config'",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md,yml,yaml}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md,yml,yaml}\" --ignore-path .gitignore",
+    "clean": "pnpm -r exec rm -rf node_modules dist build .turbo && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

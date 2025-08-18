@@ -1,0 +1,22 @@
+{
+  "name": "@prototype/shared",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shared utilities, types, and business logic",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "echo 'TODO: Configure shared package build (e.g., tsc, tsup, rollup)'",
+    "dev": "echo 'TODO: Configure watch mode for development'"
+  },
+  "files": [
+    "dist"
+  ]
+}

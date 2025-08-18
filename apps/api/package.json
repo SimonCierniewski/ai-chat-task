@@ -1,0 +1,14 @@
+{
+  "name": "@prototype/api",
+  "version": "0.0.1",
+  "private": true,
+  "description": "API service - backend REST/GraphQL endpoints",
+  "scripts": {
+    "dev": "echo 'TODO: Configure API dev server (e.g., node, tsx, nodemon)'",
+    "build": "echo 'TODO: Configure API build process'",
+    "start": "echo 'TODO: Configure API production start'"
+  },
+  "dependencies": {
+    "@prototype/shared": "workspace:*"
+  }
+}

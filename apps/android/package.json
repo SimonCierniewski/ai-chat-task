@@ -1,0 +1,14 @@
+{
+  "name": "@prototype/android",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Android app - React Native or native Android application",
+  "scripts": {
+    "android": "echo 'TODO: Configure React Native run-android or gradle wrapper'",
+    "build:apk": "echo 'TODO: Configure APK build (./gradlew assembleRelease)'",
+    "build:aab": "echo 'TODO: Configure AAB bundle build (./gradlew bundleRelease)'"
+  },
+  "dependencies": {
+    "@prototype/shared": "workspace:*"
+  }
+}
