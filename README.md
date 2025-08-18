@@ -1,5 +1,7 @@
 # Prototype Monorepo
 
+[![CI](https://github.com/SimonCierniewski/ai-chat-task/actions/workflows/ci.yml/badge.svg)](https://github.com/SimonCierniewski/ai-chat-task/actions/workflows/ci.yml)
+
 > Production-lean monorepo skeleton for rapid prototyping (1.5–3 day sprint)
 
 ## 🗂 Repository Structure
