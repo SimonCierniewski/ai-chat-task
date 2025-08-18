@@ -91,7 +91,14 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
     }
 
     // Load role from profiles table
+    // If profile doesn't exist, it will be created with default 'user' role
     const role = await profilesClient.getUserRole(userId);
+
+    // Log if profile was auto-created
+    const profile = await profilesClient.getProfile(userId);
+    if (profile && profile.created_at.getTime() === profile.updated_at.getTime()) {
+      fastify.log.info({ userId }, 'Auto-created profile for new user');
+    }
 
     return {
       id: userId,
