@@ -1,0 +1,20 @@
+# =======================================
+# Android App Environment Variables
+# =======================================
+# Copy to local.properties and fill with actual values
+# NEVER commit local.properties to version control
+
+# Supabase Configuration
+supabase.url=https://xxxxxxxxxxxxxxxxxxxx.supabase.co
+supabase.anonKey=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx
+
+# Deep Link Configuration
+app.deeplink.scheme=aichat
+app.deeplink.host=auth
+
+# API Configuration
+# Use 10.0.2.2 for Android emulator to access host machine's localhost
+api.baseUrl=http://10.0.2.2:3000
+
+# SDK path (usually auto-generated)
+sdk.dir=/path/to/Android/sdk
