@@ -46,7 +46,8 @@
     "preinstall": "npx only-allow pnpm"
   },
   "devDependencies": {
-    "prettier": "^3.2.5"
+    "prettier": "^3.2.5",
+    "supabase": "^2.34.3"
   },
   "packageManager": "pnpm@8.15.0"
 }

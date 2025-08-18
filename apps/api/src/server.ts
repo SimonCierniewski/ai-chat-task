@@ -1,7 +1,21 @@
 import Fastify from 'fastify';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import authPlugin from './plugins/auth';
+import corsPlugin from './plugins/cors';
 import { requireAdmin, requireAuth } from './utils/guards';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+const getVersion = () => {
+  try {
+    const packageJson = JSON.parse(
+      readFileSync(join(__dirname, '..', 'package.json'), 'utf-8')
+    );
+    return packageJson.version || '0.0.1';
+  } catch {
+    return '0.0.1';
+  }
+};
 
 /**
  * Build Fastify server instance
@@ -23,6 +37,12 @@ export async function buildServer() {
     },
   });
 
+  // Register CORS plugin - MUST be registered before other plugins
+  await fastify.register(corsPlugin, {
+    adminOrigin: process.env.APP_ORIGIN_ADMIN,
+    androidDevOrigin: process.env.APP_ORIGIN_ANDROID_DEV,
+  });
+
   // Register auth plugin
   await fastify.register(authPlugin, {
     // Options can be overridden via environment variables
@@ -33,7 +53,12 @@ export async function buildServer() {
 
   // Health check endpoint (no auth required)
   fastify.get('/health', async (request, reply) => {
-    return { status: 'ok', timestamp: new Date().toISOString() };
+    return { 
+      ok: true, 
+      version: getVersion(),
+      environment: process.env.NODE_ENV || 'development',
+      timestamp: new Date().toISOString()
+    };
   });
 
   // Root endpoint (no auth required)

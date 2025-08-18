@@ -37,6 +37,7 @@
 - Uses SERVICE keys for Supabase (not anon keys)
 - Handles all AI API calls to protect keys
 - Manages CORS for both web and mobile clients
+- CORS plugin enforces strict origin validation - only configured origins allowed
 
 ### Admin Dashboard (`/apps/admin`)
 
@@ -86,6 +87,10 @@ SUPABASE_PROJECT_REF=xxxxxxxxxxxxxxxxxxxx
 # JWKS Configuration (Phase 1)
 JWKS_URI=https://xxxxxxxxxxxxxxxxxxxx.supabase.co/auth/v1/.well-known/jwks.json
 JWKS_CACHE_TIME=600000  # 10 minutes in ms
+
+# CORS Configuration
+APP_ORIGIN_ADMIN=http://localhost:3001  # Admin dashboard origin
+APP_ORIGIN_ANDROID_DEV=http://localhost:8081  # Android dev server origin
 ```
 
 #### Admin Dashboard (`/apps/admin`)
@@ -284,7 +289,8 @@ cd apps/android
 
 | Issue                   | Solution                                    |
 | ----------------------- | ------------------------------------------- |
-| CORS errors in browser  | Check `APP_ORIGIN_*` variables in API       |
+| CORS errors in browser  | Check `APP_ORIGIN_*` variables in API - only exact matches allowed |
+| Preflight fails (403)   | Origin not in `APP_ORIGIN_ADMIN` or `APP_ORIGIN_ANDROID_DEV` |
 | Build fails on Vercel   | Ensure all `NEXT_PUBLIC_*` vars are set     |
 | Android can't reach API | Use `10.0.2.2` for emulator localhost       |
 | Supabase auth fails     | Verify anon vs service key usage            |
