@@ -3,9 +3,19 @@ import { getZepClient } from '../services/zep';
 import { logTelemetry } from '../services/telemetry';
 
 interface OnSignupBody {
-  user_id: string;
+  user_id?: string;
   email?: string;
   created_at?: string;
+  // Supabase webhook payload format
+  type?: 'INSERT' | 'UPDATE' | 'DELETE';
+  table?: string;
+  schema?: string;
+  record?: {
+    id?: string;
+    email?: string;
+    created_at?: string;
+  };
+  old_record?: any;
 }
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
@@ -45,19 +55,62 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
   }, async (request, reply) => {
-    const { user_id, email } = request.body;
     const startTime = Date.now();
     
-    fastify.log.info({ user_id, email }, 'Processing on-signup hook');
+    // Handle both direct calls and Supabase webhook format
+    let userId: string | undefined;
+    let userEmail: string | undefined;
+    
+    if (request.body.record) {
+      // Supabase webhook format
+      // Handle both auth.users and public.profiles webhooks
+      if (request.body.table === 'profiles') {
+        userId = request.body.record.user_id || request.body.record.id;
+        // For profiles table, we might not have email directly
+        userEmail = request.body.record.email;
+      } else {
+        // auth.users table
+        userId = request.body.record.id;
+        userEmail = request.body.record.email;
+      }
+      
+      fastify.log.info({ 
+        webhook: true,
+        type: request.body.type,
+        table: request.body.table,
+        schema: request.body.schema,
+        userId,
+        userEmail 
+      }, 'Processing Supabase webhook');
+    } else {
+      // Direct call format
+      userId = request.body.user_id;
+      userEmail = request.body.email;
+      fastify.log.info({ 
+        webhook: false,
+        userId, 
+        userEmail 
+      }, 'Processing direct on-signup call');
+    }
+    
+    if (!userId) {
+      fastify.log.warn({ body: request.body }, 'No user_id found in request');
+      return reply.code(400).send({ 
+        success: false, 
+        error: 'user_id is required' 
+      });
+    }
+    
+    fastify.log.info({ userId, userEmail }, 'Processing on-signup hook');
     
     // Initialize Zep user/collection
     const zepClient = getZepClient(fastify.log);
-    const zepResult = await zepClient.initializeUser(user_id, email);
+    const zepResult = await zepClient.initializeUser(userId, userEmail);
     
     // Log telemetry for Zep operation
     await logTelemetry(fastify.log, {
       type: 'zep_upsert',
-      user_id,
+      user_id: userId,
       payload: {
         operation: 'user_initialization',
         success: zepResult.success,
@@ -72,8 +125,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     if (zepResult.success) {
       fastify.log.info(
         {
-          user_id,
-          email,
+          user_id: userId,
+          email: userEmail,
           zep_enabled: zepClient.isEnabled(),
           timings: {
             ...zepResult.timings,
@@ -86,8 +139,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       // Log error but don't fail the signup
       fastify.log.warn(
         {
-          user_id,
-          email,
+          user_id: userId,
+          email: userEmail,
           error: zepResult.error,
           duration: totalTime,
         },

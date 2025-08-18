@@ -13,6 +13,7 @@ declare module 'fastify' {
 
 export interface AuthPluginOptions {
   jwksUri?: string;
+  jwtSecret?: string;
   audience?: string;
   issuer?: string;
   cacheMaxAge?: number;
@@ -59,25 +60,63 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
 
   /**
    * Verify JWT token and return payload
+   * Supports both HS256 (shared secret) and RS256 (JWKS) algorithms
    */
   const verifyToken = (token: string): Promise<JWTPayload> => {
     return new Promise((resolve, reject) => {
-      jwt.verify(
-        token,
-        getKey,
-        {
-          audience: options.audience,
-          issuer: options.issuer,
-          algorithms: ['RS256'],
-        },
-        (err, decoded) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(decoded as JWTPayload);
-          }
+      // First, decode the token header to check the algorithm
+      const decoded = jwt.decode(token, { complete: true }) as any;
+      if (!decoded) {
+        return reject(new Error('Invalid token format'));
+      }
+
+      const algorithm = decoded.header.alg;
+      
+      // If HS256, use shared secret
+      if (algorithm === 'HS256') {
+        const secret = options.jwtSecret || process.env.SUPABASE_JWT_SECRET;
+        if (!secret) {
+          return reject(new Error('JWT secret not configured for HS256 tokens'));
         }
-      );
+        
+        jwt.verify(
+          token,
+          secret,
+          {
+            audience: options.audience,
+            issuer: options.issuer,
+            algorithms: ['HS256'],
+          },
+          (err, decoded) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(decoded as JWTPayload);
+            }
+          }
+        );
+      } 
+      // If RS256, use JWKS
+      else if (algorithm === 'RS256') {
+        jwt.verify(
+          token,
+          getKey,
+          {
+            audience: options.audience,
+            issuer: options.issuer,
+            algorithms: ['RS256'],
+          },
+          (err, decoded) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(decoded as JWTPayload);
+            }
+          }
+        );
+      } else {
+        reject(new Error(`Unsupported algorithm: ${algorithm}`));
+      }
     });
   };
 

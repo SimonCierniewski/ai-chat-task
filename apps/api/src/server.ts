@@ -48,6 +48,7 @@ export async function buildServer() {
   await fastify.register(authPlugin, {
     // Options can be overridden via environment variables
     jwksUri: process.env.JWKS_URI,
+    jwtSecret: process.env.SUPABASE_JWT_SECRET,
     audience: process.env.SUPABASE_JWT_AUD,
     issuer: process.env.JWT_ISSUER,
   });
