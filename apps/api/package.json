@@ -3,12 +3,38 @@
   "version": "0.0.1",
   "private": true,
   "description": "API service - backend REST/GraphQL endpoints",
+  "main": "dist/index.js",
   "scripts": {
-    "dev": "echo 'TODO: Configure API dev server (e.g., node, tsx, nodemon)'",
-    "build": "echo 'TODO: Configure API build process'",
-    "start": "echo 'TODO: Configure API production start'"
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist coverage"
   },
   "dependencies": {
-    "@prototype/shared": "workspace:*"
+    "@prototype/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.25.0",
+    "fastify-plugin": "^4.5.1",
+    "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.1.0",
+    "pino": "^8.17.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "pino-pretty": "^10.3.0",
+    "ts-jest": "^29.1.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
   }
 }

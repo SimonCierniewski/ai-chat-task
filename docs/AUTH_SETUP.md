@@ -425,6 +425,172 @@ http://localhost:3001/auth/callback
 }
 ```
 
+## 🔄 Token Usage in Apps
+
+### How Tokens are Retrieved and Sent
+
+#### Admin Dashboard (Next.js)
+
+```typescript
+// 1. Get token after authentication
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
+// After successful login
+const { data: { session } } = await supabase.auth.getSession();
+const token = session?.access_token;
+
+// 2. Send token with API requests
+const response = await fetch(`${API_BASE_URL}/api/chat`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ message: 'Hello' }),
+});
+
+// 3. Auto-refresh handling
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') {
+    // Update stored token
+    updateApiToken(session?.access_token);
+  }
+});
+```
+
+#### Android App (Kotlin)
+
+```kotlin
+// 1. Get token after authentication
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.OtpProvider
+
+class AuthService(private val supabase: SupabaseClient) {
+    
+    // After magic link callback
+    suspend fun getAccessToken(): String? {
+        return supabase.auth.currentSessionOrNull()?.accessToken
+    }
+    
+    // 2. Send token with API requests
+    suspend fun makeAuthenticatedRequest(endpoint: String, body: String) {
+        val token = getAccessToken() ?: throw UnauthorizedException()
+        
+        val response = httpClient.post(endpoint) {
+            header("Authorization", "Bearer $token")
+            header("Content-Type", "application/json")
+            setBody(body)
+        }
+    }
+    
+    // 3. Token refresh
+    init {
+        supabase.auth.sessionStatus.collect { status ->
+            when (status) {
+                is SessionStatus.Authenticated -> {
+                    // Token refreshed automatically
+                    updateStoredToken(status.session.accessToken)
+                }
+                is SessionStatus.NotAuthenticated -> {
+                    // Handle logout
+                    clearStoredToken()
+                }
+            }
+        }
+    }
+}
+```
+
+#### API Server Token Verification
+
+```typescript
+// How the API verifies tokens (already implemented)
+// 1. Extract from header
+const token = request.headers.authorization?.replace('Bearer ', '');
+
+// 2. Verify with JWKS
+const payload = await verifyToken(token); // Uses JWKS endpoint
+
+// 3. Load user context
+const user = await loadUserContext(payload);
+request.user = { id: payload.sub, email: payload.email, role: user.role };
+```
+
+### Token Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Supabase
+    participant API
+    participant JWKS
+    
+    Client->>Supabase: Login (magic link)
+    Supabase-->>Client: JWT Token (1hr expiry)
+    
+    Client->>API: Request + Bearer Token
+    API->>JWKS: Get public key
+    JWKS-->>API: RSA public key
+    API->>API: Verify signature
+    API->>API: Load user role
+    API-->>Client: Authorized response
+    
+    Note over Client: Before expiry...
+    Client->>Supabase: Refresh token
+    Supabase-->>Client: New JWT Token
+```
+
+### Token Storage Best Practices
+
+#### Web (Admin Dashboard)
+- **Storage**: Supabase client handles it (localStorage by default)
+- **Security**: Consider using httpOnly cookies for production
+- **Refresh**: Automatic via Supabase client
+
+#### Mobile (Android)
+- **Storage**: EncryptedSharedPreferences or Android Keystore
+- **Security**: Never store in plain SharedPreferences
+- **Refresh**: Handle in background before expiry
+
+```kotlin
+// Secure storage example
+class SecureTokenStorage(context: Context) {
+    private val sharedPreferences = EncryptedSharedPreferences.create(
+        context,
+        "auth_prefs",
+        MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
+    
+    fun saveToken(token: String) {
+        sharedPreferences.edit()
+            .putString("access_token", token)
+            .apply()
+    }
+    
+    fun getToken(): String? {
+        return sharedPreferences.getString("access_token", null)
+    }
+}
+```
+
+### Common Token Issues
+
+| Issue | Solution |
+|-------|----------|
+| Token expired (401) | Implement auto-refresh before expiry |
+| Invalid signature | Ensure using correct JWKS endpoint |
+| Missing user role | Check profiles table has user record |
+| CORS errors | Configure CORS in API (Phase 8) |
+| Token not sent | Check Authorization header format |
+
 ## 🔗 Related Documentation
 
 - [Environment Variables](./ENVIRONMENT.md#phase-1-auth)
