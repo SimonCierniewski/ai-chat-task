@@ -45,6 +45,56 @@ pnpm clean        # Clean all build artifacts and node_modules
 
 - [Architecture Overview](./docs/ARCHITECTURE.md) - System design and component interaction
 - [Release Checklist](./docs/RELEASE_CHECKLIST.md) - Pre-deployment verification steps
+- [Commands Reference](./docs/COMMANDS.md) - All available monorepo commands
+- [Environment Guide](./docs/ENVIRONMENT.md) - Environment variable setup
+
+## 💻 Editor Setup
+
+### VS Code (Recommended)
+
+Install these extensions for the best development experience:
+
+1. **[Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)** - Code formatting
+2. **[EditorConfig](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig)** - Consistent coding styles
+3. **[ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)** - JavaScript/TypeScript linting (when configured)
+
+#### Auto-format on Save
+
+Add to your VS Code settings (`.vscode/settings.json` or user settings):
+
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}
+```
+
+### Other Editors
+
+- **IntelliJ/WebStorm**: Built-in Prettier support, enable via Settings → Tools → Prettier
+- **Sublime Text**: Install [JsPrettier](https://packagecontrol.io/packages/JsPrettier) package
+- **Vim/Neovim**: Use [vim-prettier](https://github.com/prettier/vim-prettier) plugin
+
+### Manual Formatting
+
+If auto-format isn't configured, run manually:
+
+```bash
+pnpm format        # Format all files
+pnpm format:check  # Check formatting without changes
+```
 
 ## 🛠 Technology Stack
 

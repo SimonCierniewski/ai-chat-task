@@ -11,5 +11,12 @@ trim_trailing_whitespace = true
 [*.md]
 trim_trailing_whitespace = false
 
+[*.{kt,kts}]
+indent_size = 4
+max_line_length = 120
+
+[*.{gradle,gradle.kts}]
+indent_size = 4
+
 [Makefile]
 indent_style = tab

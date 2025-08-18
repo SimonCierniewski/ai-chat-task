@@ -26,12 +26,14 @@
 **Purpose**: Backend service handling all sensitive operations
 
 **Key Categories**:
+
 - **AI Services**: OpenAI, Zep memory management
 - **Database**: Supabase service keys (full access)
 - **Security**: JWT secrets, refresh tokens
 - **CORS**: Allowed origins for admin and mobile apps
 
 **Special Considerations**:
+
 - Uses SERVICE keys for Supabase (not anon keys)
 - Handles all AI API calls to protect keys
 - Manages CORS for both web and mobile clients
@@ -41,25 +43,29 @@
 **Purpose**: Web-based management interface
 
 **Key Categories**:
+
 - **Public Config**: API endpoints, app metadata
 - **Supabase Public**: Anon keys for client-side auth
 - **Feature Flags**: Build-time feature toggles
 
-**NEXT_PUBLIC_ Prefix Rules**:
+**NEXT*PUBLIC* Prefix Rules**:
+
 - `NEXT_PUBLIC_*` = Exposed to browser, embedded at build time
 - Without prefix = Server-side only (API routes, SSR)
-- Only use NEXT_PUBLIC_ for non-sensitive data
+- Only use NEXT*PUBLIC* for non-sensitive data
 
 ### Android App (`/apps/android`)
 
 **Purpose**: Mobile application
 
 **Key Categories**:
+
 - **API Access**: Backend endpoints
 - **Supabase Public**: Anon keys for auth
 - **Deep Links**: URL scheme configuration
 
 **Configuration Methods**:
+
 - React Native: `react-native-config` package
 - Native: `local.properties` + `BuildConfig`
 - Never hardcode in source files
@@ -72,15 +78,15 @@
 API:
   Primary: Railway (Frankfurt/Amsterdam)
   Alternative: Render.com (Frankfurt)
-  
+
 Admin:
   Primary: Vercel (Frankfurt - eu-central-1)
   Alternative: Netlify (Frankfurt)
-  
+
 Database:
   Primary: Supabase (Frankfurt - eu-central-1)
   Alternative: Neon.tech (EU regions)
-  
+
 Memory/Vector:
   Primary: Zep (self-hosted in EU)
   Alternative: Pinecone (EU-West)
@@ -162,12 +168,12 @@ vercel --prod
 graph TD
     A[Developer] -->|1. Copy .env.example| B[.env.local]
     B -->|2. Fill secrets| C[Local Development]
-    
+
     A -->|3. Push code| D[GitHub]
     D -->|4. No secrets!| E[CI/CD]
-    
+
     F[Platform Secrets Vault] -->|5. Inject at deploy| G[Production]
-    
+
     style B fill:#ffcccc
     style F fill:#ccffcc
 ```
@@ -220,23 +226,23 @@ cd apps/android
 
 ### Naming Conventions
 
-| Pattern | Usage | Example |
-|---------|-------|---------|
-| `NEXT_PUBLIC_*` | Next.js client-side | `NEXT_PUBLIC_API_BASE_URL` |
-| `*_URL` | Service endpoints | `SUPABASE_URL`, `API_BASE_URL` |
-| `*_KEY` | API keys | `OPENAI_API_KEY`, `ZEP_API_KEY` |
-| `*_SECRET` | Private keys | `JWT_SECRET`, `SESSION_SECRET` |
-| `FEATURE_*` | Feature flags | `FEATURE_PRICING_EDITOR` |
-| `APP_*` | App configuration | `APP_ORIGIN_ADMIN` |
+| Pattern         | Usage               | Example                         |
+| --------------- | ------------------- | ------------------------------- |
+| `NEXT_PUBLIC_*` | Next.js client-side | `NEXT_PUBLIC_API_BASE_URL`      |
+| `*_URL`         | Service endpoints   | `SUPABASE_URL`, `API_BASE_URL`  |
+| `*_KEY`         | API keys            | `OPENAI_API_KEY`, `ZEP_API_KEY` |
+| `*_SECRET`      | Private keys        | `JWT_SECRET`, `SESSION_SECRET`  |
+| `FEATURE_*`     | Feature flags       | `FEATURE_PRICING_EDITOR`        |
+| `APP_*`         | App configuration   | `APP_ORIGIN_ADMIN`              |
 
 ### Common Issues & Solutions
 
-| Issue | Solution |
-|-------|----------|
-| CORS errors in browser | Check `APP_ORIGIN_*` variables in API |
-| Build fails on Vercel | Ensure all `NEXT_PUBLIC_*` vars are set |
-| Android can't reach API | Use `10.0.2.2` for emulator localhost |
-| Supabase auth fails | Verify anon vs service key usage |
+| Issue                   | Solution                                    |
+| ----------------------- | ------------------------------------------- |
+| CORS errors in browser  | Check `APP_ORIGIN_*` variables in API       |
+| Build fails on Vercel   | Ensure all `NEXT_PUBLIC_*` vars are set     |
+| Android can't reach API | Use `10.0.2.2` for emulator localhost       |
+| Supabase auth fails     | Verify anon vs service key usage            |
 | Environment not loading | Check file naming (`.env.local` not `.env`) |
 
 ## 📊 Monitoring & Debugging
@@ -249,13 +255,13 @@ console.log('Environment:', process.env.NODE_ENV);
 console.log('API Keys loaded:', {
   openai: !!process.env.OPENAI_API_KEY,
   zep: !!process.env.ZEP_API_KEY,
-  supabase: !!process.env.SUPABASE_URL
+  supabase: !!process.env.SUPABASE_URL,
 });
 
 // Admin (Next.js)
 console.log('Public vars:', {
   api: process.env.NEXT_PUBLIC_API_BASE_URL,
-  supabase: process.env.NEXT_PUBLIC_SUPABASE_URL
+  supabase: process.env.NEXT_PUBLIC_SUPABASE_URL,
 });
 
 // Android (React Native)

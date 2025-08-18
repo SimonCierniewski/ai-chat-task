@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+coverage/
+*.tsbuildinfo
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Android
+apps/android/build/
+apps/android/.gradle/
+apps/android/app/build/
+*.apk
+*.aab
+
+# Generated files
+*.generated.*
+*.min.js
+*.min.css
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Cache
+.cache/
+.parcel-cache/
+.turbo/
+.docusaurus/
+.serverless/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Temporary
+tmp/
+temp/
+*.tmp
+*.log
+
+# Documentation (if auto-generated)
+# docs/api/
+
+# Ignore specific file types in specific directories
+**/.DS_Store
+**/Thumbs.db
