@@ -226,11 +226,97 @@ CREATE TRIGGER on_auth_user_created
 
 ### 2. Admin Promotion
 
+#### Quick One-Liner Commands
+
 ```sql
--- Manually promote user to admin (run as service role)
-UPDATE profiles 
-SET role = 'admin', updated_at = NOW()
-WHERE user_id = 'uuid-of-user';
+-- One-liner to promote user to admin (requires service role)
+UPDATE profiles SET role = 'admin' WHERE user_id = 'USER_UUID_HERE';
+
+-- Using helper function (if migrations applied)
+SELECT promote_to_admin('USER_UUID_HERE');
+
+-- Demote admin back to user
+UPDATE profiles SET role = 'user' WHERE user_id = 'USER_UUID_HERE';
+
+-- Or using helper function
+SELECT demote_to_user('USER_UUID_HERE');
+```
+
+#### Finding User IDs
+
+```sql
+-- Find user by email
+SELECT id FROM auth.users WHERE email = 'admin@example.com';
+
+-- List all users with their roles
+SELECT 
+    u.id as user_id,
+    u.email,
+    p.role,
+    p.created_at
+FROM auth.users u
+LEFT JOIN profiles p ON u.id = p.user_id
+ORDER BY p.created_at DESC;
+
+-- List current admins
+SELECT * FROM profiles WHERE role = 'admin';
+
+-- Or using helper function
+SELECT * FROM list_admins();
+```
+
+#### Verifying Admin Status
+
+```sql
+-- Check if specific user is admin
+SELECT is_admin('USER_UUID_HERE');
+
+-- Get user's current role
+SELECT get_user_role('USER_UUID_HERE');
+
+-- View role statistics
+SELECT * FROM role_stats;
+```
+
+#### Audit Trail
+
+```sql
+-- View recent role changes (if audit logging enabled)
+SELECT * FROM role_audit_log 
+ORDER BY changed_at DESC 
+LIMIT 10;
+```
+
+#### API/SDK Usage
+
+```typescript
+// Using Supabase Admin SDK (Node.js)
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  SUPABASE_URL,
+  SUPABASE_SERVICE_KEY
+);
+
+// Promote user to admin
+async function promoteToAdmin(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .update({ role: 'admin' })
+    .eq('user_id', userId);
+    
+  if (error) throw error;
+  return data;
+}
+
+// Check if user is admin
+async function isUserAdmin(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .rpc('is_admin', { check_user_id: userId });
+    
+  if (error) throw error;
+  return data;
+}
 ```
 
 ## 🚀 Implementation Checklist
