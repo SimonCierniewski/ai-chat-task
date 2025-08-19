@@ -13,6 +13,57 @@ interface OnSignupBody {
 }
 
 export const authRoutes: FastifyPluginAsync = async (server) => {
+  server.get('/ping', {
+    schema: {
+      description: 'Protected test endpoint to verify authentication',
+      tags: ['Auth'],
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            email: { type: 'string' },
+            role: { type: 'string' },
+            timestamp: { type: 'string' },
+          },
+        },
+        401: {
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+            code: { type: 'string' },
+            req_id: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    // This route requires authentication (handled by auth plugin)
+    if (!request.user) {
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'Authentication required',
+        code: 'UNAUTHENTICATED',
+        req_id: request.id,
+      });
+    }
+    
+    request.log.info({
+      req_id: request.id,
+      userId: request.user.id,
+      role: request.user.role,
+    }, 'Auth ping successful');
+    
+    return {
+      id: request.user.id,
+      email: request.user.email || 'N/A',
+      role: request.user.role,
+      timestamp: new Date().toISOString(),
+    };
+  });
+  
   server.get('/status', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) {
       return {

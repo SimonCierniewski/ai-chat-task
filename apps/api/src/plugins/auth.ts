@@ -4,10 +4,12 @@ import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import { UserContext, JWTPayload } from '../types/auth';
 import { profilesClient } from '../db/profiles';
+import { config } from '../config';
 
 declare module 'fastify' {
   interface FastifyRequest {
     user?: UserContext;
+    userCache?: Map<string, UserContext>;
   }
 }
 
@@ -20,35 +22,39 @@ export interface AuthPluginOptions {
   excludePaths?: string[];
 }
 
-const DEFAULT_OPTIONS: AuthPluginOptions = {
-  jwksUri: 'https://fgscwpqqadqncgjknsmk.supabase.co/auth/v1/.well-known/jwks.json',
-  audience: 'authenticated',
-  issuer: 'https://fgscwpqqadqncgjknsmk.supabase.co/auth/v1',
-  cacheMaxAge: 600000, // 10 minutes
-  excludePaths: ['/health', '/metrics', '/', '/docs', '/auth/on-signup'],
-};
-
-/**
- * Fastify plugin for Supabase JWT authentication via JWKS
- */
 const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
   fastify,
   opts
 ) => {
-  const options = { ...DEFAULT_OPTIONS, ...opts };
+  const options = {
+    jwksUri: opts.jwksUri || config.auth.jwksUri,
+    jwtSecret: opts.jwtSecret || config.auth.jwtSecret,
+    audience: opts.audience || config.auth.audience || 'authenticated',
+    issuer: opts.issuer || config.auth.issuer,
+    cacheMaxAge: opts.cacheMaxAge || 600000, // 10 minutes
+    excludePaths: opts.excludePaths || [
+      '/health',
+      '/ready',
+      '/',
+      '/docs',
+      '/api/v1/auth/on-signup',
+    ],
+  };
 
-  // Initialize JWKS client
-  const client = jwksClient({
-    jwksUri: options.jwksUri!,
-    cache: true,
-    cacheMaxAge: options.cacheMaxAge!,
-    timeout: 5000,
-  });
+  // Initialize JWKS client if URI is provided
+  const client = options.jwksUri
+    ? jwksClient({
+        jwksUri: options.jwksUri,
+        cache: true,
+        cacheMaxAge: options.cacheMaxAge,
+        timeout: 5000,
+      })
+    : null;
 
-  /**
-   * Get signing key from JWKS
-   */
   const getKey = (header: any, callback: any) => {
+    if (!client) {
+      return callback(new Error('JWKS client not configured'));
+    }
     client.getSigningKey(header.kid, (err, key) => {
       if (err) {
         return callback(err);
@@ -58,13 +64,8 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
     });
   };
 
-  /**
-   * Verify JWT token and return payload
-   * Supports both HS256 (shared secret) and RS256 (JWKS) algorithms
-   */
   const verifyToken = (token: string): Promise<JWTPayload> => {
     return new Promise((resolve, reject) => {
-      // First, decode the token header to check the algorithm
       const decoded = jwt.decode(token, { complete: true }) as any;
       if (!decoded) {
         return reject(new Error('Invalid token format'));
@@ -72,9 +73,8 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
 
       const algorithm = decoded.header.alg;
 
-      // If HS256, use shared secret
       if (algorithm === 'HS256') {
-        const secret = options.jwtSecret || process.env.SUPABASE_JWT_SECRET;
+        const secret = options.jwtSecret;
         if (!secret) {
           return reject(new Error('JWT secret not configured for HS256 tokens'));
         }
@@ -95,9 +95,10 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
             }
           }
         );
-      }
-      // If RS256, use JWKS
-      else if (algorithm === 'RS256') {
+      } else if (algorithm === 'RS256') {
+        if (!client) {
+          return reject(new Error('JWKS client not configured for RS256 tokens'));
+        }
         jwt.verify(
           token,
           getKey,
@@ -120,47 +121,74 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
     });
   };
 
-  /**
-   * Load user context from JWT and database
-   */
-  const loadUserContext = async (payload: JWTPayload): Promise<UserContext> => {
+  const loadUserContext = async (
+    request: FastifyRequest,
+    payload: JWTPayload
+  ): Promise<UserContext> => {
     const userId = payload.sub;
     if (!userId) {
       throw new Error('Invalid JWT: missing sub claim');
     }
 
-    // Load role from profiles table
-    // If profile doesn't exist, it will be created with default 'user' role
-    const role = await profilesClient.getUserRole(userId);
-
-    // Log if profile was auto-created
-    const profile = await profilesClient.getProfile(userId);
-    if (profile && profile.created_at.getTime() === profile.updated_at.getTime()) {
-      fastify.log.info({ userId }, 'Auto-created profile for new user');
+    // Check request-level cache first
+    if (!request.userCache) {
+      request.userCache = new Map();
     }
 
-    return {
+    const cached = request.userCache.get(userId);
+    if (cached) {
+      request.log.debug({ userId }, 'User context loaded from request cache');
+      return cached;
+    }
+
+    // Load role from profiles table
+    const role = await profilesClient.getUserRole(userId);
+
+    const userContext: UserContext = {
       id: userId,
       email: payload.email,
       role,
     };
+
+    // Cache for this request
+    request.userCache.set(userId, userContext);
+
+    // Log if profile was auto-created
+    const profile = await profilesClient.getProfile(userId);
+    if (profile && Math.abs(profile.created_at.getTime() - profile.updated_at.getTime()) < 1000) {
+      request.log.info({ userId, req_id: request.id }, 'Auto-created profile for new user');
+    }
+
+    return userContext;
   };
 
-  /**
-   * Auth middleware hook
-   */
+  // Add hook to initialize user cache
+  fastify.decorateRequest('userCache', null);
+  
+  // Add auth verification hook
   fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     // Skip auth for excluded paths
-    if (options.excludePaths?.includes(request.url)) {
+    const isExcluded = options.excludePaths?.some(path => 
+      request.url === path || request.url.startsWith(path + '?')
+    );
+    
+    if (isExcluded) {
       return;
     }
 
-    // Extract token from Authorization header
+    // Skip auth for OPTIONS requests (CORS preflight)
+    if (request.method === 'OPTIONS') {
+      return;
+    }
+
     const authHeader = request.headers.authorization;
     if (!authHeader) {
+      request.log.debug({ req_id: request.id, url: request.url }, 'Missing authorization header');
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Missing authorization header',
+        code: 'UNAUTHENTICATED',
+        req_id: request.id,
       });
     }
 
@@ -169,44 +197,57 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Invalid authorization header format',
+        code: 'UNAUTHENTICATED',
+        req_id: request.id,
       });
     }
 
     try {
-      // Verify JWT token
       const payload = await verifyToken(token);
-
-      // Load user context
-      const user = await loadUserContext(payload);
-
-      // Attach user to request
+      const user = await loadUserContext(request, payload);
       request.user = user;
 
-      // Log successful auth
-      fastify.log.debug({ userId: user.id, role: user.role }, 'User authenticated');
+      request.log.debug({
+        req_id: request.id,
+        userId: user.id,
+        role: user.role,
+      }, 'User authenticated');
     } catch (error) {
-      fastify.log.warn({ error }, 'Authentication failed');
+      request.log.warn({
+        req_id: request.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }, 'Authentication failed');
 
-      // Determine error type and message
       let message = 'Invalid or expired token';
+      let code = 'UNAUTHENTICATED';
+      
       if (error instanceof Error) {
         if (error.name === 'TokenExpiredError') {
           message = 'Token has expired';
+          code = 'TOKEN_EXPIRED';
         } else if (error.name === 'JsonWebTokenError') {
           message = 'Invalid token';
+          code = 'INVALID_TOKEN';
         } else if (error.message.includes('JWKS')) {
           message = 'Token verification failed';
+          code = 'VERIFICATION_FAILED';
         }
       }
 
       return reply.code(401).send({
         error: 'Unauthorized',
         message,
+        code,
+        req_id: request.id,
       });
     }
   });
 
-  fastify.log.info('Auth plugin registered with JWKS verification');
+  fastify.log.info({
+    jwksUri: options.jwksUri ? 'configured' : 'not configured',
+    audience: options.audience,
+    excludedPaths: options.excludePaths,
+  }, 'Auth plugin registered');
 };
 
 export default fp(authPlugin, {

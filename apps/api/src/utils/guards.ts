@@ -14,6 +14,8 @@ export function requireAuth(
     return reply.code(401).send({
       error: 'Unauthorized',
       message: 'Authentication required',
+      code: 'UNAUTHENTICATED',
+      req_id: request.id,
     });
   }
   done();
@@ -32,13 +34,23 @@ export function requireAdmin(
     return reply.code(401).send({
       error: 'Unauthorized',
       message: 'Authentication required',
+      code: 'UNAUTHENTICATED',
+      req_id: request.id,
     });
   }
 
   if (request.user.role !== 'admin') {
+    request.log.warn({
+      req_id: request.id,
+      userId: request.user.id,
+      role: request.user.role,
+    }, 'Admin access denied');
+    
     return reply.code(403).send({
       error: 'Forbidden',
       message: 'Admin role required',
+      code: 'FORBIDDEN',
+      req_id: request.id,
     });
   }
 
