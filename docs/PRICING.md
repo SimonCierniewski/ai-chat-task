@@ -28,16 +28,29 @@ The `models_pricing` table stores per-model token rates with support for cached 
 
 ### Formula
 
-Cost is calculated per million tokens (mtok):
+The authoritative cost calculation formula:
 
 ```
-Total Cost = Input Cost + Cached Cost + Output Cost
-
-Where:
-- Input Cost = (input_tokens - cached_tokens) / 1,000,000 × input_per_mtok
-- Cached Cost = cached_tokens / 1,000,000 × cached_input_per_mtok
-- Output Cost = output_tokens / 1,000,000 × output_per_mtok
+cost_usd = (input_tokens / 1,000,000) × input_per_mtok + 
+           (output_tokens / 1,000,000) × output_per_mtok
 ```
+
+For models with cached token support:
+
+```
+cost_usd = (regular_input_tokens / 1,000,000) × input_per_mtok +
+           (cached_input_tokens / 1,000,000) × cached_input_per_mtok +
+           (output_tokens / 1,000,000) × output_per_mtok
+```
+
+### Precision and Rounding
+
+- **Calculation**: Maintain 6-8 decimal places during computation
+- **Storage**: Round to 6 decimal places
+- **Display**: Round to 4 decimal places for UI
+- **Source of Truth**: Prefer API-reported token usage; fallback to approximate counts
+
+**📘 For complete cost calculation specification including precision rules, fallback behavior, and examples, see [COSTS.md](./COSTS.md)**
 
 ### Database Function
 
