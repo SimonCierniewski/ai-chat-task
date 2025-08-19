@@ -2,16 +2,16 @@
 
 ## 📊 Current Status
 
-| Phase | Status | Verification |
-|-------|--------|--------------|
-| Phase 0: Foundations | ✅ Complete | N/A |
-| **Phase 1: Supabase Auth** | ✅ **Implementation Complete** | [PHASE1_VERIFICATION.md](./PHASE1_VERIFICATION.md) |
-| Phase 2: Telemetry & Pricing | ⏳ Not Started | - |
-| Phase 3: Zep v3 Integration | ⏳ Not Started | - |
-| Phase 4-5: API Service | ⏳ Not Started | - |
-| Phase 6: Admin Panel | ⏳ Not Started | - |
-| Phase 7: Android App | ⏳ Not Started | - |
-| Phase 8-12: Security/Deploy/QA | ⏳ Not Started | - |
+| Phase | Status | Verification                                       |
+|-------|--------|----------------------------------------------------|
+| Phase 0: Foundations | ✅ Complete | N/A                                                |
+| **Phase 1: Supabase Auth** | ✅ Complete | [PHASE1_VERIFICATION.md](./PHASE1_VERIFICATION.md) |
+| Phase 2: Telemetry & Pricing | ✅ Complete | [PHASE2_VERIFICATION.md](./PHASE2_VERIFICATION.md) |
+| Phase 3: Zep v3 Integration | ✅ Complete | [PHASE3_VERIFICATION.md](./PHASE3_VERIFICATION.md) |
+| Phase 4-5: API Service | ⏳ Not Started | -                                                  |
+| Phase 6: Admin Panel | ⏳ Not Started | -                                                  |
+| Phase 7: Android App | ⏳ Not Started | -                                                  |
+| Phase 8-12: Security/Deploy/QA | ⏳ Not Started | -                                                  |
 
 **Current Phase:** Phase 1 - Awaiting Supabase project creation for final testing  
 **Next Steps:** Create Supabase project → Run migrations → Test auth flow → Begin Phase 2
@@ -110,17 +110,36 @@
   - [ ] Cost calculation matches pricing table
 
 ### Phase 3: Zep v3 Integration
+
+**Status:** Documentation Complete - Ready for Implementation  
+**Verification:** See [PHASE3_VERIFICATION.md](./PHASE3_VERIFICATION.md) for detailed test procedures
+
 - [ ] **Memory Management**
-  - [ ] User namespaces created (user:<id>)
-  - [ ] Messages stored with metadata
-  - [ ] Retrieval returns trimmed results
-  - [ ] Graph facts can be upserted
+  - [ ] User collections created lazily (user:<id>)
+  - [ ] Messages stored with session association
+  - [ ] Retrieval applies policy (dedup, clip, token budget)
+  - [ ] Knowledge graph edges extracted and upserted
+  - [ ] Session history retrievable
 
 - [ ] **Performance**
-  - [ ] Top_k limited to 6-10 results
-  - [ ] Facts trimmed to ≤2 sentences
-  - [ ] Total memory ≤1.5k tokens
-  - [ ] Zep latency documented
+  - [ ] Top_k configurable (6-10 default: 8)
+  - [ ] Content clipped to 1-2 sentences
+  - [ ] Token budget enforced (≤1500)
+  - [ ] Zep latency < 700ms for search
+  - [ ] Circuit breaker prevents cascading failures
+
+- [ ] **Security**
+  - [ ] ZEP_API_KEY server-only (never in clients)
+  - [ ] User collection isolation enforced
+  - [ ] No sensitive data in error messages
+  - [ ] Telemetry events sanitized
+
+- [ ] **Reliability**  
+  - [ ] SSE continues when Zep unavailable
+  - [ ] Retry once on transient 5xx errors
+  - [ ] No retry on 4xx errors
+  - [ ] Fallback to no-memory mode
+  - [ ] All failures logged as zep_error events
 
 ### Phase 4-5: API Service (Fastify + OpenAI)
 - [ ] **Core Endpoints**
