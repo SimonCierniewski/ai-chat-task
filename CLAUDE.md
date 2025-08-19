@@ -5,7 +5,7 @@
 **Project**: AI Integrations Quest (Szymon)  
 **Goal**: Build a real, end-to-end system with Auth → API → Zep/OpenAI → SSE → Android → Admin telemetry  
 **Timeline**: 1.5-3 working days  
-**Current Phase**: Phase 1 (Supabase Auth) - Implementation Complete
+**Current Phase**: Phase 4 (API Service Implementation) - IN PROGRESS
 
 ### Key Requirements
 - Real integrations (no mocks) - OpenAI + Zep
@@ -115,7 +115,7 @@
    - `memory-config.ts` ✅ - Memory configuration
    - `admin-settings.ts` ✅ - Admin dashboard settings
 
-### 🚧 Phase 3: Zep v3 Integration (IN PROGRESS)
+### ✅ Phase 3: Zep v3 Integration (DOCUMENTATION COMPLETE)
 
 **Status**: Documentation and configuration complete, ready for implementation
 
@@ -136,9 +136,52 @@
    - All operations proxied through API backend
    - US region deployment (expect +100-150ms latency)
 
+### 🚧 Phase 4: API Service (IN PROGRESS)
+
+**Status**: Core infrastructure complete, SSE endpoints ready for OpenAI integration
+
+#### Completed Today:
+
+1. **API Service Shell** ✅:
+   - Fastify server with versioned routes (`/api/v1`)
+   - Structured logging with request IDs (`req_id`)
+   - Global error handler (always returns JSON)
+   - CORS with strict origin validation (403 for blocked origins)
+   - Health endpoint with uptime tracking
+   - Ajv JSON Schema validator integration
+   - Created `RUNBOOK_API.md` operational documentation
+
+2. **JWT Authentication** ✅:
+   - JWKS verification for RS256 tokens
+   - HS256 support for development
+   - User context (`req.user = { id, email, role }`)
+   - Request-level role caching
+   - `requireAdmin()` guard utility
+   - Error codes: `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `FORBIDDEN`
+   - Test endpoint `/api/v1/auth/ping`
+   - Complete `README.md` with curl examples
+
+3. **API Contracts & Validation** ✅:
+   - **Shared DTOs** (`/packages/shared/src/api/`):
+     - `chat.ts`: Chat request/response, SSE event types
+     - `memory.ts`: Memory upsert/search with graph edges
+     - `admin.ts`: Admin users, metrics, pricing types
+   - **JSON Schemas**: All endpoints have Ajv validation
+   - **SSE Contract**: Complete streaming event definitions
+   - **Documentation**:
+     - `/docs/API_CONTRACTS.md`: Full endpoint specifications
+     - `/docs/SSE_CONTRACT.md`: Detailed SSE streaming contract
+
+#### Pending:
+- [ ] OpenAI integration with real SSE streaming
+- [ ] Zep memory retrieval implementation
+- [ ] Telemetry event logging
+- [ ] Rate limiting implementation
+- [ ] Cost calculation and tracking
+
 ### 🔮 Upcoming Phases
 
-**Phase 4-5**: API Service (Fastify + OpenAI SSE)  
+**Phase 5**: OpenAI Integration (SSE streaming)  
 **Phase 6**: Admin Panel (Next.js)  
 **Phase 7**: Android App  
 **Phase 8-12**: Security, Deployment, QA
@@ -183,23 +226,35 @@
 - Supabase webhook format with `record` object
 - Supports both auth.users and profiles table webhooks
 
+### 4. CORS Package Compatibility (FIXED)
+**Issue**: `fastify-cors` deprecated and incompatible with Fastify v4  
+**Solution**: Migrated to `@fastify/cors` v8.5.0
+
 ## 📁 Key Files to Review
 
 ### Documentation
 - `/PROJECT_CONTEXT.md` - Full project requirements
 - `/IMPLEMENTATION_PLAN.md` - Detailed phase breakdown
-- `/docs/AUTH_SETUP.md` - Auth implementation guide
-- `/docs/DEFINITION_OF_DONE.md` - Acceptance criteria with current status
-- `/docs/PHASE1_VERIFICATION.md` - Complete QA test procedures
+- `/docs/API_CONTRACTS.md` - **NEW: Complete API endpoint specifications**
+- `/docs/SSE_CONTRACT.md` - **NEW: SSE streaming contract with examples**
+- `/apps/api/RUNBOOK_API.md` - **NEW: API operational documentation**
+- `/apps/api/README.md` - **UPDATED: Auth testing with curl examples**
 
-### Code - API
-- `/apps/api/src/plugins/auth.ts` - JWT verification middleware
-- `/apps/api/src/plugins/cors.ts` - CORS origin validation
-- `/apps/api/src/utils/guards.ts` - Admin role guards
-- `/apps/api/src/db/profiles.ts` - **Database client with real Supabase (fixed)**
-- `/apps/api/src/routes/auth.ts` - On-signup webhook endpoint
-- `/apps/api/db/migrations/` - SQL migrations ready to run
-- `/apps/api/debug-webhook.sh` - Webhook testing script
+### Code - API (Updated)
+- `/apps/api/src/server.ts` - **UPDATED: Versioned routes, structured logging**
+- `/apps/api/src/config/index.ts` - **NEW: Centralized configuration**
+- `/apps/api/src/plugins/auth.ts` - **UPDATED: JWKS verification, request caching**
+- `/apps/api/src/utils/error-handler.ts` - **NEW: Global JSON error handler**
+- `/apps/api/src/utils/validator.ts` - **NEW: Ajv schema validators**
+- `/apps/api/src/utils/guards.ts` - **UPDATED: Error codes in guards**
+- `/apps/api/src/routes/health.ts` - **NEW: Health & readiness endpoints**
+- `/apps/api/src/routes/v1/*.ts` - **NEW: Versioned API routes**
+
+### Code - Shared Types (New)
+- `/packages/shared/src/api/chat.ts` - **NEW: Chat & SSE types**
+- `/packages/shared/src/api/memory.ts` - **NEW: Memory API types**
+- `/packages/shared/src/api/admin.ts` - **NEW: Admin API types**
+- `/packages/shared/src/api/index.ts` - **NEW: Central API exports**
 
 ### Code - Admin
 - `/apps/admin/app/` - Complete Next.js app with auth
@@ -227,10 +282,7 @@
 2. **Run Migrations**:
    ```bash
    # In Supabase SQL Editor, run in order:
-   # 001_create_profiles_table.sql
-   # 002_create_profiles_rls_policies.sql
-   # 003_create_user_signup_trigger_alternative.sql
-   # 004_admin_management_utils.sql
+   # 001_create_profiles_table.sql through 010_create_daily_usage_views.sql
    ```
 
 3. **Configure Auth**:
@@ -245,6 +297,10 @@
    cp .env.example .env.local
    # Add real Supabase credentials
    pnpm dev
+   
+   # Test endpoints
+   curl http://localhost:3000/health
+   curl http://localhost:3000/api/v1/auth/ping -H "Authorization: Bearer $TOKEN"
    ```
 
 ## 💡 Session Restoration Tips
@@ -255,13 +311,13 @@ When continuing this project:
    - This file (CLAUDE.md)
    - PROJECT_CONTEXT.md
    - IMPLEMENTATION_PLAN.md
-   - PHASE1_VERIFICATION.md for testing procedures
+   - API_CONTRACTS.md for endpoint specifications
+   - SSE_CONTRACT.md for streaming details
 
 2. **Check current phase status**:
-   - Phase 1 implementation is COMPLETE
+   - Phase 1-3: Documentation and schemas complete
+   - Phase 4: API infrastructure ready, needs OpenAI integration
    - Look at DEFINITION_OF_DONE.md for detailed status
-   - All three apps (API, Admin, Android) are fully implemented
-   - Just awaiting Supabase project creation for testing
 
 3. **Verify environment**:
    ```bash
@@ -273,17 +329,22 @@ When continuing this project:
 
 4. **Key technical decisions**:
    - **JWKS for JWT verification** (not Supabase client round-trips)
-   - **Profiles table with RLS** for role management
-   - **ProfilesClient uses real Supabase** (fixed from stub)
-   - **Auto-creation of profiles** as resilient fallback
-   - **CORS strict origin validation** (Admin + Android only)
-   - **Never block auth** - errors handled gracefully
+   - **Versioned API routes** under `/api/v1`
+   - **Request IDs** on all logs and errors
+   - **SSE streaming** for chat responses
+   - **Shared DTOs** in monorepo package
+   - **CORS strict validation** returns 403 for blocked origins
 
-5. **Recent fixes implemented**:
-   - Fixed ProfilesClient to use real Supabase instead of stub data
-   - Added profile auto-creation on first authenticated request
-   - Updated on-signup endpoint to handle webhook payload formats
-   - Created debug scripts for testing webhooks and CORS
+5. **Recent work completed** (Current Session):
+   - API service shell with Fastify
+   - JWT authentication with JWKS
+   - Request ID tracking and structured logging
+   - CORS with strict origin validation
+   - Health endpoint with uptime
+   - Versioned routes structure
+   - Complete API contracts and SSE specifications
+   - Shared TypeScript DTOs for all endpoints
+   - Ajv JSON Schema validation
 
 ## 📝 Commands Reference
 
@@ -293,10 +354,27 @@ pnpm dev:api          # Start API server
 pnpm dev:admin        # Start admin dashboard
 pnpm dev:all          # Start all services
 
-# Testing
-curl http://localhost:3000/health                    # Health check
-curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:3000/api/me                      # Test auth
+# Testing Auth
+# Generate test token
+node -e "
+const jwt = require('jsonwebtoken');
+const token = jwt.sign(
+  {
+    sub: 'test-user-id',
+    email: 'test@example.com',
+    aud: 'authenticated',
+    exp: Math.floor(Date.now() / 1000) + 3600
+  },
+  'placeholder-jwt-secret-with-at-least-32-characters',
+  { algorithm: 'HS256' }
+);
+console.log(token);
+"
+
+# Test endpoints
+curl http://localhost:3000/health
+curl http://localhost:3000/api/v1/auth/ping -H "Authorization: Bearer $TOKEN"
+curl http://localhost:3000/api/v1/admin/users -H "Authorization: Bearer $ADMIN_TOKEN"
 
 # Database
 psql $DATABASE_URL -f migrations/001_*.sql          # Run migration
@@ -319,19 +397,25 @@ pnpm check:all        # Run all checks
 
 **Phase 0**: ✅ Complete  
 **Phase 1**: ✅ Implementation Complete (awaiting Supabase project for testing)  
-**Phase 2-12**: ⏳ Not started  
+**Phase 2**: ✅ Schema & Types Complete  
+**Phase 3**: ✅ Documentation Complete  
+**Phase 4**: 🚧 API Infrastructure Complete, OpenAI Integration Pending  
+**Phase 5-12**: ⏳ Not started  
 
-**Critical Achievement**: All three applications (API, Admin, Android) have complete authentication implementations with role-based access control, session persistence, and resilient error handling.
+**Critical Achievement**: API service now has complete infrastructure with versioned routes, JWT auth via JWKS, structured logging with request IDs, strict CORS, and comprehensive contracts for all endpoints including SSE streaming.
 
-**Last Session Work**:
-1. Debugged and fixed profile creation issue (ProfilesClient was using stub data)
-2. Implemented auto-creation fallback for profiles
-3. Added webhook payload format handling
-4. Created comprehensive verification documentation
-5. Updated all status tracking documents
+**Current Session Work**:
+1. Built API service shell with Fastify and versioned routes
+2. Implemented JWT verification using JWKS with role loading
+3. Added structured logging with request IDs throughout
+4. Created requireAdmin() guard with proper error codes
+5. Defined complete API contracts and SSE streaming specifications
+6. Created shared TypeScript DTOs for all endpoints
+7. Integrated Ajv JSON Schema validation
+8. Documented everything in API_CONTRACTS.md and SSE_CONTRACT.md
 
 ---
 
-**Last Updated**: Phase 1 implementation complete with all fixes applied. ProfilesClient now uses real Supabase. Auto-creation ensures profiles always exist. Ready for testing once Supabase project is created.
+**Last Updated**: 2025-08-19 - Phase 4 API infrastructure complete with auth, logging, CORS, and contracts. Ready for OpenAI SSE integration.
 
 **GitHub Repo**: SimonCierniewski/ai-chat-task
