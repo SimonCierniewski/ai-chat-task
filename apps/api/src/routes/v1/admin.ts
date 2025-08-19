@@ -1,21 +1,21 @@
 import { FastifyPluginAsync } from 'fastify';
 import { FastifyRequest, FastifyReply } from 'fastify';
+import {
+  AdminMetricsQuery,
+  adminMetricsQuerySchema,
+  AdminMetricsResponse,
+  AdminUsersResponse,
+  ModelPricingUpdateRequest,
+  modelPricingUpdateSchema,
+  ModelPricingUpdateResponse
+} from '@prototype/shared';
 
 interface MetricsQuery {
-  Querystring: {
-    from?: string;
-    to?: string;
-    userId?: string;
-  };
+  Querystring: AdminMetricsQuery;
 }
 
 interface PricingUpdate {
-  Body: {
-    model: string;
-    input_per_mtok: number;
-    output_per_mtok: number;
-    cached_input_per_mtok?: number;
-  };
+  Body: ModelPricingUpdateRequest;
 }
 
 export const adminRoutes: FastifyPluginAsync = async (server) => {

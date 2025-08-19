@@ -23,3 +23,6 @@ export * from './memory-config';
 
 // Export admin settings types
 export * from './admin-settings';
+
+// Export API DTOs and schemas
+export * from './api';

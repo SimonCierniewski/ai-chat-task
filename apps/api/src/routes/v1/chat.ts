@@ -1,29 +1,25 @@
 import { FastifyPluginAsync } from 'fastify';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { createError } from '../../utils/error-handler';
+import {
+  ChatRequest,
+  chatRequestSchema,
+  ChatEventType,
+  formatSSEEvent,
+  UsageEventData,
+  DoneEventData
+} from '@prototype/shared';
 
-interface ChatRequest {
-  Body: {
-    message: string;
-    useMemory?: boolean;
-    sessionId?: string;
-    model?: string;
-  };
+interface ChatRequestFastify {
+  Body: ChatRequest;
 }
 
 export const chatRoutes: FastifyPluginAsync = async (server) => {
-  server.post<ChatRequest>('/', {
+  server.post<ChatRequestFastify>('/', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['message'],
-        properties: {
-          message: { type: 'string', minLength: 1, maxLength: 4000 },
-          useMemory: { type: 'boolean', default: false },
-          sessionId: { type: 'string' },
-          model: { type: 'string', enum: ['gpt-4-mini', 'gpt-4', 'gpt-3.5-turbo'] },
-        },
-      },
+      body: chatRequestSchema,
+      description: 'Stream chat response via Server-Sent Events',
+      tags: ['Chat'],
     },
   }, async (request, reply) => {
     const { message, useMemory, sessionId, model } = request.body;
@@ -44,16 +40,21 @@ export const chatRoutes: FastifyPluginAsync = async (server) => {
       'X-Request-Id': request.id,
     });
     
-    reply.raw.write(`event: token\ndata: ${JSON.stringify({ text: "Chat endpoint coming soon!" })}\n\n`);
+    // Send token events
+    reply.raw.write(formatSSEEvent(ChatEventType.TOKEN, { text: "Chat endpoint coming soon!" }));
     
-    reply.raw.write(`event: usage\ndata: ${JSON.stringify({
+    // Send usage event
+    const usage: UsageEventData = {
       tokens_in: 0,
       tokens_out: 0,
       cost_usd: 0,
       model: model || 'gpt-4-mini',
-    })}\n\n`);
+    };
+    reply.raw.write(formatSSEEvent(ChatEventType.USAGE, usage));
     
-    reply.raw.write(`event: done\ndata: ${JSON.stringify({ finish_reason: 'stop' })}\n\n`);
+    // Send done event
+    const done: DoneEventData = { finish_reason: 'stop' };
+    reply.raw.write(formatSSEEvent(ChatEventType.DONE, done));
     
     reply.raw.end();
   });

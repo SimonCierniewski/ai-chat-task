@@ -1,33 +1,26 @@
 import { FastifyPluginAsync } from 'fastify';
 import { FastifyRequest, FastifyReply } from 'fastify';
+import {
+  MemorySearchQuery,
+  memorySearchQuerySchema,
+  MemorySearchResponse,
+  MemoryUpsertRequest,
+  memoryUpsertRequestSchema,
+  MemoryUpsertResponse
+} from '@prototype/shared';
 
 interface SearchQuery {
-  Querystring: {
-    q?: string;
-    limit?: number;
-  };
+  Querystring: MemorySearchQuery;
 }
 
 interface UpsertBody {
-  Body: {
-    facts: Array<{
-      content: string;
-      type?: string;
-      metadata?: Record<string, any>;
-    }>;
-  };
+  Body: MemoryUpsertRequest;
 }
 
 export const memoryRoutes: FastifyPluginAsync = async (server) => {
   server.get<SearchQuery>('/search', {
     schema: {
-      querystring: {
-        type: 'object',
-        properties: {
-          q: { type: 'string' },
-          limit: { type: 'number', minimum: 1, maximum: 50, default: 10 },
-        },
-      },
+      querystring: memorySearchQuerySchema,
       response: {
         200: {
           type: 'object',
@@ -59,35 +52,19 @@ export const memoryRoutes: FastifyPluginAsync = async (server) => {
       limit,
     }, 'Memory search request');
     
-    return {
+    const response: MemorySearchResponse = {
       results: [],
       query: q || '',
       count: 0,
+      search_time_ms: 0
     };
+    
+    return response;
   });
   
   server.post<UpsertBody>('/upsert', {
     schema: {
-      body: {
-        type: 'object',
-        required: ['facts'],
-        properties: {
-          facts: {
-            type: 'array',
-            items: {
-              type: 'object',
-              required: ['content'],
-              properties: {
-                content: { type: 'string', minLength: 1, maxLength: 500 },
-                type: { type: 'string' },
-                metadata: { type: 'object' },
-              },
-            },
-            minItems: 1,
-            maxItems: 100,
-          },
-        },
-      },
+      body: memoryUpsertRequestSchema,
       response: {
         200: {
           type: 'object',
@@ -107,9 +84,11 @@ export const memoryRoutes: FastifyPluginAsync = async (server) => {
       factCount: facts.length,
     }, 'Memory upsert request');
     
-    return {
+    const response: MemoryUpsertResponse = {
       success: true,
       upserted: facts.length,
     };
+    
+    return response;
   });
 };
