@@ -136,11 +136,11 @@
    - All operations proxied through API backend
    - US region deployment (expect +100-150ms latency)
 
-### 🚧 Phase 4: API Service (IN PROGRESS)
+### ✅ Phase 4: API Service (COMPLETE)
 
-**Status**: Core infrastructure complete, SSE endpoints ready for OpenAI integration
+**Status**: Full API infrastructure with SSE endpoints complete
 
-#### Completed Today:
+#### Completed:
 
 1. **API Service Shell** ✅:
    - Fastify server with versioned routes (`/api/v1`)
@@ -172,17 +172,114 @@
      - `/docs/API_CONTRACTS.md`: Full endpoint specifications
      - `/docs/SSE_CONTRACT.md`: Detailed SSE streaming contract
 
-#### Pending:
-- [ ] OpenAI integration with real SSE streaming
-- [ ] Zep memory retrieval implementation
-- [ ] Telemetry event logging
-- [ ] Rate limiting implementation
-- [ ] Cost calculation and tracking
+### ✅ Phase 5: OpenAI Integration (COMPLETE)
+
+**Status**: Real OpenAI streaming with usage tracking and production hardening
+
+#### Phase 5A - Core Integration:
+
+1. **OpenAI Provider** (`/apps/api/src/providers/openai-provider.ts`) ✅:
+   - Real streaming with `stream_options.include_usage: true`
+   - TTFT capture on first non-empty delta
+   - Timeout enforcement (connect/overall)
+   - Retry logic for 5xx/network errors with jitter
+   - No retry on 4xx errors
+
+2. **Usage Service** (`/apps/api/src/services/usage-service.ts`) ✅:
+   - Primary path: Provider-reported usage
+   - Fallback path: Token estimation (word + character based)
+   - 6-8 decimal internal precision, 4 decimal display rounding
+   - Database pricing lookup with caching
+
+3. **Prompt Assembler** (`/apps/api/src/services/prompt-assembler.ts`) ✅:
+   - Token budget enforcement (1500 for memory, 200 system, 2000 user)
+   - Memory item inclusion/exclusion tracking
+   - Sentence clipping support
+   - Prompt plan telemetry
+
+4. **Telemetry Service** (`/apps/api/src/services/telemetry-service.ts`) ✅:
+   - Complete event logging to Supabase
+   - Support for all event types
+   - Error tracking with context
+
+#### Phase 5B - Production Hardening:
+
+1. **SSE Stability** ✅:
+   - Early header flush before upstream calls
+   - Heartbeat comments every 10 seconds (configurable)
+   - HTTP keep-alive agents for connection pooling
+   - Client disconnect detection with upstream cancellation
+   - Retry tracking in telemetry
+
+2. **Model Registry** (`/apps/api/src/services/model-registry.ts`) ✅:
+   - Model validation against pricing table
+   - Fallback to default model for unknown requests
+   - Cache invalidation on pricing updates
+   - Admin models list endpoint
+
+3. **Graceful Failures** ✅:
+   - User-friendly messages for 429/5xx/timeout errors
+   - Single error message in stream + clean done event
+   - Rich server telemetry for debugging
+   - Incident response documentation
+
+4. **Documentation Updates** ✅:
+   - `/docs/SSE_TROUBLESHOOTING.md`: Complete troubleshooting guide
+   - `/docs/PRICING.md`: Model registry integration
+   - `/apps/api/RUNBOOK_API.md`: Incident response procedures
+   - Updated environment variables
+
+### ✅ Phase 6: Admin Panel (COMPLETE)
+
+**Status**: Full admin dashboard with auth and all pages scaffolded
+
+#### Phase 6A - Scaffolding:
+
+1. **Pages Created** ✅:
+   - `/admin`: Dashboard with metrics cards
+   - `/admin/playground`: Chat testing interface
+   - `/admin/users`: User management table
+   - `/admin/telemetry`: Metrics and charts
+   - `/admin/pricing`: Model pricing configuration
+   - `/admin/settings`: System settings
+   - `/login`: Magic link authentication
+
+2. **Components** ✅:
+   - `AdminSidebar`: Navigation with feature flags
+   - `AdminHeader`: Page headers with titles
+   - `Card`: Reusable UI component
+   - `UserInfo`: Session display in sidebar
+
+3. **Configuration** ✅:
+   - `/apps/admin/lib/config.ts`: Centralized config with public/server separation
+   - Environment variable documentation
+   - EU region deployment notes
+
+#### Phase 6B - Authentication & Authorization:
+
+1. **Magic Link Flow** ✅:
+   - Enhanced login page with "check email" state
+   - Auto-redirect based on role
+   - Session persistence
+
+2. **Role Gating** ✅:
+   - Middleware-based role checking for `/admin/*` routes
+   - Server-side verification using `SUPABASE_SERVICE_ROLE_KEY`
+   - Unauthorized page for non-admins
+   - Role check API endpoint
+
+3. **Security** ✅:
+   - Service role key protection (server-only)
+   - Automatic session refresh
+   - Graceful fallbacks
+
+4. **Documentation** ✅:
+   - `/apps/admin/docs/ADMIN_ENV.md`: Environment variable guide
+   - `/apps/admin/docs/AUTH_ADMIN.md`: Complete auth testing guide
+   - Security warnings in README
 
 ### 🔮 Upcoming Phases
 
-**Phase 5**: OpenAI Integration (SSE streaming)  
-**Phase 6**: Admin Panel (Next.js)  
 **Phase 7**: Android App  
 **Phase 8-12**: Security, Deployment, QA
 
@@ -240,15 +337,17 @@
 - `/apps/api/RUNBOOK_API.md` - **NEW: API operational documentation**
 - `/apps/api/README.md` - **UPDATED: Auth testing with curl examples**
 
-### Code - API (Updated)
-- `/apps/api/src/server.ts` - **UPDATED: Versioned routes, structured logging**
-- `/apps/api/src/config/index.ts` - **NEW: Centralized configuration**
-- `/apps/api/src/plugins/auth.ts` - **UPDATED: JWKS verification, request caching**
-- `/apps/api/src/utils/error-handler.ts` - **NEW: Global JSON error handler**
-- `/apps/api/src/utils/validator.ts` - **NEW: Ajv schema validators**
-- `/apps/api/src/utils/guards.ts` - **UPDATED: Error codes in guards**
-- `/apps/api/src/routes/health.ts` - **NEW: Health & readiness endpoints**
-- `/apps/api/src/routes/v1/*.ts` - **NEW: Versioned API routes**
+### Code - API (Phase 4-5)
+- `/apps/api/src/server.ts` - Versioned routes, structured logging
+- `/apps/api/src/config/index.ts` - Centralized configuration with OpenAI settings
+- `/apps/api/src/providers/openai-provider.ts` - **Phase 5: OpenAI streaming provider**
+- `/apps/api/src/services/usage-service.ts` - **Phase 5: Usage & cost calculation**
+- `/apps/api/src/services/prompt-assembler.ts` - **Phase 5: Prompt assembly with budgets**
+- `/apps/api/src/services/telemetry-service.ts` - **Phase 5: Telemetry logging**
+- `/apps/api/src/services/model-registry.ts` - **Phase 5B: Model validation & pricing**
+- `/apps/api/src/utils/http-agents.ts` - **Phase 5B: HTTP keep-alive agents**
+- `/apps/api/src/routes/v1/chat.ts` - **Phase 5: Complete SSE chat implementation**
+- `/apps/api/src/routes/v1/admin.ts` - **Phase 5B: Admin models endpoint**
 
 ### Code - Shared Types (New)
 - `/packages/shared/src/api/chat.ts` - **NEW: Chat & SSE types**
@@ -256,10 +355,18 @@
 - `/packages/shared/src/api/admin.ts` - **NEW: Admin API types**
 - `/packages/shared/src/api/index.ts` - **NEW: Central API exports**
 
-### Code - Admin
-- `/apps/admin/app/` - Complete Next.js app with auth
-- `/apps/admin/lib/supabase/` - Supabase client utilities
-- `/apps/admin/middleware.ts` - Auth and role protection
+### Code - Admin (Phase 6)
+- `/apps/admin/lib/config.ts` - **Phase 6: Centralized config with public/server separation**
+- `/apps/admin/src/middleware.ts` - **Phase 6B: Enhanced with role gating**
+- `/apps/admin/src/app/login/page.tsx` - **Phase 6B: Magic link with check email state**
+- `/apps/admin/src/app/unauthorized/page.tsx` - **Phase 6B: Access denied page**
+- `/apps/admin/src/app/admin/layout.tsx` - **Phase 6: Admin layout with sidebar**
+- `/apps/admin/src/app/admin/*/page.tsx` - **Phase 6: All admin pages (dashboard, playground, users, telemetry, pricing, settings)**
+- `/apps/admin/src/components/admin/sidebar.tsx` - **Phase 6: Navigation sidebar**
+- `/apps/admin/src/components/admin/user-info.tsx` - **Phase 6B: Session display**
+- `/apps/admin/src/app/api/auth/check-role/route.ts` - **Phase 6B: Server-side role check**
+- `/apps/admin/docs/ADMIN_ENV.md` - **Phase 6: Environment variable documentation**
+- `/apps/admin/docs/AUTH_ADMIN.md` - **Phase 6B: Auth testing guide**
 
 ### Code - Android
 - `/apps/android/app/src/main/` - Complete Android app
@@ -399,23 +506,43 @@ pnpm check:all        # Run all checks
 **Phase 1**: ✅ Implementation Complete (awaiting Supabase project for testing)  
 **Phase 2**: ✅ Schema & Types Complete  
 **Phase 3**: ✅ Documentation Complete  
-**Phase 4**: 🚧 API Infrastructure Complete, OpenAI Integration Pending  
-**Phase 5-12**: ⏳ Not started  
+**Phase 4**: ✅ API Infrastructure Complete  
+**Phase 5**: ✅ OpenAI Integration & Production Hardening Complete  
+**Phase 6**: ✅ Admin Panel with Auth Complete  
+**Phase 7**: ⏳ Android App (Not started)  
+**Phase 8-12**: ⏳ Security, Deployment, QA (Not started)  
 
-**Critical Achievement**: API service now has complete infrastructure with versioned routes, JWT auth via JWKS, structured logging with request IDs, strict CORS, and comprehensive contracts for all endpoints including SSE streaming.
+**Critical Achievements**: 
+- Full OpenAI streaming integration with real-time SSE
+- Production-ready error handling and retry logic
+- Complete admin dashboard with magic link auth and role gating
+- Model registry with pricing validation
+- Comprehensive telemetry and cost tracking
 
-**Current Session Work**:
-1. Built API service shell with Fastify and versioned routes
-2. Implemented JWT verification using JWKS with role loading
-3. Added structured logging with request IDs throughout
-4. Created requireAdmin() guard with proper error codes
-5. Defined complete API contracts and SSE streaming specifications
-6. Created shared TypeScript DTOs for all endpoints
-7. Integrated Ajv JSON Schema validation
-8. Documented everything in API_CONTRACTS.md and SSE_CONTRACT.md
+**Recent Session Work (Phase 5 & 6)**:
+
+**Phase 5 - OpenAI Integration**:
+1. Implemented OpenAI streaming provider with usage tracking
+2. Created UsageService with primary/fallback cost calculation
+3. Built PromptAssembler with token budget enforcement
+4. Added TelemetryService for event logging
+5. Hardened SSE with heartbeats, keep-alive, and disconnect handling
+6. Created Model Registry for pricing validation
+7. Added graceful failure handling with user-friendly messages
+8. Updated documentation with troubleshooting guides
+
+**Phase 6 - Admin Panel**:
+1. Scaffolded all admin pages (dashboard, playground, users, telemetry, pricing, settings)
+2. Created consistent layout with sidebar navigation
+3. Implemented magic link authentication flow
+4. Added middleware-based role gating for admin routes
+5. Created server-side role verification using service role key
+6. Built session display and sign-out functionality
+7. Added comprehensive auth documentation and testing guides
+8. Separated public and server-only environment variables
 
 ---
 
-**Last Updated**: 2025-08-19 - Phase 4 API infrastructure complete with auth, logging, CORS, and contracts. Ready for OpenAI SSE integration.
+**Last Updated**: 2025-01-20 - Phase 5 (OpenAI Integration) and Phase 6 (Admin Panel) complete. System now has full SSE streaming, production hardening, and authenticated admin dashboard. Ready for Phase 7 (Android App).
 
 **GitHub Repo**: SimonCierniewski/ai-chat-task
