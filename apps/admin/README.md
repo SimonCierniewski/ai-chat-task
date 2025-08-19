@@ -249,10 +249,27 @@ pnpm lint
 
 ## Environment Variables
 
-See `.env.example` for all available configuration options.
+See `.env.example` for all available configuration options and [docs/ADMIN_ENV.md](./docs/ADMIN_ENV.md) for detailed documentation.
 
 Key variables:
 - `NEXT_PUBLIC_API_BASE_URL` - Backend API URL
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
 - `NEXT_PUBLIC_APP_URL` - This app's URL for redirects
+
+### 🔒 Security Warning
+
+**NEVER expose `SUPABASE_SERVICE_ROLE_KEY` to the client!**
+
+This key provides full admin access to your database and must only be used in:
+- Server Components
+- API Route Handlers  
+- Server-side functions
+- Middleware
+
+If you accidentally expose this key:
+1. Immediately rotate it in Supabase Dashboard
+2. Check audit logs for unauthorized access
+3. Review all environment variable usage
+
+For more details on security best practices, see [docs/ADMIN_ENV.md](./docs/ADMIN_ENV.md#server-only-environment-variables-never-expose-to-client).
