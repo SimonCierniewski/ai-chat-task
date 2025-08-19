@@ -84,10 +84,60 @@
 - [ ] Test complete auth flow end-to-end
 - [ ] Seed admin user
 
+### ✅ Phase 2: Telemetry & Pricing (COMPLETE)
+
+**Status**: Database schema and documentation complete, ready for implementation
+
+#### Completed:
+1. **Database Migrations** (`/apps/api/db/migrations/`):
+   - `005_create_telemetry_events_table.sql` ✅ - Core event storage with indices
+   - `006_create_telemetry_rls_policies.sql` ✅ - Service role only RLS
+   - `007_create_daily_usage_table.sql` ✅ - Aggregation with auto-function
+   - `008_create_models_pricing_table.sql` ✅ - Pricing with cost calculation
+   - `009_create_models_pricing_standalone.sql` ✅ - Enhanced pricing
+   - `010_create_daily_usage_views.sql` ✅ - Real-time and materialized views
+
+2. **Documentation**:
+   - `TELEMETRY.md` ✅ - Complete telemetry system design
+   - `PRICING.md` ✅ - Pricing configuration guide
+   - `COSTS.md` ✅ - Detailed cost calculation rules (6-8 decimal precision)
+   - `DB_VALIDATION.md` ✅ - SQL validation queries
+   - `PHASE2_VERIFICATION.md` ✅ - Complete QA checklist
+   - `ENVIRONMENT.md` ✅ - Updated with Phase 2 requirements
+   - `SECRETS_MATRIX.md` ✅ - Security boundaries documentation
+
+3. **Shared Types** (`/packages/shared/src/`):
+   - `telemetry.ts` ✅ - Event types and schemas
+   - `pricing.ts` ✅ - Pricing types and cost calculation
+   - `aggregates.ts` ✅ - Daily usage and reporting types
+   - `telemetry-memory.ts` ✅ - Message and retrieval types
+   - `graph.ts` ✅ - Knowledge graph edge types
+   - `memory-config.ts` ✅ - Memory configuration
+   - `admin-settings.ts` ✅ - Admin dashboard settings
+
+### 🚧 Phase 3: Zep v3 Integration (IN PROGRESS)
+
+**Status**: Documentation and configuration complete, ready for implementation
+
+#### Completed:
+1. **Documentation**:
+   - `ZEP_INTEGRATION.md` ✅ - Complete API documentation
+   - `ZEP_COLLECTIONS.md` ✅ - Multi-tenant architecture
+   - Updated `ARCHITECTURE.md` with Zep integration
+
+2. **Configuration**:
+   - Updated `/apps/api/.env.example` with Zep v3 variables
+   - Updated `/apps/admin/.env.example` with server-side config
+   - Defined collection naming: `user:{supabase_user_id}`
+   - Session ID pattern: `session-YYYYMMDD-HHMMSS-XXXX`
+
+3. **Security Decisions**:
+   - Zep API key is **server-only** (never exposed to clients)
+   - All operations proxied through API backend
+   - US region deployment (expect +100-150ms latency)
+
 ### 🔮 Upcoming Phases
 
-**Phase 2**: Telemetry & Pricing Tables  
-**Phase 3**: Zep v3 Integration  
 **Phase 4-5**: API Service (Fastify + OpenAI SSE)  
 **Phase 6**: Admin Panel (Next.js)  
 **Phase 7**: Android App  
