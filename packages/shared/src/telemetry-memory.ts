@@ -3,8 +3,6 @@
  * Types for message storage and retrieval in Zep memory system
  */
 
-import { JSONSchemaType } from 'ajv';
-
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -107,7 +105,7 @@ export interface BatchMessages {
 /**
  * JSON Schema for Message validation
  */
-export const messageSchema: JSONSchemaType<Message> = {
+export const messageSchema: any = {
   type: 'object',
   properties: {
     id: {
@@ -123,7 +121,7 @@ export const messageSchema: JSONSchemaType<Message> = {
     },
     role: {
       type: 'string',
-      enum: ['user', 'assistant', 'system'] as const,
+      enum: ['user', 'assistant', 'system'],
       description: 'Message sender role'
     },
     content: {
@@ -138,21 +136,18 @@ export const messageSchema: JSONSchemaType<Message> = {
       description: 'Creation timestamp'
     },
     metadata: {
-      type: 'object',
-      nullable: true,
+      type: ['object', 'null'],
       properties: {
-        model: { type: 'string', nullable: true },
-        tokens: { type: 'integer', nullable: true, minimum: 0 },
-        cost_usd: { type: 'number', nullable: true, minimum: 0 },
-        ttft_ms: { type: 'number', nullable: true, minimum: 0 },
-        duration_ms: { type: 'number', nullable: true, minimum: 0 },
+        model: { type: ['string', 'null'] },
+        tokens: { type: ['integer', 'null'], minimum: 0 },
+        cost_usd: { type: ['number', 'null'], minimum: 0 },
+        ttft_ms: { type: ['number', 'null'], minimum: 0 },
+        duration_ms: { type: ['number', 'null'], minimum: 0 },
         user_feedback: {
-          type: 'string',
-          nullable: true,
-          enum: ['positive', 'negative', null] as const
+          type: ['string', 'null'],
+          enum: ['positive', 'negative', null]
         }
       },
-      required: [],
       additionalProperties: true
     }
   },
@@ -163,7 +158,7 @@ export const messageSchema: JSONSchemaType<Message> = {
 /**
  * JSON Schema for RetrievalResult validation
  */
-export const retrievalResultSchema: JSONSchemaType<RetrievalResult> = {
+export const retrievalResultSchema: any = {
   type: 'object',
   properties: {
     id: {
@@ -172,8 +167,7 @@ export const retrievalResultSchema: JSONSchemaType<RetrievalResult> = {
       description: 'Result identifier'
     },
     session_id: {
-      type: 'string',
-      nullable: true,
+      type: ['string', 'null'],
       minLength: 1,
       description: 'Session if from message'
     },
@@ -191,7 +185,7 @@ export const retrievalResultSchema: JSONSchemaType<RetrievalResult> = {
     },
     source_type: {
       type: 'string',
-      enum: ['message', 'fact'] as const,
+      enum: ['message', 'fact'],
       description: 'Source of retrieved content'
     },
     tokens_estimate: {
@@ -201,15 +195,13 @@ export const retrievalResultSchema: JSONSchemaType<RetrievalResult> = {
       description: 'Estimated token count'
     },
     metadata: {
-      type: 'object',
-      nullable: true,
+      type: ['object', 'null'],
       properties: {
-        original_message_id: { type: 'string', nullable: true },
-        fact_id: { type: 'string', nullable: true },
-        timestamp: { type: 'string', nullable: true },
-        confidence: { type: 'number', nullable: true, minimum: 0, maximum: 1 }
+        original_message_id: { type: ['string', 'null'] },
+        fact_id: { type: ['string', 'null'] },
+        timestamp: { type: ['string', 'null'] },
+        confidence: { type: ['number', 'null'], minimum: 0, maximum: 1 }
       },
-      required: [],
       additionalProperties: true
     }
   },
@@ -220,7 +212,7 @@ export const retrievalResultSchema: JSONSchemaType<RetrievalResult> = {
 /**
  * JSON Schema for CreateMessage validation
  */
-export const createMessageSchema: JSONSchemaType<CreateMessage> = {
+export const createMessageSchema: any = {
   type: 'object',
   properties: {
     session_id: {
@@ -230,7 +222,7 @@ export const createMessageSchema: JSONSchemaType<CreateMessage> = {
     },
     role: {
       type: 'string',
-      enum: ['user', 'assistant', 'system'] as const,
+      enum: ['user', 'assistant', 'system'],
       description: 'Message role'
     },
     content: {
@@ -240,8 +232,7 @@ export const createMessageSchema: JSONSchemaType<CreateMessage> = {
       description: 'Message content'
     },
     metadata: {
-      type: 'object',
-      nullable: true,
+      type: ['object', 'null'],
       additionalProperties: true
     }
   },
@@ -252,7 +243,7 @@ export const createMessageSchema: JSONSchemaType<CreateMessage> = {
 /**
  * JSON Schema for MemorySearchQuery validation
  */
-export const memorySearchQuerySchema: JSONSchemaType<MemorySearchQuery> = {
+export const memorySearchQuerySchema: any = {
   type: 'object',
   properties: {
     query: {
@@ -267,31 +258,27 @@ export const memorySearchQuerySchema: JSONSchemaType<MemorySearchQuery> = {
       description: 'User collection name'
     },
     session_id: {
-      type: 'string',
-      nullable: true,
+      type: ['string', 'null'],
       minLength: 1,
       description: 'Filter by session'
     },
     limit: {
-      type: 'integer',
-      nullable: true,
+      type: ['integer', 'null'],
       minimum: 1,
       maximum: 100,
       description: 'Max results'
     },
     min_score: {
-      type: 'number',
-      nullable: true,
+      type: ['number', 'null'],
       minimum: 0,
       maximum: 1,
       description: 'Minimum relevance'
     },
     source_types: {
-      type: 'array',
-      nullable: true,
+      type: ['array', 'null'],
       items: {
         type: 'string',
-        enum: ['message', 'fact'] as const
+        enum: ['message', 'fact']
       },
       minItems: 1,
       maxItems: 2,

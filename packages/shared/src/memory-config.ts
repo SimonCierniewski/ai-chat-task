@@ -3,7 +3,6 @@
  * Configuration for memory retrieval and graph processing
  */
 
-import { JSONSchemaType } from 'ajv';
 import { GraphPredicate } from './graph';
 
 // ============================================================================
@@ -79,7 +78,7 @@ export interface MemorySystemConfig {
 /**
  * JSON Schema for MemoryConfig validation
  */
-export const memoryConfigSchema: JSONSchemaType<MemoryConfig> = {
+export const memoryConfigSchema: any = {
   type: 'object',
   properties: {
     top_k: {
@@ -176,7 +175,7 @@ export const memoryConfigSchema: JSONSchemaType<MemoryConfig> = {
 /**
  * JSON Schema for RetrievalStrategy validation
  */
-export const retrievalStrategySchema: JSONSchemaType<RetrievalStrategy> = {
+export const retrievalStrategySchema: any = {
   type: 'object',
   properties: {
     type: {
@@ -213,7 +212,7 @@ export const retrievalStrategySchema: JSONSchemaType<RetrievalStrategy> = {
 /**
  * JSON Schema for PruningConfig validation
  */
-export const pruningConfigSchema: JSONSchemaType<PruningConfig> = {
+export const pruningConfigSchema: any = {
   type: 'object',
   properties: {
     enabled: {

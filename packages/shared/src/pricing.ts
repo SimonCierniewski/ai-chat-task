@@ -3,8 +3,6 @@
  * Shared contracts for model pricing across API and Admin
  */
 
-import { JSONSchemaType } from 'ajv';
-
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -68,7 +66,7 @@ export interface BulkPricingUpdate {
 /**
  * JSON Schema for ModelPricing validation
  */
-export const modelPricingSchema: JSONSchemaType<CreateModelPricing> = {
+export const modelPricingSchema: any = {
   type: 'object',
   properties: {
     model: {
@@ -81,22 +79,21 @@ export const modelPricingSchema: JSONSchemaType<CreateModelPricing> = {
     input_per_mtok: {
       type: 'number',
       minimum: 0,
-      exclusiveMinimum: true,
+      exclusiveMinimum: 0,
       maximum: 1000000, // Reasonable upper limit
       description: 'Cost per million input tokens in USD'
     },
     output_per_mtok: {
       type: 'number',
       minimum: 0,
-      exclusiveMinimum: true,
+      exclusiveMinimum: 0,
       maximum: 1000000,
       description: 'Cost per million output tokens in USD'
     },
     cached_input_per_mtok: {
-      type: 'number',
-      nullable: true,
+      type: ['number', 'null'],
       minimum: 0,
-      exclusiveMinimum: true,
+      exclusiveMinimum: 0,
       maximum: 1000000,
       description: 'Cost per million cached input tokens in USD'
     }
@@ -108,7 +105,7 @@ export const modelPricingSchema: JSONSchemaType<CreateModelPricing> = {
 /**
  * JSON Schema for token usage validation
  */
-export const tokenUsageSchema: JSONSchemaType<TokenUsage> = {
+export const tokenUsageSchema: any = {
   type: 'object',
   properties: {
     input_tokens: {
@@ -122,8 +119,7 @@ export const tokenUsageSchema: JSONSchemaType<TokenUsage> = {
       description: 'Number of output tokens'
     },
     cached_input_tokens: {
-      type: 'integer',
-      nullable: true,
+      type: ['integer', 'null'],
       minimum: 0,
       description: 'Number of cached input tokens'
     }
@@ -135,7 +131,7 @@ export const tokenUsageSchema: JSONSchemaType<TokenUsage> = {
 /**
  * JSON Schema for bulk pricing update
  */
-export const bulkPricingUpdateSchema: JSONSchemaType<BulkPricingUpdate[]> = {
+export const bulkPricingUpdateSchema: any = {
   type: 'array',
   items: modelPricingSchema,
   minItems: 1,

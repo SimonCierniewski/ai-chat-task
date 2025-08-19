@@ -3,8 +3,6 @@
  * Types for knowledge graph edges and facts in Zep memory
  */
 
-import { JSONSchemaType } from 'ajv';
-
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -110,8 +108,9 @@ export interface GraphStats {
 
 /**
  * JSON Schema for GraphEdge validation
+ * Note: Using 'any' type due to AJV's complex type requirements for nullable properties
  */
-export const graphEdgeSchema: JSONSchemaType<GraphEdge> = {
+export const graphEdgeSchema: any = {
   type: 'object',
   properties: {
     subject: {
@@ -130,7 +129,7 @@ export const graphEdgeSchema: JSONSchemaType<GraphEdge> = {
         'interested_in', 'expert_in', 'learning',
         'speaks_language', 'has_role',
         'manages', 'reports_to', 'collaborates_with'
-      ] as const,
+      ],
       description: 'Relationship type'
     },
     object: {
@@ -146,8 +145,7 @@ export const graphEdgeSchema: JSONSchemaType<GraphEdge> = {
       description: 'Confidence score'
     },
     source_message_id: {
-      type: 'string',
-      nullable: true,
+      type: ['string', 'null'],
       minLength: 1,
       description: 'Source message ID'
     },
@@ -157,26 +155,22 @@ export const graphEdgeSchema: JSONSchemaType<GraphEdge> = {
       description: 'Creation timestamp'
     },
     metadata: {
-      type: 'object',
-      nullable: true,
+      type: ['object', 'null'],
       properties: {
-        session_id: { type: 'string', nullable: true },
+        session_id: { type: ['string', 'null'] },
         extraction_method: {
-          type: 'string',
-          nullable: true,
-          enum: ['explicit', 'inferred', 'manual'] as const
+          type: ['string', 'null'],
+          enum: ['explicit', 'inferred', 'manual']
         },
-        verified: { type: 'boolean', nullable: true },
-        expires_at: { type: 'string', nullable: true, format: 'date-time' },
-        context: { type: 'string', nullable: true, maxLength: 1000 },
+        verified: { type: ['boolean', 'null'] },
+        expires_at: { type: ['string', 'null'], format: 'date-time' },
+        context: { type: ['string', 'null'], maxLength: 1000 },
         tags: {
-          type: 'array',
-          nullable: true,
+          type: ['array', 'null'],
           items: { type: 'string' },
           maxItems: 10
         }
       },
-      required: [],
       additionalProperties: true
     }
   },
@@ -187,7 +181,7 @@ export const graphEdgeSchema: JSONSchemaType<GraphEdge> = {
 /**
  * JSON Schema for CreateGraphEdge validation
  */
-export const createGraphEdgeSchema: JSONSchemaType<CreateGraphEdge> = {
+export const createGraphEdgeSchema: any = {
   type: 'object',
   properties: {
     subject: {
@@ -205,7 +199,7 @@ export const createGraphEdgeSchema: JSONSchemaType<CreateGraphEdge> = {
         'interested_in', 'expert_in', 'learning',
         'speaks_language', 'has_role',
         'manages', 'reports_to', 'collaborates_with'
-      ] as const
+      ]
     },
     object: {
       type: 'string',
@@ -213,19 +207,16 @@ export const createGraphEdgeSchema: JSONSchemaType<CreateGraphEdge> = {
       maxLength: 500
     },
     confidence: {
-      type: 'number',
-      nullable: true,
+      type: ['number', 'null'],
       minimum: 0,
       maximum: 1
     },
     source_message_id: {
-      type: 'string',
-      nullable: true,
+      type: ['string', 'null'],
       minLength: 1
     },
     metadata: {
-      type: 'object',
-      nullable: true,
+      type: ['object', 'null'],
       additionalProperties: true
     }
   },
@@ -236,7 +227,7 @@ export const createGraphEdgeSchema: JSONSchemaType<CreateGraphEdge> = {
 /**
  * JSON Schema for GraphQuery validation
  */
-export const graphQuerySchema: JSONSchemaType<GraphQuery> = {
+export const graphQuerySchema: any = {
   type: 'object',
   properties: {
     collection_name: {
@@ -244,14 +235,13 @@ export const graphQuerySchema: JSONSchemaType<GraphQuery> = {
       pattern: '^user:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
     },
     subject: {
-      type: 'string',
-      nullable: true,
+      type: ['string', 'null'],
       minLength: 1,
       maxLength: 200
     },
     predicate: {
-      nullable: true,
       oneOf: [
+        { type: 'null' },
         {
           type: 'string',
           enum: [
@@ -262,7 +252,7 @@ export const graphQuerySchema: JSONSchemaType<GraphQuery> = {
             'interested_in', 'expert_in', 'learning',
             'speaks_language', 'has_role',
             'manages', 'reports_to', 'collaborates_with'
-          ] as const
+          ]
         },
         {
           type: 'array',
@@ -276,7 +266,7 @@ export const graphQuerySchema: JSONSchemaType<GraphQuery> = {
               'interested_in', 'expert_in', 'learning',
               'speaks_language', 'has_role',
               'manages', 'reports_to', 'collaborates_with'
-            ] as const
+            ]
           },
           minItems: 1,
           uniqueItems: true
@@ -284,26 +274,22 @@ export const graphQuerySchema: JSONSchemaType<GraphQuery> = {
       ]
     },
     object: {
-      type: 'string',
-      nullable: true,
+      type: ['string', 'null'],
       minLength: 1,
       maxLength: 500
     },
     min_confidence: {
-      type: 'number',
-      nullable: true,
+      type: ['number', 'null'],
       minimum: 0,
       maximum: 1
     },
     limit: {
-      type: 'integer',
-      nullable: true,
+      type: ['integer', 'null'],
       minimum: 1,
       maximum: 1000
     },
     include_expired: {
-      type: 'boolean',
-      nullable: true
+      type: ['boolean', 'null']
     }
   },
   required: ['collection_name'],

@@ -3,8 +3,6 @@
  * Shared contracts for telemetry events across API and Admin
  */
 
-import { JSONSchemaType } from 'ajv';
-
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -78,74 +76,66 @@ export interface CreateTelemetryEvent {
 /**
  * JSON Schema for TelemetryPayload validation
  */
-export const telemetryPayloadSchema: JSONSchemaType<TelemetryPayload> = {
+export const telemetryPayloadSchema: any = {
   type: 'object',
   properties: {
     // Timing metrics
     ttft_ms: {
-      type: 'number',
-      nullable: true,
+      type: ['number', 'null'],
       minimum: 0,
       description: 'Time to first token in milliseconds'
     },
     openai_ms: {
-      type: 'number',
-      nullable: true,
+      type: ['number', 'null'],
       minimum: 0,
       description: 'OpenAI API response time in milliseconds'
     },
     zep_ms: {
-      type: 'number',
-      nullable: true,
+      type: ['number', 'null'],
       minimum: 0,
       description: 'Zep API response time in milliseconds'
     },
     duration_ms: {
-      type: 'number',
-      nullable: true,
+      type: ['number', 'null'],
       minimum: 0,
       description: 'Total request duration in milliseconds'
     },
     
     // Model and tokens
     model: {
-      type: 'string',
-      nullable: true,
+      type: ['string', 'null'],
       minLength: 1,
       description: 'AI model identifier'
     },
     tokens_in: {
-      type: 'integer',
-      nullable: true,
+      type: ['integer', 'null'],
       minimum: 0,
       description: 'Input token count'
     },
     tokens_out: {
-      type: 'integer',
-      nullable: true,
+      type: ['integer', 'null'],
       minimum: 0,
       description: 'Output token count'
     },
     
     // Cost
     cost_usd: {
-      type: 'number',
-      nullable: true,
+      type: ['number', 'null'],
       minimum: 0,
       description: 'Cost in USD'
     },
     
     // Error
     error: {
-      nullable: true,
       oneOf: [
+        { type: 'null' },
         { type: 'string' },
         {
           type: 'object',
           properties: {
             message: { type: 'string' },
-            code: { type: 'string', nullable: true },
-            stack: { type: 'string', nullable: true }
+            code: { type: ['string', 'null'] },
+            stack: { type: ['string', 'null'] }
           },
           required: ['message'],
           additionalProperties: true
@@ -161,7 +151,7 @@ export const telemetryPayloadSchema: JSONSchemaType<TelemetryPayload> = {
 /**
  * JSON Schema for complete TelemetryEvent validation
  */
-export const telemetryEventSchema: JSONSchemaType<CreateTelemetryEvent> = {
+export const telemetryEventSchema: any = {
   type: 'object',
   properties: {
     user_id: {
@@ -170,14 +160,13 @@ export const telemetryEventSchema: JSONSchemaType<CreateTelemetryEvent> = {
       description: 'User UUID'
     },
     session_id: {
-      type: 'string',
-      nullable: true,
+      type: ['string', 'null'],
       minLength: 1,
       description: 'Optional session identifier'
     },
     type: {
       type: 'string',
-      enum: ['message_sent', 'openai_call', 'zep_upsert', 'zep_search', 'error'] as const,
+      enum: ['message_sent', 'openai_call', 'zep_upsert', 'zep_search', 'error'],
       description: 'Event type'
     },
     payload_json: telemetryPayloadSchema
