@@ -239,7 +239,7 @@ All admin endpoints require `role: 'admin'`.
 
 #### `GET /api/v1/admin/users`
 
-List all users with statistics.
+List all users with redacted sensitive information and usage statistics.
 
 **Response:**
 
@@ -247,20 +247,17 @@ List all users with statistics.
 interface AdminUsersResponse {
   users: AdminUser[];
   total: number;
-  page?: number;
-  per_page?: number;
+  fetched_at: string;
 }
 
 interface AdminUser {
-  id: string;
-  email: string;
-  role: 'user' | 'admin';
-  created_at: string;
-  updated_at?: string;
-  last_active?: string;
-  message_count?: number;
-  session_count?: number;
-  total_cost?: number;
+  id: string;                    // User UUID
+  email: string;                 // Email address (from auth.users)
+  role: 'user' | 'admin';        // User role
+  created_at: string;            // User creation timestamp
+  last_sign_in_at?: string;      // Last sign-in time (if available)
+  message_count?: number;        // Total messages sent
+  total_cost_usd?: number;       // Total API usage cost
 }
 ```
 
@@ -274,69 +271,68 @@ interface AdminUser {
       "email": "user@example.com",
       "role": "user",
       "created_at": "2024-01-01T00:00:00Z",
-      "last_active": "2024-01-15T14:30:00Z",
+      "last_sign_in_at": "2024-01-15T14:30:00Z",
       "message_count": 142,
-      "session_count": 8,
-      "total_cost": 0.042156
+      "total_cost_usd": 0.042156
+    },
+    {
+      "id": "admin-550e8400-e29b-41d4-a716",
+      "email": "admin@example.com",
+      "role": "admin", 
+      "created_at": "2024-01-01T00:00:00Z",
+      "last_sign_in_at": "2024-01-19T09:15:00Z",
+      "message_count": 23,
+      "total_cost_usd": 0.008934
     }
   ],
-  "total": 1
+  "total": 2,
+  "fetched_at": "2024-01-19T16:00:00Z"
 }
 ```
 
 #### `GET /api/v1/admin/metrics`
 
-Get aggregated metrics and time series data.
+Get aggregated usage metrics, KPIs, and time series data from the `daily_usage_view`.
 
 **Query Parameters:**
 
 ```typescript
 interface AdminMetricsQuery {
-  from?: string;    // YYYY-MM-DD
-  to?: string;      // YYYY-MM-DD
-  userId?: string;  // UUID
-  groupBy?: 'day' | 'week' | 'month';  // Default: 'day'
+  from?: string;      // ISO date (YYYY-MM-DD), defaults to 30 days ago
+  to?: string;        // ISO date (YYYY-MM-DD), defaults to today
+  userId?: string;    // UUID - filter by specific user
+  model?: string;     // Filter by specific AI model
 }
 ```
 
 **Example Request:**
 
 ```http
-GET /api/v1/admin/metrics?from=2024-01-01&to=2024-01-31&groupBy=day
+GET /api/v1/admin/metrics?from=2024-01-01&to=2024-01-31&userId=550e8400-e29b-41d4-a716-446655440000
 ```
 
 **Response:**
 
 ```typescript
 interface AdminMetricsResponse {
-  metrics: {
-    totalMessages: number;
-    totalUsers: number;
-    totalTokensIn: number;
-    totalTokensOut: number;
-    totalCost: number;
-    avgResponseTime: number;  // milliseconds
-    avgTTFT: number;          // milliseconds
-    errorRate: number;        // 0-1
-  };
-  timeSeries?: MetricsDataPoint[];
   period: {
-    from: string;
+    from: string;                 // Date range queried
     to: string;
   };
-  userId?: string;
-}
-
-interface MetricsDataPoint {
-  date: string;
-  messages: number;
-  users: number;
-  tokens_in: number;
-  tokens_out: number;
-  cost_usd: number;
-  avg_response_time_ms?: number;
-  avg_ttft_ms?: number;
-  errors?: number;
+  kpis: {
+    total_messages: number;       // Total API calls
+    unique_users: number;         // Number of unique users
+    total_cost_usd: number;       // Total cost (6 decimal precision)
+    avg_ttft_ms: number;          // Average time to first token
+    avg_duration_ms: number;      // Average request duration
+  };
+  time_series: Array<{
+    day: string;                  // YYYY-MM-DD
+    messages: number;             // API calls for this day
+    users: number;                // Active users (approximate)
+    cost_usd: number;             // Total cost for day
+    avg_ttft_ms: number;          // Average TTFT for day
+  }>;
 }
 ```
 
@@ -344,47 +340,48 @@ interface MetricsDataPoint {
 
 ```json
 {
-  "metrics": {
-    "totalMessages": 1523,
-    "totalUsers": 42,
-    "totalTokensIn": 150234,
-    "totalTokensOut": 320567,
-    "totalCost": 2.456789,
-    "avgResponseTime": 1250,
-    "avgTTFT": 320,
-    "errorRate": 0.012
-  },
-  "timeSeries": [
-    {
-      "date": "2024-01-01",
-      "messages": 48,
-      "users": 12,
-      "tokens_in": 4523,
-      "tokens_out": 9876,
-      "cost_usd": 0.078234,
-      "avg_response_time_ms": 1180,
-      "avg_ttft_ms": 310
-    }
-  ],
   "period": {
     "from": "2024-01-01",
     "to": "2024-01-31"
-  }
+  },
+  "kpis": {
+    "total_messages": 1523,
+    "unique_users": 42,
+    "total_cost_usd": 2.456789,
+    "avg_ttft_ms": 320.45,
+    "avg_duration_ms": 1250.80
+  },
+  "time_series": [
+    {
+      "day": "2024-01-01",
+      "messages": 48,
+      "users": 1,
+      "cost_usd": 0.078234,
+      "avg_ttft_ms": 310.2
+    },
+    {
+      "day": "2024-01-02", 
+      "messages": 67,
+      "users": 1,
+      "cost_usd": 0.112456,
+      "avg_ttft_ms": 295.8
+    }
+  ]
 }
 ```
 
 #### `POST /api/v1/admin/models/pricing`
 
-Update model pricing (partial upsert).
+Upsert pricing information for AI models used in cost calculations. Updates the `models_pricing` table.
 
 **Request Body:**
 
 ```typescript
 interface ModelPricingUpdateRequest {
-  model: string;                  // Required, 1-50 chars, pattern: ^[a-z0-9-_.]+$
-  input_per_mtok?: number;        // Cost per million input tokens
-  output_per_mtok?: number;       // Cost per million output tokens
-  cached_input_per_mtok?: number; // Cost per million cached tokens
+  model: string;                    // Required, 1-100 chars
+  input_per_mtok: number;           // Cost per million input tokens (0-1000)
+  output_per_mtok: number;          // Cost per million output tokens (0-1000)
+  cached_input_per_mtok?: number;   // Optional: cost for cached tokens (0-1000)
 }
 ```
 
@@ -392,9 +389,10 @@ interface ModelPricingUpdateRequest {
 
 ```json
 {
-  "model": "gpt-4-mini",
+  "model": "gpt-4o-mini",
   "input_per_mtok": 0.15,
-  "output_per_mtok": 0.60
+  "output_per_mtok": 0.60,
+  "cached_input_per_mtok": 0.075
 }
 ```
 
@@ -404,17 +402,12 @@ interface ModelPricingUpdateRequest {
 interface ModelPricingUpdateResponse {
   success: boolean;
   model: string;
-  pricing: ModelPricing;
-  previous?: ModelPricing;
-}
-
-interface ModelPricing {
-  model: string;
-  input_per_mtok: number;
-  output_per_mtok: number;
-  cached_input_per_mtok?: number;
-  effective_date?: string;
-  active: boolean;
+  pricing: {
+    input_per_mtok: number;
+    output_per_mtok: number;
+    cached_input_per_mtok: number | null;
+  };
+  updated_at: string;             // ISO timestamp
 }
 ```
 
@@ -423,23 +416,13 @@ interface ModelPricing {
 ```json
 {
   "success": true,
-  "model": "gpt-4-mini",
+  "model": "gpt-4o-mini",
   "pricing": {
-    "model": "gpt-4-mini",
     "input_per_mtok": 0.15,
     "output_per_mtok": 0.60,
-    "cached_input_per_mtok": 0.075,
-    "effective_date": "2024-01-15T12:00:00Z",
-    "active": true
+    "cached_input_per_mtok": 0.075
   },
-  "previous": {
-    "model": "gpt-4-mini",
-    "input_per_mtok": 0.10,
-    "output_per_mtok": 0.50,
-    "cached_input_per_mtok": 0.05,
-    "effective_date": "2024-01-01T00:00:00Z",
-    "active": false
-  }
+  "updated_at": "2024-01-19T16:00:00.000Z"
 }
 ```
 
@@ -492,11 +475,46 @@ interface ErrorResponse {
 
 ## Rate Limiting
 
-Rate limits are applied per user/IP:
+Rate limits are applied per user (if authenticated) or per IP address using in-memory buckets:
 
-- **Default:** 100 requests per minute
-- **Chat endpoint:** 10 requests per minute
-- **Admin endpoints:** 1000 requests per minute
+- **Default endpoints:** 100 requests per 60 seconds (`RATE_MAX_REQUESTS`)
+- **Chat endpoint (`/api/v1/chat`):** 20 requests per 60 seconds (`RATE_MAX_REQUESTS_CHAT`)
+
+### Rate Limit Headers
+
+All responses include rate limit information:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 87
+X-RateLimit-Reset: 1642678234
+X-RateLimit-Window: 60
+```
+
+### Rate Limit Exceeded Response
+
+When rate limit is exceeded, returns HTTP 429:
+
+```json
+{
+  "error": "Too many requests",
+  "code": "RATE_LIMITED",
+  "message": "Rate limit exceeded. Try again in 45 seconds.",
+  "details": {
+    "limit": 100,
+    "window_ms": 60000,
+    "reset_time": 1642678234000
+  }
+}
+```
+
+### Configuration
+
+Rate limits are configurable via environment variables:
+
+- `RATE_WINDOW_MS`: Time window in milliseconds (default: 60000)
+- `RATE_MAX_REQUESTS`: Max requests per window for regular endpoints (default: 100)
+- `RATE_MAX_REQUESTS_CHAT`: Max requests per window for chat endpoint (default: 20)
 
 Rate limit headers:
 

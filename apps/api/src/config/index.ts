@@ -40,6 +40,12 @@ export const config = {
     baseUrl: process.env.ZEP_BASE_URL || 'https://api.getzep.com',
   },
   
+  rateLimit: {
+    windowMs: parseInt(process.env.RATE_WINDOW_MS || '60000', 10),
+    maxRequests: parseInt(process.env.RATE_MAX_REQUESTS || '100', 10),
+    maxRequestsChat: parseInt(process.env.RATE_MAX_REQUESTS_CHAT || '20', 10),
+  },
+  
   logging: {
     level: process.env.LOG_LEVEL || 'info',
     pretty: process.env.NODE_ENV === 'development',
