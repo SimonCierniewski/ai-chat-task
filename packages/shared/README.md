@@ -100,6 +100,42 @@ Types for reporting views and aggregated data.
 - **Functions**: `calculateUsageSummary()`, `toTimeSeries()`, `toCsv()`
 - **Constants**: `QUERY_DEFAULTS`, `METRIC_LABELS`, `CHART_COLORS`
 
+### Telemetry Memory (`/src/telemetry-memory.ts`)
+
+Types for message storage and retrieval in Zep memory system.
+
+- **Types**: `Message`, `RetrievalResult`, `MemorySearchQuery`
+- **Schemas**: `messageSchema`, `retrievalResultSchema`, `memorySearchQuerySchema`
+- **Functions**: `estimateTokens()`, `truncateToTokens()`, `sortByRelevance()`, `trimToTokenBudget()`
+- **Constants**: `MEMORY_DEFAULTS`, `MESSAGE_ROLE_LABELS`
+
+### Knowledge Graph (`/src/graph.ts`)
+
+Types for knowledge graph edges and relationships.
+
+- **Types**: `GraphEdge`, `GraphPredicate`, `GraphQuery`, `GraphStats`
+- **Schemas**: `graphEdgeSchema`, `createGraphEdgeSchema`, `graphQuerySchema`
+- **Functions**: `filterByConfidence()`, `groupByPredicate()`, `edgeToText()`, `extractUserFacts()`
+- **Constants**: `PREDICATE_CATEGORIES`, `PREDICATE_LABELS`, `CONFIDENCE_LEVELS`
+
+### Memory Configuration (`/src/memory-config.ts`)
+
+Configuration types for memory retrieval and processing.
+
+- **Types**: `MemoryConfig`, `RetrievalStrategy`, `PruningConfig`, `MemorySystemConfig`
+- **Schemas**: `memoryConfigSchema`, `retrievalStrategySchema`, `pruningConfigSchema`
+- **Functions**: `createDefaultConfig()`, `validateConfig()`, `mergeWithDefaults()`
+- **Constants**: `CONFIG_PRESETS`, `CONFIG_LIMITS`, `DEFAULT_RETRIEVAL_STRATEGY`
+
+### Admin Settings (`/src/admin-settings.ts`)
+
+Admin dashboard configuration and memory management settings.
+
+- **Types**: `AdminMemorySettings`, `SystemMemorySettings`, `AdminDashboardSettings`
+- **Schemas**: `adminMemorySettingsSchema`, `systemMemorySettingsSchema`
+- **Functions**: `createDefaultAdminSettings()`, `validateAdminSettings()`, `getEffectiveConfig()`
+- **Constants**: `ADMIN_PRESETS`, `ADMIN_PERMISSIONS`
+
 ## Type Alignment
 
 All TypeScript types are aligned with the database schema:

@@ -11,3 +11,15 @@ export * from './pricing';
 
 // Export all aggregate types
 export * from './aggregates';
+
+// Export memory and retrieval types
+export * from './telemetry-memory';
+
+// Export knowledge graph types
+export * from './graph';
+
+// Export memory configuration types
+export * from './memory-config';
+
+// Export admin settings types
+export * from './admin-settings';
