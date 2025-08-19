@@ -79,7 +79,7 @@
 ```bash
 # Supabase Auth (Phase 1)
 SUPABASE_URL=https://xxxxxxxxxxxxxxxxxxxx.supabase.co
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # Service role key
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # Service role key (⚠️ SERVER ONLY)
 SUPABASE_JWT_SECRET=your-super-secret-jwt-secret-with-at-least-32-characters
 SUPABASE_JWT_AUD=authenticated
 SUPABASE_PROJECT_REF=xxxxxxxxxxxxxxxxxxxx
@@ -99,6 +99,9 @@ APP_ORIGIN_ANDROID_DEV=http://localhost:8081  # Android dev server origin
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxxxxxxxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # Anon key only
 NEXT_PUBLIC_APP_URL=http://localhost:3001  # For auth redirects
+
+# Phase 2: Server-side only (for API routes/SSR)
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # ⚠️ NEVER expose to client
 ```
 
 #### Android App (`/apps/android`)
@@ -118,6 +121,66 @@ http://localhost:3001/auth/callback     # Admin local dev
 https://admin.yourdomain.eu/auth/callback  # Admin production
 myapp://auth/callback                   # Android deep link
 http://localhost:8081/auth/callback     # Android dev (if using web view)
+```
+
+## 📊 Phase 2: Telemetry & Pricing Variables
+
+### Required for Telemetry System
+
+#### API Service (`/apps/api`)
+```bash
+# Phase 2: Telemetry Writing (SERVER ONLY)
+# Uses existing SUPABASE_URL from Phase 1
+# Uses existing SUPABASE_SERVICE_KEY from Phase 1
+# Service role key required for:
+# - Writing to telemetry_events table
+# - Updating daily_usage aggregates
+# - Managing models_pricing
+
+# No additional variables needed - reuses Phase 1 service credentials
+```
+
+#### Admin Dashboard (`/apps/admin`)
+```bash
+# Phase 2: Telemetry Reading (SERVER-SIDE ROUTES ONLY)
+# For Next.js API routes and SSR pages that read telemetry
+
+# Server-side variables (NOT prefixed with NEXT_PUBLIC_)
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # ⚠️ SERVER ONLY
+
+# These are used in:
+# - /api/admin/metrics - Read telemetry_events and daily_usage
+# - /api/admin/pricing - Read/update models_pricing
+# - /api/admin/users - Read user telemetry data
+```
+
+### Security Boundaries
+
+| Variable | API | Admin (Server) | Admin (Client) | Android |
+|----------|-----|---------------|----------------|---------|
+| `SUPABASE_URL` | ✅ | ✅ | ✅ (public) | ✅ |
+| `SUPABASE_ANON_KEY` | ❌ | ❌ | ✅ (public) | ✅ |
+| `SUPABASE_SERVICE_KEY` | ✅ | ✅ (SSR only) | ❌ NEVER | ❌ NEVER |
+
+### Telemetry Data Flow
+
+```mermaid
+graph LR
+    A[API Backend] -->|Service Role| B[telemetry_events]
+    A -->|Service Role| C[daily_usage]
+    A -->|Service Role| D[models_pricing]
+    
+    E[Admin SSR] -->|Service Role| B
+    E -->|Service Role| C
+    E -->|Service Role| D
+    
+    F[Admin Client] -->|No Access| G[❌ Blocked by RLS]
+    H[Android App] -->|No Access| G
+    
+    style A fill:#90EE90
+    style E fill:#90EE90
+    style F fill:#FFB6C1
+    style H fill:#FFB6C1
 ```
 
 ## 🌍 EU Region Deployment
