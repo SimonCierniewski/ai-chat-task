@@ -8,22 +8,36 @@
 
 **Responsibilities**:
 
-- Authentication & authorization
+- Authentication & authorization (Supabase JWT verification)
 - Business logic execution
-- Database operations
-- External service integrations
-- WebSocket connections (if real-time features needed)
+- Database operations (Supabase/PostgreSQL)
+- External service integrations (OpenAI, Zep)
+- WebSocket/SSE connections for streaming
+- Telemetry event tracking
 
-**Technology Considerations**:
+**Technology Stack**:
 
-- Framework: Express, Fastify, NestJS, or Hono
-- Database: PostgreSQL, MongoDB, or SQLite for prototype
-- ORM/ODM: Prisma, TypeORM, or Mongoose
-- API Style: REST, GraphQL, or tRPC
+- Framework: Fastify (TypeScript)
+- Database: PostgreSQL via Supabase
+- Auth: Supabase with JWKS verification
+- Memory: Zep v3 for conversation history
+- AI: OpenAI with SSE streaming
+- API Style: REST with SSE endpoints
+
+**Key Integrations**:
+
+- **Supabase**: Authentication, database, telemetry storage
+- **Zep v3**: Conversation memory and knowledge graph ([details](./ZEP_INTEGRATION.md))
+- **OpenAI**: LLM with streaming responses
+- **Telemetry**: Event tracking and cost calculation ([details](./TELEMETRY.md))
 
 **Environment Variables**:
 
-- `DATABASE_URL` - Database connection string
+- `SUPABASE_URL` - Supabase project URL
+- `SUPABASE_SERVICE_KEY` - Service role key (server-only)
+- `ZEP_API_KEY` - Zep API key (server-only)
+- `ZEP_BASE_URL` - Zep API endpoint
+- `OPENAI_API_KEY` - OpenAI API key
 - `JWT_SECRET` - Authentication token secret
 - `PORT` - Server port (default: 3000)
 - `NODE_ENV` - Environment (development/production)
@@ -119,12 +133,34 @@ export * from './validators';
 
 ```
 [Android App] ─────┐
-                   ├──→ [API Service] ←→ [Database]
-[Admin Dashboard] ─┘         ↑
-                            │
-                    [Shared Package]
+                   ├──→ [API Service] ←→ [Supabase DB]
+[Admin Dashboard] ─┘         ↑              ↑
+                            │              │
+                    [Shared Package]    [Telemetry]
                     (types, utils)
+                            ↓
+                      [Zep Memory] ←→ [OpenAI]
+                      (US Region)     (Streaming)
 ```
+
+### Memory & AI Integration
+
+The system integrates with external AI services following these patterns:
+
+1. **Zep Memory Management**: 
+   - Multi-tenant collections using `user:{uuid}` naming ([details](./ZEP_COLLECTIONS.md))
+   - Server-only access via API backend
+   - US region deployment (latency considerations)
+
+2. **OpenAI Integration**:
+   - SSE streaming for real-time responses
+   - Cost tracking via telemetry system
+   - Model selection per request
+
+3. **Telemetry & Monitoring**:
+   - Event-based tracking in `telemetry_events` table
+   - Cost calculation with precision rules ([details](./COSTS.md))
+   - Daily aggregation for analytics ([details](./TELEMETRY.md))
 
 ## Environment Management
 
