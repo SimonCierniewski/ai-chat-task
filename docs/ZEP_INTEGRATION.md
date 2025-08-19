@@ -177,30 +177,45 @@ GET /collections/{collection_id}/knowledge/query?subject=user&predicate_in=works
 ```typescript
 // apps/api/src/services/zep.ts
 
+import { RetrievalConfig, OntologySettings } from '@packages/shared/admin-settings';
+import { applyRetrievalPolicy } from './retrieval';
+import { extractKnowledge } from './ontology';
+
 class ZepService {
   private client: ZepClient;
+  private retrievalConfig: RetrievalConfig;
+  private ontologySettings: OntologySettings;
   
-  constructor() {
+  constructor(adminSettings: AdminMemorySettings) {
     this.client = new ZepClient({
       apiKey: process.env.ZEP_API_KEY,  // Server-only
       baseUrl: process.env.ZEP_BASE_URL
     });
+    
+    // Load policy configurations
+    this.retrievalConfig = adminSettings.retrieval;
+    this.ontologySettings = adminSettings.ontology;
   }
   
   async searchMemories(userId: string, query: string): Promise<Memory[]> {
     const collectionName = `user:${userId}`;
     
     try {
-      // Search with timeout for transatlantic latency
+      // Search with policy-defined limit (2x for filtering)
       const results = await this.client.search({
         collection: collectionName,
         query,
-        limit: 10,
+        limit: this.retrievalConfig.topK * 2,
         timeout: 3000  // 3s timeout for US region
       });
       
-      // Filter and sanitize results
-      return this.sanitizeResults(results);
+      // Apply retrieval policy (dedup, clip, interleave, budget)
+      const processedMemories = await applyRetrievalPolicy(
+        results,
+        this.retrievalConfig
+      );
+      
+      return processedMemories;
     } catch (error) {
       // Log but don't fail the request
       logger.warn('Zep search failed, continuing without memory', error);
@@ -213,16 +228,31 @@ class ZepService {
     sessionId: string, 
     message: Message
   ): Promise<void> {
+    // Extract knowledge using ontology rules
+    const facts = await extractKnowledge(
+      message,
+      this.ontologySettings
+    );
+    
+    // Store message and facts
+    const promises = [
+      this.client.addMessage({
+        collection: `user:${userId}`,
+        session: sessionId,
+        message
+      }),
+      facts.length > 0 ? this.client.addFacts({
+        collection: `user:${userId}`,
+        facts
+      }) : Promise.resolve()
+    ];
+    
     // Fire-and-forget pattern for writes
-    this.client.addMessage({
-      collection: `user:${userId}`,
-      session: sessionId,
-      message
-    }).catch(error => {
+    Promise.all(promises).catch(error => {
       // Log but don't block the response
-      logger.error('Failed to store message in Zep', error);
+      logger.error('Failed to store in Zep', error);
       // Queue for retry if critical
-      this.retryQueue.add({ userId, sessionId, message });
+      this.retryQueue.add({ userId, sessionId, message, facts });
     });
   }
 }
@@ -240,28 +270,48 @@ const [memories, openAiStream] = await Promise.all([
 ]);
 ```
 
-### 2. Memory Budget Management
+### 2. Memory Retrieval Policy
+
+Memory retrieval follows the deterministic rules defined in [RETRIEVAL_POLICY.md](./RETRIEVAL_POLICY.md):
+
+- **Top-K Results**: 6-10 results (default: 8)
+- **Content Clipping**: 1-2 sentences per fact
+- **Token Budget**: ≤1500 tokens maximum
+- **Deduplication**: Normalized text hashing
+- **Interleaving**: Alternates relevance and recency
 
 ```typescript
-const MEMORY_TOKEN_BUDGET = 1500;  // Max tokens for context
+import { RetrievalConfig } from '../shared/admin-settings';
+import { applyRetrievalPolicy } from '../services/retrieval';
 
-function trimMemories(memories: Memory[]): Memory[] {
-  let tokenCount = 0;
-  const trimmed: Memory[] = [];
-  
-  for (const memory of memories) {
-    const tokens = estimateTokens(memory.content);
-    if (tokenCount + tokens > MEMORY_TOKEN_BUDGET) break;
-    
-    trimmed.push(memory);
-    tokenCount += tokens;
-  }
-  
-  return trimmed;
-}
+// Use policy-driven retrieval
+const memories = await applyRetrievalPolicy(
+  rawZepResults,
+  adminSettings.memory.retrieval
+);
 ```
 
-### 3. Caching Strategy (Future)
+### 3. Knowledge Graph Ontology
+
+Entity extraction and relationship management follow [ONTOLOGY.md](./ONTOLOGY.md):
+
+- **Allowed Predicates**: likes, works_at, located_in, knows, owns, interested_in, visited, uses
+- **Entity Normalization**: Lowercase, NFKC, trim
+- **Edge Limits**: Max 3 new edges per message
+- **Confidence Scoring**: 0.0-1.0 heuristic-based
+
+```typescript
+import { OntologySettings } from '../shared/admin-settings';
+import { extractKnowledge } from '../services/ontology';
+
+// Extract facts using ontology rules
+const facts = await extractKnowledge(
+  message,
+  adminSettings.memory.ontology
+);
+```
+
+### 4. Caching Strategy (Future)
 
 ```typescript
 // Redis cache for frequently accessed memories
