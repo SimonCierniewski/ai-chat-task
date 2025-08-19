@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { publicConfig } from '../../../lib/config';
+import { UserInfo } from './user-info';
 
 interface NavItem {
   label: string;
@@ -91,14 +92,7 @@ export function AdminSidebar() {
       </nav>
       
       <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-800">
-        <div className="text-xs text-gray-500">
-          <p>Region: {publicConfig.region}</p>
-          <p className="mt-1">
-            <Link href="/login" className="hover:text-gray-300">
-              Sign Out
-            </Link>
-          </p>
-        </div>
+        <UserInfo />
       </div>
     </aside>
   );
