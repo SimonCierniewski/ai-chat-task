@@ -45,10 +45,28 @@ pnpm clean        # Clean all build artifacts and node_modules
 
 ## 📚 Documentation
 
+### Project Management
 - [Architecture Overview](./docs/ARCHITECTURE.md) - System design and component interaction
+- [Implementation Plan](./docs/IMPLEMENTATION_PLAN.md) - Detailed phase breakdown
+- [Project Context](./docs/PROJECT_CONTEXT.md) - Full project requirements
 - [Release Checklist](./docs/RELEASE_CHECKLIST.md) - Pre-deployment verification steps
+
+### Development Guides
 - [Commands Reference](./docs/COMMANDS.md) - All available monorepo commands
 - [Environment Guide](./docs/ENVIRONMENT.md) - Environment variable setup
+- [Secrets Matrix](./infra/SECRETS_MATRIX.md) - Security boundaries and secret management
+
+### Phase 1: Authentication
+- [Auth Setup](./docs/AUTH_SETUP.md) - Complete auth implementation guide
+- [Phase 1 Verification](./docs/PHASE1_VERIFICATION.md) - Authentication QA procedures
+- [Definition of Done](./docs/DEFINITION_OF_DONE.md) - Acceptance criteria with status
+
+### Phase 2: Telemetry & Pricing
+- [Telemetry System](./docs/TELEMETRY.md) - Event tracking and aggregation
+- [Pricing Configuration](./docs/PRICING.md) - Model pricing management
+- [Cost Calculation](./docs/COSTS.md) - Detailed cost formulas and precision rules
+- [Database Validation](./docs/DB_VALIDATION.md) - SQL queries for testing
+- [Phase 2 Verification](./docs/PHASE2_VERIFICATION.md) - Telemetry QA checklist
 
 ## 💻 Editor Setup
 
