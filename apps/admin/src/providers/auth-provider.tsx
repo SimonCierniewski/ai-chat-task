@@ -103,8 +103,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
+    // Sign out from Supabase
     await supabase.auth.signOut()
+    
+    // Clear local state
+    setUser(null)
     setProfile(null)
+    setSession(null)
+    
+    // Clear all storage to remove any cached tokens
+    if (typeof window !== 'undefined') {
+      // Clear localStorage
+      localStorage.clear()
+      
+      // Clear sessionStorage
+      sessionStorage.clear()
+      
+      // Clear all cookies for this domain
+      document.cookie.split(";").forEach((c) => {
+        const eqPos = c.indexOf("=")
+        const name = eqPos > -1 ? c.substr(0, eqPos) : c
+        document.cookie = `${name.trim()}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+        document.cookie = `${name.trim()}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
+        document.cookie = `${name.trim()}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${window.location.hostname}`
+      })
+    }
+    
+    // Navigate to login
     router.push('/login')
   }
 
