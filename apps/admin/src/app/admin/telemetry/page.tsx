@@ -1,26 +1,185 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { AdminHeader } from '@/components/admin/header';
 import { Card } from '@/components/ui/card';
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from 'recharts';
+
+interface MetricsData {
+  kpis: {
+    total_messages: number;
+    total_cost: number;
+    avg_ttft_ms: number;
+    avg_response_ms: number;
+  };
+  daily: Array<{
+    day: string;
+    messages: number;
+    total_cost: number;
+    avg_ttft_ms: number;
+    avg_response_ms: number;
+    tokens_in: number;
+    tokens_out: number;
+  }>;
+  models: Array<{
+    model: string;
+    count: number;
+    total_cost: number;
+  }>;
+  users?: Array<{
+    user_id: string;
+    email: string;
+    message_count: number;
+    total_cost: number;
+  }>;
+}
 
 export default function TelemetryPage() {
-  // Mock data for chart visualization
-  const mockData = {
-    messagesPerDay: [
-      { day: 'Mon', count: 1234 },
-      { day: 'Tue', count: 1456 },
-      { day: 'Wed', count: 1678 },
-      { day: 'Thu', count: 1234 },
-      { day: 'Fri', count: 1890 },
-      { day: 'Sat', count: 987 },
-      { day: 'Sun', count: 765 },
-    ],
-    costByModel: [
-      { model: 'gpt-4o-mini', cost: 234.56 },
-      { model: 'gpt-4o', cost: 456.78 },
-      { model: 'gpt-3.5-turbo', cost: 123.45 },
-    ]
+  const [metrics, setMetrics] = useState<MetricsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<'7' | '30'>('7');
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchMetrics();
+  }, [dateRange, selectedUser, selectedModel]);
+
+  const fetchMetrics = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Calculate date range
+      const to = new Date();
+      const from = new Date();
+      from.setDate(from.getDate() - parseInt(dateRange));
+
+      // Build query params
+      const params = new URLSearchParams({
+        from: from.toISOString().split('T')[0],
+        to: to.toISOString().split('T')[0],
+      });
+      if (selectedUser) params.append('userId', selectedUser);
+      if (selectedModel) params.append('model', selectedModel);
+
+      const response = await fetch(`/api/telemetry/metrics?${params}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch metrics');
+      }
+
+      const data = await response.json();
+      setMetrics(data);
+
+      // Extract unique models for filter
+      if (data.models) {
+        const models = data.models.map((m: any) => m.model);
+        setAvailableModels(models);
+      }
+    } catch (err: any) {
+      console.error('Error fetching metrics:', err);
+      setError(err.message || 'Failed to load metrics');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4,
+    }).format(value);
+  };
+
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('en-US').format(value);
+  };
+
+  const formatTiming = (ms: number) => {
+    if (ms < 1000) {
+      return `${Math.round(ms)}ms`;
+    }
+    return `${(ms / 1000).toFixed(2)}s`;
+  };
+
+  // Custom tooltip for charts
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+          <p className="font-medium text-sm">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-sm" style={{ color: entry.color }}>
+              {entry.name}: {
+                entry.dataKey.includes('cost') 
+                  ? formatCurrency(entry.value)
+                  : entry.dataKey.includes('ms')
+                  ? formatTiming(entry.value)
+                  : formatNumber(entry.value)
+              }
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  if (loading) {
+    return (
+      <>
+        <AdminHeader 
+          title="Telemetry" 
+          subtitle="System metrics and performance data"
+        />
+        <div className="p-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">Loading metrics...</div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <AdminHeader 
+          title="Telemetry" 
+          subtitle="System metrics and performance data"
+        />
+        <div className="p-8">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-700">{error}</p>
+            <button 
+              onClick={fetchMetrics}
+              className="mt-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -30,133 +189,235 @@ export default function TelemetryPage() {
       />
       
       <div className="p-8">
+        {/* Filters */}
+        <div className="mb-6 flex flex-wrap gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date Range
+            </label>
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as '7' | '30')}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+            </select>
+          </div>
+
+          {metrics?.users && metrics.users.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                User (Optional)
+              </label>
+              <select
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Users</option>
+                {metrics.users.map((user) => (
+                  <option key={user.user_id} value={user.user_id}>
+                    {user.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {availableModels.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Model (Optional)
+              </label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Models</option>
+                {availableModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card
+            title="Total Messages"
+            value={formatNumber(metrics?.kpis.total_messages || 0)}
+            description={`Last ${dateRange} days`}
+            icon="💬"
+          />
+          <Card
+            title="Total Cost"
+            value={formatCurrency(metrics?.kpis.total_cost || 0)}
+            description={`Last ${dateRange} days`}
+            icon="💰"
+          />
+          <Card
             title="Avg TTFT"
-            value="287ms"
+            value={formatTiming(metrics?.kpis.avg_ttft_ms || 0)}
             description="Time to first token"
             icon="⚡"
           />
           <Card
-            title="Success Rate"
-            value="99.2%"
-            description="Last 24 hours"
-            icon="✅"
-          />
-          <Card
-            title="Total Tokens"
-            value="1.2M"
-            description="This month"
-            icon="🔤"
-          />
-          <Card
-            title="Error Rate"
-            value="0.8%"
-            description="Last 24 hours"
-            icon="⚠️"
+            title="Avg Response Time"
+            value={formatTiming(metrics?.kpis.avg_response_ms || 0)}
+            description="End-to-end latency"
+            icon="⏱️"
           />
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Messages Per Day Chart */}
-          <Card title="Messages Per Day" icon="📊">
-            <div className="mt-4">
-              <div className="h-64 flex items-end justify-between gap-2">
-                {mockData.messagesPerDay.map((day) => (
-                  <div key={day.day} className="flex-1 flex flex-col items-center">
-                    <div 
-                      className="w-full bg-blue-500 rounded-t"
-                      style={{ height: `${(day.count / 2000) * 100}%` }}
+        {metrics?.daily && metrics.daily.length > 0 && (
+          <div className="space-y-8">
+            {/* Messages per Day Chart */}
+            <Card title="Messages per Day" icon="📊">
+              <div className="mt-4 h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={metrics.daily}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="day" 
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => {
+                        const date = new Date(value);
+                        return `${date.getMonth() + 1}/${date.getDate()}`;
+                      }}
                     />
-                    <span className="text-xs text-gray-600 mt-2">{day.day}</span>
-                  </div>
-                ))}
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Line 
+                      type="monotone" 
+                      dataKey="messages" 
+                      stroke="#3b82f6" 
+                      strokeWidth={2}
+                      dot={{ fill: '#3b82f6', r: 4 }}
+                      name="Messages"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
-            </div>
-          </Card>
+            </Card>
 
-          {/* Cost by Model */}
-          <Card title="Cost by Model" icon="💰">
-            <div className="mt-4 space-y-4">
-              {mockData.costByModel.map((item) => (
-                <div key={item.model}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="font-medium">{item.model}</span>
-                    <span>${item.cost.toFixed(2)}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-green-500 h-2 rounded-full"
-                      style={{ width: `${(item.cost / 500) * 100}%` }}
+            {/* Average TTFT per Day Chart */}
+            <Card title="Average TTFT per Day" icon="⚡">
+              <div className="mt-4 h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={metrics.daily}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="day" 
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => {
+                        const date = new Date(value);
+                        return `${date.getMonth() + 1}/${date.getDate()}`;
+                      }}
                     />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
+                    <YAxis 
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => `${value}ms`}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Line 
+                      type="monotone" 
+                      dataKey="avg_ttft_ms" 
+                      stroke="#8b5cf6" 
+                      strokeWidth={2}
+                      dot={{ fill: '#8b5cf6', r: 4 }}
+                      name="Avg TTFT (ms)"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="avg_response_ms" 
+                      stroke="#ec4899" 
+                      strokeWidth={2}
+                      dot={{ fill: '#ec4899', r: 4 }}
+                      name="Avg Response (ms)"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
 
-        {/* Detailed Metrics Table */}
-        <Card title="Recent Events" icon="📋" className="mt-8">
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Time
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Model
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Tokens
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Cost
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    TTFT
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                <tr>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    10:23:45
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                      openai_call
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    user@example.com
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    gpt-4o-mini
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    1,234
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    $0.0234
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    245ms
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            {/* Costs per Day Chart */}
+            <Card title="Costs per Day" icon="💰">
+              <div className="mt-4 h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={metrics.daily}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="day" 
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => {
+                        const date = new Date(value);
+                        return `${date.getMonth() + 1}/${date.getDate()}`;
+                      }}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => `$${value}`}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Area 
+                      type="monotone" 
+                      dataKey="total_cost" 
+                      stroke="#10b981" 
+                      fill="#10b981"
+                      fillOpacity={0.3}
+                      strokeWidth={2}
+                      name="Cost (USD)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            {/* Model Distribution */}
+            {metrics.models && metrics.models.length > 0 && (
+              <Card title="Model Usage & Costs" icon="🤖">
+                <div className="mt-4 h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={metrics.models}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="model" tick={{ fontSize: 12 }} />
+                      <YAxis yAxisId="left" orientation="left" tick={{ fontSize: 12 }} />
+                      <YAxis 
+                        yAxisId="right" 
+                        orientation="right" 
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(value) => `$${value}`}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Bar 
+                        yAxisId="left" 
+                        dataKey="count" 
+                        fill="#3b82f6" 
+                        name="Message Count"
+                      />
+                      <Bar 
+                        yAxisId="right" 
+                        dataKey="total_cost" 
+                        fill="#10b981" 
+                        name="Total Cost (USD)"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
           </div>
-        </Card>
+        )}
       </div>
     </>
   );
