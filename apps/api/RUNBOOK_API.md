@@ -144,6 +144,7 @@ All API endpoints are versioned under `/api/v1`:
 
 - `GET /api/v1/admin/users` - List all users
 - `GET /api/v1/admin/metrics` - Get telemetry metrics
+- `GET /api/v1/admin/models` - List available models with pricing
 - `POST /api/v1/admin/models/pricing` - Update model pricing
 
 ## Request IDs
@@ -292,6 +293,134 @@ while ! curl -sf http://localhost:3000/ready; do
   sleep 1
 done
 ```
+
+## Incident Response (Phase 5)
+
+### Key Metrics to Inspect
+
+When investigating issues, check these telemetry fields:
+
+1. **Request Tracking**
+   - `req_id`: Unique request identifier for tracing
+   - `user_id`: User experiencing the issue
+   - `session_id`: Session context
+
+2. **Performance Metrics**
+   - `ttft_ms`: Time to first token (target < 350ms)
+   - `openai_ms`: Total OpenAI request time
+   - `memory_ms`: Memory retrieval time (if useMemory=true)
+   - `total_ms`: End-to-end request time
+
+3. **Reliability Indicators**
+   - `provider_retry_count`: Number of retries (0 = no issues, 1+ = transient failures)
+   - `has_provider_usage`: true = exact usage, false = estimated
+   - `status_code`: HTTP status from upstream (429 = rate limit, 5xx = server error)
+
+4. **Error Codes**
+   - `OPENAI_TIMEOUT`: Request timed out
+   - `RATE_LIMIT`: Hit rate limits (429)
+   - `SERVER_ERROR`: Upstream 5xx error
+   - `PROVIDER_ERROR`: Generic provider failure
+
+### Common Incidents
+
+#### High TTFT (> 350ms)
+```sql
+-- Find slow requests
+SELECT 
+  req_id,
+  user_id,
+  (payload_json->>'ttft_ms')::int as ttft_ms,
+  (payload_json->>'provider_retry_count')::int as retries,
+  payload_json->>'model' as model
+FROM telemetry_events
+WHERE type = 'openai_call'
+  AND (payload_json->>'ttft_ms')::int > 350
+  AND created_at > NOW() - INTERVAL '1 hour'
+ORDER BY ttft_ms DESC;
+```
+
+**Actions**:
+1. Check retry count - high retries indicate network issues
+2. Verify model availability in registry
+3. Check OpenAI status page
+4. Review memory retrieval time if useMemory=true
+
+#### Rate Limiting (429 Errors)
+```sql
+-- Check rate limit incidents
+SELECT 
+  date_trunc('minute', created_at) as minute,
+  COUNT(*) as rate_limit_errors
+FROM telemetry_events
+WHERE type = 'error'
+  AND payload_json->>'code' = 'RATE_LIMIT'
+  AND created_at > NOW() - INTERVAL '1 hour'
+GROUP BY minute
+ORDER BY minute DESC;
+```
+
+**Actions**:
+1. Review OpenAI quota and limits
+2. Check for usage spikes
+3. Consider implementing request queuing
+4. Verify rate limiting configuration
+
+#### Timeout Errors
+```sql
+-- Analyze timeout patterns
+SELECT 
+  user_id,
+  COUNT(*) as timeout_count,
+  AVG((payload_json->>'message_length')::int) as avg_message_length
+FROM telemetry_events
+WHERE type = 'error'
+  AND payload_json->>'code' = 'OPENAI_TIMEOUT'
+  AND created_at > NOW() - INTERVAL '24 hours'
+GROUP BY user_id
+ORDER BY timeout_count DESC;
+```
+
+**Actions**:
+1. Check if specific users have long messages
+2. Review OPENAI_TIMEOUT_MS setting (default 30s)
+3. Check network latency to OpenAI
+4. Consider message length limits
+
+#### Client Disconnects
+```bash
+# Monitor disconnect patterns in logs
+grep "Client disconnected" /var/log/api.log | tail -20
+
+# Check for correlation with long requests
+grep -A2 -B2 "Client disconnected" /var/log/api.log | grep "openai_ms"
+```
+
+**Actions**:
+1. Verify heartbeat is working (every 10s)
+2. Check proxy buffering settings
+3. Review client timeout settings
+4. Monitor SSE connection stability
+
+### Emergency Procedures
+
+#### OpenAI Service Degradation
+1. Monitor retry rates in telemetry
+2. Check OpenAI status: https://status.openai.com
+3. Consider temporary model fallback
+4. Notify users via status page
+
+#### Memory Service (Zep) Failure
+1. Service continues without memory (degraded mode)
+2. Monitor `zep_search` error events
+3. Check Zep service health
+4. Memory retrieval failures are non-blocking
+
+#### Database Connection Issues
+1. Health endpoint will return unhealthy
+2. Telemetry may be lost (accept this)
+3. Check Supabase status
+4. Verify connection pool settings
 
 ## Troubleshooting
 

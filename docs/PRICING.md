@@ -137,6 +137,43 @@ CREATE POLICY "Models pricing select public"
     USING (true);
 ```
 
+## Model Registry Integration (Phase 5)
+
+### Real-time Price Updates
+
+Admin pricing edits take effect immediately through the Model Registry:
+
+1. **Cache Invalidation**: When pricing is updated via `/api/v1/admin/models/pricing`, the Model Registry cache is invalidated
+2. **Immediate Effect**: Next request will use new pricing for cost calculations
+3. **No Restart Required**: Changes apply without service restart
+4. **Audit Trail**: All price changes are logged with admin user ID and timestamp
+
+### Model Validation
+
+The Model Registry validates requested models:
+
+1. **Primary Check**: Validates model exists in `models_pricing` table
+2. **Fallback**: Uses `OPENAI_DEFAULT_MODEL` if requested model not found
+3. **Cost Transparency**: Actual prices included in `openai_call` telemetry
+4. **Admin Visibility**: `GET /api/v1/admin/models` returns available models with pricing
+
+### Registry API
+
+```typescript
+// List available models with pricing (admin-only)
+GET /api/v1/admin/models
+Response: [
+  {
+    "model": "gpt-4o-mini",
+    "input_per_mtok": 0.15,
+    "output_per_mtok": 0.6,
+    "cached_input_per_mtok": null,
+    "available": true,
+    "is_default": true
+  }
+]
+```
+
 ## Admin Panel Integration
 
 ### Pricing Management UI

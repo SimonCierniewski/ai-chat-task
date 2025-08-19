@@ -26,6 +26,8 @@ import { OpenAIProvider } from '../../providers/openai-provider';
 import { UsageService } from '../../services/usage-service';
 import { PromptAssembler } from '../../services/prompt-assembler';
 import { TelemetryService } from '../../services/telemetry-service';
+import { ModelRegistry } from '../../services/model-registry';
+import { config } from '../../config';
 
 // ============================================================================
 // Types & Schemas  
@@ -80,6 +82,7 @@ const openAIProvider = new OpenAIProvider();
 const usageService = new UsageService();
 const promptAssembler = new PromptAssembler();
 const telemetryService = new TelemetryService();
+const modelRegistry = new ModelRegistry();
 
 // ============================================================================
 // Memory Integration (from memory routes)
@@ -143,11 +146,13 @@ class SSEStream {
   private reply: FastifyReply;
   private heartbeatInterval?: NodeJS.Timeout;
   private closed = false;
+  private abortController: AbortController;
   
   constructor(reply: FastifyReply, requestId: string) {
     this.reply = reply;
+    this.abortController = new AbortController();
     
-    // Set SSE headers
+    // Set SSE headers and flush immediately
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -160,16 +165,21 @@ class SSEStream {
       'Proxy-Buffering': 'off'   // Generic
     });
     
+    // Flush headers immediately before any upstream calls
+    this.flush();
+    
     // Start heartbeat to keep connection alive
     this.startHeartbeat();
     
     // Handle client disconnect
     reply.raw.on('close', () => {
+      this.abortController.abort();
       this.close();
     });
     
     reply.raw.on('error', (error) => {
       logger.warn('SSE stream error', { error: error.message });
+      this.abortController.abort();
       this.close();
     });
     
@@ -209,11 +219,13 @@ class SSEStream {
    * Start periodic heartbeat
    */
   private startHeartbeat() {
+    const heartbeatMs = config.openai.sseHeartbeatMs || 10000; // Default 10s
     this.heartbeatInterval = setInterval(() => {
       if (!this.closed) {
         this.sendComment(`heartbeat ${Date.now()}`);
+        this.flush();
       }
-    }, 30000); // 30 second heartbeat
+    }, heartbeatMs);
   }
   
   /**
@@ -239,6 +251,13 @@ class SSEStream {
    */
   isClosed(): boolean {
     return this.closed;
+  }
+  
+  /**
+   * Get abort signal for upstream cancellation
+   */
+  getAbortSignal(): AbortSignal {
+    return this.abortController.signal;
   }
 }
 
@@ -267,15 +286,22 @@ async function chatHandler(
       });
     }
 
-    const { message, useMemory = false, sessionId, model = 'gpt-4o-mini' } = req.body;
+    const { message, useMemory = false, sessionId } = req.body;
+    let { model } = req.body;
     const userId = authReq.user.id;
 
+    // Validate and resolve model
+    const modelValidation = await modelRegistry.validateModel(model);
+    model = modelValidation.model; // Use validated/default model
+    
     logger.info('Chat request received', {
       req_id: req.id,
       user_id: userId,
       session_id: sessionId,
       use_memory: useMemory,
       model,
+      model_valid: modelValidation.valid,
+      used_default: modelValidation.is_default,
       message_length: message.length
     });
 
@@ -332,10 +358,11 @@ async function chatHandler(
       let hasProviderUsage = false;
       
       // Stream response via OpenAI provider
-      await openAIProvider.streamCompletion({
+      const metrics = await openAIProvider.streamCompletion({
         message,
         model,
         messages: promptPlan.messages,
+        signal: stream.getAbortSignal(), // Pass abort signal for disconnect handling
         onFirstToken: () => {
           ttftMs = Date.now() - openAIStartTime;
         },
@@ -379,10 +406,13 @@ async function chatHandler(
                 tokens_in: usageCalc.tokens_in,
                 tokens_out: usageCalc.tokens_out,
                 cost_usd: usageCalc.cost_usd,
-                ttft_ms: ttftMs,
-                openai_ms: openAIMs,
+                ttft_ms: ttftMs || metrics?.ttftMs,
+                openai_ms: openAIMs || metrics?.openAiMs,
                 has_provider_usage: true,
-                prompt_plan: promptAssembler.getPromptPlanSummary(promptPlan)
+                prompt_plan: promptAssembler.getPromptPlanSummary(promptPlan),
+                provider_retry_count: metrics?.retryCount || 0,
+                input_price_per_mtok: modelValidation.pricing?.input_per_mtok,
+                output_price_per_mtok: modelValidation.pricing?.output_per_mtok
               }
             );
             
@@ -438,10 +468,13 @@ async function chatHandler(
                   tokens_in: usageCalc.tokens_in,
                   tokens_out: usageCalc.tokens_out,
                   cost_usd: usageCalc.cost_usd,
-                  ttft_ms: ttftMs,
-                  openai_ms: openAIMs,
+                  ttft_ms: ttftMs || metrics?.ttftMs,
+                  openai_ms: openAIMs || metrics?.openAiMs,
                   has_provider_usage: false,
-                  prompt_plan: promptAssembler.getPromptPlanSummary(promptPlan)
+                  prompt_plan: promptAssembler.getPromptPlanSummary(promptPlan),
+                  provider_retry_count: metrics?.retryCount || 0,
+                  input_price_per_mtok: modelValidation.pricing?.input_per_mtok,
+                  output_price_per_mtok: modelValidation.pricing?.output_per_mtok
                 }
               );
               
@@ -462,7 +495,7 @@ async function chatHandler(
             stream.close();
           }
         },
-        onError: async (error: Error) => {
+        onError: async (error: Error, statusCode?: number) => {
           if (!stream.isClosed()) {
             logger.error('Streaming provider error', {
               req_id: req.id,
@@ -475,19 +508,42 @@ async function chatHandler(
               userId,
               sessionId,
               error,
-              { model, request_id: req.id }
+              { model, request_id: req.id, status_code: statusCode }
             );
             
-            stream.sendEvent(ChatEventType.ERROR, {
-              error: 'Streaming service temporarily unavailable',
-              code: 'PROVIDER_ERROR'
-            });
+            // Send user-friendly error message based on status
+            let userMessage = 'Service temporarily unavailable. Please try again.';
+            let errorCode = 'PROVIDER_ERROR';
+            
+            if (statusCode === 429) {
+              userMessage = 'Overloaded, please try again soon.';
+              errorCode = 'RATE_LIMIT';
+            } else if (statusCode && statusCode >= 500) {
+              userMessage = 'Server error, please try again later.';
+              errorCode = 'SERVER_ERROR';
+            } else if (error.message.includes('timeout')) {
+              userMessage = 'Request timed out. Please try again with a shorter message.';
+              errorCode = 'OPENAI_TIMEOUT';
+            }
+            
+            // Send error as a token message for user visibility
+            stream.sendEvent(ChatEventType.TOKEN, { text: userMessage });
             
             stream.sendEvent(ChatEventType.DONE, { finish_reason: 'error' });
             stream.close();
           }
         }
       });
+      
+      // Update telemetry with retry count
+      if (metrics.retryCount > 0) {
+        logger.info('Request completed with retries', {
+          req_id: req.id,
+          retry_count: metrics.retryCount,
+          ttft_ms: metrics.ttftMs,
+          openai_ms: metrics.openAiMs
+        });
+      }
       
     } catch (error) {
       // Handle errors during request processing

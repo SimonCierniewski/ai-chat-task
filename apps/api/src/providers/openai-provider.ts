@@ -6,6 +6,7 @@
 import { config } from '../config';
 import { logger } from '../config/logger';
 import { UsageEventData } from '@shared/api/chat';
+import { httpsKeepAliveAgent } from '../utils/http-agents';
 
 // ============================================================================
 // Types
@@ -21,8 +22,9 @@ interface StreamOptions {
   onToken: (text: string) => void;
   onUsage: (usage: UsageEventData) => void;
   onDone: (reason: 'stop' | 'length' | 'content_filter' | 'error') => void;
-  onError: (error: Error) => void;
+  onError: (error: Error, statusCode?: number) => void;
   onFirstToken?: () => void;
+  signal?: AbortSignal; // For client disconnect handling
 }
 
 interface OpenAIStreamResponse {
@@ -70,7 +72,11 @@ export class OpenAIProvider {
   /**
    * Stream completion from OpenAI with usage tracking
    */
-  async streamCompletion(options: StreamOptions): Promise<void> {
+  async streamCompletion(options: StreamOptions): Promise<{
+    ttftMs?: number;
+    openAiMs?: number;
+    retryCount: number;
+  }> {
     const {
       message,
       model = config.openai.defaultModel,
@@ -89,6 +95,7 @@ export class OpenAIProvider {
     let firstTokenReceived = false;
     const startTime = Date.now();
     let retryCount = 0;
+    let openAiMs: number | undefined;
 
     // Build messages array
     const requestMessages = messages || [
@@ -105,6 +112,12 @@ export class OpenAIProvider {
           controller.abort();
           onError(new Error('OpenAI request timeout'));
         }, this.timeoutMs);
+
+        // Check for client disconnect
+        if (options.signal?.aborted) {
+          logger.info('Client disconnected before OpenAI request');
+          return { ttftMs, openAiMs, retryCount };
+        }
 
         const response = await fetch(`${this.baseUrl}/chat/completions`, {
           method: 'POST',
@@ -123,7 +136,8 @@ export class OpenAIProvider {
               include_usage: true
             }
           }),
-          signal: controller.signal
+          signal: options.signal || controller.signal,
+          agent: httpsKeepAliveAgent
         });
 
         clearTimeout(connectTimeout);
@@ -133,25 +147,48 @@ export class OpenAIProvider {
           const errorText = await response.text();
           const error = new Error(`OpenAI API error: ${response.status} ${errorText}`);
           
-          // Never retry 4xx errors
+          // Handle rate limiting (429)
+          if (response.status === 429) {
+            if (retryCount < this.retryMax) {
+              retryCount++;
+              const retryAfter = response.headers.get('retry-after');
+              const delay = retryAfter ? parseInt(retryAfter) * 1000 : 2000 + Math.random() * 1000;
+              logger.warn('OpenAI rate limit, retrying', { 
+                retry_count: retryCount,
+                delay_ms: delay 
+              });
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            onError(error, 429);
+            return { ttftMs, openAiMs, retryCount };
+          }
+          
+          // Never retry 4xx errors (except 429)
           if (response.status >= 400 && response.status < 500) {
             logger.error('OpenAI client error', { 
               status: response.status, 
-              error: errorText 
+              error: errorText,
+              retry_count: retryCount
             });
-            onError(error);
-            return;
+            onError(error, response.status);
+            return { ttftMs, openAiMs, retryCount };
           }
           
           // Retry 5xx errors
           if (response.status >= 500 && retryCount < this.retryMax) {
             retryCount++;
             const jitter = Math.random() * 1000;
+            logger.warn('OpenAI server error, retrying', {
+              status: response.status,
+              retry_count: retryCount
+            });
             await new Promise(resolve => setTimeout(resolve, 1000 + jitter));
             continue;
           }
           
-          throw error;
+          onError(error, response.status);
+          return { ttftMs, openAiMs, retryCount };
         }
 
         // Process SSE stream
@@ -166,6 +203,13 @@ export class OpenAIProvider {
         let finishReason: 'stop' | 'length' | 'content_filter' = 'stop';
 
         while (true) {
+          // Check for client disconnect
+          if (options.signal?.aborted) {
+            logger.info('Client disconnected during streaming');
+            reader.cancel();
+            break;
+          }
+
           const { done, value } = await reader.read();
           
           if (done) break;
@@ -180,6 +224,7 @@ export class OpenAIProvider {
               
               if (data === '[DONE]') {
                 clearTimeout(overallTimeout);
+                openAiMs = Date.now() - startTime;
                 
                 // Emit usage if we have it
                 if (usage) {
@@ -192,7 +237,7 @@ export class OpenAIProvider {
                 }
                 
                 onDone(finishReason);
-                return;
+                return { ttftMs, openAiMs, retryCount };
               }
 
               try {
@@ -235,7 +280,8 @@ export class OpenAIProvider {
         }
 
         clearTimeout(overallTimeout);
-        return;
+        openAiMs = Date.now() - startTime;
+        return { ttftMs, openAiMs, retryCount };
 
       } catch (error: any) {
         // Handle network errors with retry
@@ -247,12 +293,18 @@ export class OpenAIProvider {
           continue;
         }
         
+        // Handle abort/disconnect
+        if (error.name === 'AbortError' || options.signal?.aborted) {
+          logger.info('Request aborted', { retry_count: retryCount });
+          return { ttftMs, openAiMs, retryCount };
+        }
+
         logger.error('OpenAI streaming error', { 
           error: error.message,
-          retryCount 
+          retry_count: retryCount 
         });
         onError(error);
-        return;
+        return { ttftMs, openAiMs, retryCount };
       }
     }
   }

@@ -4,6 +4,16 @@
 
 This guide covers common issues and solutions when working with Server-Sent Events (SSE) in the AI Chat API. SSE is used for real-time streaming of chat responses from the `/api/v1/chat` endpoint.
 
+## Production Hardening Features (Phase 5)
+
+### Key Improvements
+- **Early Header Flush**: SSE headers are flushed immediately before any upstream calls
+- **Heartbeat Comments**: Sent every 10 seconds (configurable via `OPENAI_SSE_HEARTBEAT_MS`)
+- **HTTP Keep-Alive**: Connection pooling with up to 50 concurrent sockets for OpenAI
+- **Client Disconnect Detection**: Upstream requests are cancelled via AbortSignal when clients disconnect
+- **Retry Tracking**: `provider_retry_count` logged in telemetry for monitoring
+- **Graceful Failures**: User-friendly messages for 429/5xx errors
+
 ## Quick Verification
 
 ### 1. Basic SSE Test with curl
@@ -51,6 +61,20 @@ curl -I -X POST \
 # x-request-id: req_abc123
 # x-accel-buffering: no
 # proxy-buffering: off
+```
+
+### 3. Test Heartbeats (Phase 5)
+
+```bash
+# Watch for heartbeat comments (every 10 seconds by default)
+curl -N -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Tell me a long story"}' \
+  http://localhost:3000/api/v1/chat 2>&1 | grep -E "(heartbeat|data:|event:)"
+
+# Output should include:
+# : heartbeat 1704074400000
+# : heartbeat 1704074410000  # 10 seconds later
 ```
 
 ### 3. Test with JavaScript EventSource
@@ -299,16 +323,27 @@ client.newCall(request).enqueue(object : Callback {
 
 **Solutions:**
 
-#### Check Heartbeat Configuration
+#### Check Heartbeat Configuration (Phase 5 Updated)
 ```typescript
 // In SSEStream class, verify heartbeat interval
 private startHeartbeat() {
+  const heartbeatMs = config.openai.sseHeartbeatMs || 10000; // Default 10s
   this.heartbeatInterval = setInterval(() => {
     if (!this.closed) {
       this.sendComment(`heartbeat ${Date.now()}`);
+      this.flush(); // Ensure immediate delivery
     }
-  }, 30000); // 30 second heartbeat
+  }, heartbeatMs);
 }
+```
+
+#### Client Disconnect Handling (Phase 5)
+```typescript
+// Disconnects now cancel upstream requests
+reply.raw.on('close', () => {
+  this.abortController.abort(); // Cancel OpenAI request
+  this.close();
+});
 ```
 
 #### Handle Reconnection in Client
@@ -365,6 +400,41 @@ tail -f logs/api.log | grep "memory_ms"
 
 # Look for patterns like:
 # {"memory_ms": 150, "results_count": 5, "total_tokens": 245}
+```
+
+## Error Handling (Phase 5)
+
+### Graceful Failure Messages
+
+```typescript
+// User-friendly error messages for common failures
+if (statusCode === 429) {
+  userMessage = 'Overloaded, please try again soon.';
+  errorCode = 'RATE_LIMIT';
+} else if (statusCode >= 500) {
+  userMessage = 'Server error, please try again later.';
+  errorCode = 'SERVER_ERROR';
+} else if (error.message.includes('timeout')) {
+  userMessage = 'Request timed out. Please try again with a shorter message.';
+  errorCode = 'OPENAI_TIMEOUT';
+}
+```
+
+### Testing Error Scenarios
+
+```bash
+# Simulate timeout (requires mock/fault injection)
+curl -N -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-Test-Scenario: timeout" \
+  -d '{"message":"test"}' \
+  http://localhost:3000/api/v1/chat
+
+# Expected: Single user-friendly message + done event
+# event: token
+# data: {"text":"Request timed out. Please try again with a shorter message."}
+# event: done
+# data: {"finish_reason":"error"}
 ```
 
 ## Performance Optimization
@@ -497,6 +567,37 @@ netstat -an | grep :3000
 - **Connection Stability**: > 99% uptime for 5-minute streams
 - **Concurrent Streams**: Support 100+ concurrent SSE connections
 - **Error Rate**: < 1% of requests result in stream errors
+- **Retry Rate**: < 5% of requests require retries (monitor `provider_retry_count`)
+- **Heartbeat Interval**: 10 seconds (configurable via `OPENAI_SSE_HEARTBEAT_MS`)
+
+### Key Metrics SQL Queries (Phase 5)
+
+```sql
+-- Monitor retry rates
+SELECT 
+  date_trunc('hour', created_at) as hour,
+  AVG((payload_json->>'provider_retry_count')::int) as avg_retries,
+  MAX((payload_json->>'provider_retry_count')::int) as max_retries,
+  COUNT(*) FILTER (WHERE (payload_json->>'provider_retry_count')::int > 0) as requests_with_retries,
+  COUNT(*) as total_requests
+FROM telemetry_events
+WHERE type = 'openai_call'
+  AND created_at > NOW() - INTERVAL '24 hours'
+GROUP BY hour
+ORDER BY hour DESC;
+
+-- Check timeout errors
+SELECT 
+  date_trunc('hour', created_at) as hour,
+  COUNT(*) FILTER (WHERE payload_json->>'code' = 'OPENAI_TIMEOUT') as timeout_errors,
+  COUNT(*) FILTER (WHERE payload_json->>'code' = 'RATE_LIMIT') as rate_limit_errors,
+  COUNT(*) as total_errors
+FROM telemetry_events  
+WHERE type = 'error'
+  AND created_at > NOW() - INTERVAL '24 hours'
+GROUP BY hour
+ORDER BY hour DESC;
+```
 
 ## Contact & Support
 

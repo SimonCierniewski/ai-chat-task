@@ -10,6 +10,7 @@ import { createValidator } from '../../utils/validator';
 import { logger } from '../../config';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../../config';
+import { ModelRegistry } from '../../services/model-registry';
 
 // ============================================================================
 // Types & Schemas
@@ -89,6 +90,9 @@ const pricingRequestSchema = Type.Object({
 
 const validateMetricsQuery = createValidator(metricsQuerySchema);
 const validatePricingRequest = createValidator(pricingRequestSchema);
+
+// Initialize services
+const modelRegistry = new ModelRegistry();
 
 // ============================================================================
 // Supabase Admin Client
@@ -342,6 +346,37 @@ async function getMetricsHandler(
 }
 
 /**
+ * GET /api/v1/admin/models
+ * List available models with pricing
+ */
+async function listModelsHandler(
+  req: FastifyRequest,
+  reply: FastifyReply
+) {
+  try {
+    const models = await modelRegistry.getAllModels();
+    
+    logger.info('Admin listed models', {
+      req_id: req.id,
+      user_id: (req as any).user.id,
+      models_count: models.length
+    });
+    
+    return reply.send(models);
+  } catch (error) {
+    logger.error('Failed to list models', {
+      req_id: req.id,
+      error: error.message
+    });
+    
+    return reply.status(500).send({
+      error: 'INTERNAL_ERROR',
+      message: 'Failed to list models'
+    });
+  }
+}
+
+/**
  * POST /api/v1/admin/models/pricing
  * Upsert model pricing configuration
  */
@@ -398,6 +433,9 @@ async function updateModelPricingHandler(
       throw error;
     }
 
+    // Invalidate model registry cache to reflect changes immediately
+    await modelRegistry.invalidateCache();
+    
     const totalMs = Date.now() - startTime;
     
     logger.info('Admin pricing update completed', {
@@ -506,6 +544,25 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     }
   }, getMetricsHandler);
 
+  // GET /api/v1/admin/models - List available models
+  fastify.get('/models', {
+    schema: {
+      summary: 'List available models (admin only)',
+      description: 'Get list of available AI models with pricing information',
+      tags: ['Admin'],
+      response: {
+        200: Type.Array(Type.Object({
+          model: Type.String(),
+          input_per_mtok: Type.Number(),
+          output_per_mtok: Type.Number(),
+          cached_input_per_mtok: Type.Optional(Type.Number()),
+          available: Type.Boolean(),
+          is_default: Type.Boolean()
+        }))
+      }
+    }
+  }, listModelsHandler);
+
   // POST /api/v1/admin/models/pricing - Update model pricing  
   fastify.post('/models/pricing', {
     schema: {
@@ -529,7 +586,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
   }, updateModelPricingHandler);
 
   logger.info('Admin routes registered', { 
-    routes: ['/users', '/metrics', '/models/pricing'],
+    routes: ['/users', '/metrics', '/models', '/models/pricing'],
     auth_required: true,
     admin_required: true
   });
