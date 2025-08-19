@@ -207,6 +207,104 @@ SELECT public.aggregate_daily_usage(CURRENT_DATE - INTERVAL '1 day');
 3. **Aggregation**: Pre-computed daily metrics reduce query complexity for dashboards
 4. **Partitioning**: Consider partitioning `telemetry_events` by month if data volume grows significantly
 
+## Reporting Views
+
+### daily_usage_view
+
+A real-time view that aggregates telemetry events by day, user, and model. This view performs on-the-fly aggregation of the raw telemetry data.
+
+#### Features
+- Real-time data (always current)
+- No refresh needed
+- Includes percentile metrics (median, p95)
+- Suitable for small to medium datasets
+
+#### Aggregation Logic
+
+The view aggregates `openai_call` events from `telemetry_events`:
+
+1. **Day Truncation**: Uses `date_trunc('day', created_at AT TIME ZONE 'UTC')` for consistent UTC-based grouping
+2. **Metrics Calculated**:
+   - `tokens_in/out`: Sum of token usage
+   - `cost_usd`: Sum of pre-calculated costs from events
+   - `calls`: Count of API calls
+   - `avg_ttft_ms`: Average time to first token
+   - `avg_duration_ms`: Average request duration
+   - `median_ttft_ms`: 50th percentile TTFT
+   - `p95_ttft_ms`: 95th percentile TTFT
+
+### daily_usage_mv (Materialized View)
+
+A cached version of the aggregation for better performance on large datasets.
+
+#### Features
+- Cached data (requires refresh)
+- Much faster queries
+- Includes `last_refreshed` timestamp
+- Supports concurrent refresh (non-blocking)
+
+#### Refresh Strategies
+
+1. **Full Refresh**: `SELECT refresh_daily_usage_mv()`
+   - Rebuilds entire view
+   - Uses CONCURRENTLY to avoid blocking reads
+
+2. **Incremental Refresh**: `SELECT refresh_daily_usage_mv_incremental(7)`
+   - Updates only recent N days
+   - More efficient for large datasets
+   - Reduces refresh time
+
+### Timezone Considerations
+
+#### UTC vs Local Time Trade-offs
+
+**Default (UTC)**:
+```sql
+date_trunc('day', created_at AT TIME ZONE 'UTC')::date
+```
+- ✅ Consistent across regions
+- ✅ No ambiguity during DST changes
+- ✅ Easier for global aggregation
+- ❌ May not align with business hours
+
+**Local Time (e.g., Europe/Warsaw)**:
+```sql
+date_trunc('day', created_at AT TIME ZONE 'Europe/Warsaw')::date
+```
+- ✅ Aligns with business reporting
+- ✅ Intuitive for local teams
+- ❌ DST transitions cause complexity
+- ❌ Different results per timezone
+
+#### Switching Timezones
+
+To switch from UTC to local timezone:
+1. Update the view definition (both standard and materialized)
+2. Replace all instances of `'UTC'` with your timezone (e.g., `'Europe/Warsaw'`)
+3. Refresh the materialized view
+4. Update any dependent reports
+
+### Query Examples
+
+```sql
+-- Query the real-time view
+SELECT * FROM daily_usage_view 
+WHERE day BETWEEN '2025-01-01' AND '2025-01-31'
+  AND user_id = 'specific-user-uuid'
+ORDER BY day DESC;
+
+-- Query the materialized view (faster)
+SELECT * FROM daily_usage_mv
+WHERE day >= CURRENT_DATE - INTERVAL '30 days'
+  AND model = 'gpt-4o-mini'
+ORDER BY day DESC, cost_usd DESC;
+
+-- Check when materialized view was last refreshed
+SELECT DISTINCT last_refreshed 
+FROM daily_usage_mv 
+LIMIT 1;
+```
+
 ## Migration Order
 
 Run migrations in this sequence:
@@ -214,6 +312,8 @@ Run migrations in this sequence:
 2. `006_create_telemetry_rls_policies.sql` - Security policies
 3. `007_create_daily_usage_table.sql` - Aggregation table
 4. `008_create_models_pricing_table.sql` - Pricing configuration
+5. `009_create_models_pricing_standalone.sql` - Enhanced pricing with triggers
+6. `010_create_daily_usage_views.sql` - Reporting views and refresh functions
 
 ## Monitoring & Alerts
 
