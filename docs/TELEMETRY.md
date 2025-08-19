@@ -40,12 +40,39 @@ The main event storage table that captures all telemetry data in real-time.
 3. **zep_upsert** - Memory facts written to Zep
    - Required payload fields:
      - `zep_ms`: Zep API response time
+     - `edge_count`: Number of facts/edges being upserted
+     - `success`: Boolean indicating if operation succeeded
+   - Optional payload fields:
+     - `total_ms`: Total request duration including validation
+     - `session_id`: Session identifier if facts are session-specific
+     - `req_id`: Request ID for tracing
 
 4. **zep_search** - Memory retrieval from Zep
    - Required payload fields:
      - `zep_ms`: Zep API response time
+     - `results_count`: Number of results returned
+     - `query_length`: Length of search query in characters
+     - `success`: Boolean indicating if operation succeeded
+   - Optional payload fields:
+     - `total_ms`: Total request duration including processing
+     - `total_tokens`: Total estimated tokens in results
+     - `session_id`: Session identifier if search is session-scoped
+     - `req_id`: Request ID for tracing
 
-5. **error** - Error events
+5. **zep_error** - Zep-specific error events
+   - Required payload fields:
+     - `zep_ms`: Time spent before error occurred
+     - `operation`: Operation that failed ('upsert' | 'search')
+     - `error_status`: HTTP status code of error
+     - `error_message`: Mapped error message for client
+   - Optional payload fields:
+     - `original_error`: Original error message from Zep API
+     - `edge_count`: Number of edges involved (for upsert errors)
+     - `query_length`: Query length (for search errors)
+     - `session_id`: Session identifier if applicable
+     - `req_id`: Request ID for tracing
+
+6. **error** - General error events
    - Required payload fields:
      - `error`: Error message or details
 
@@ -176,6 +203,52 @@ await supabase.from('telemetry_events').insert({
     tokens_in: 150,
     tokens_out: 420,
     cost_usd: 0.000315
+  }
+});
+
+// Example: Writing a zep_upsert event
+await supabase.from('telemetry_events').insert({
+  user_id: userId,
+  session_id: sessionId,
+  type: 'zep_upsert',
+  payload_json: {
+    zep_ms: 125,
+    total_ms: 180,
+    edge_count: 3,
+    success: true,
+    req_id: 'req_abc123'
+  }
+});
+
+// Example: Writing a zep_search event
+await supabase.from('telemetry_events').insert({
+  user_id: userId,
+  session_id: sessionId,
+  type: 'zep_search',
+  payload_json: {
+    zep_ms: 95,
+    total_ms: 140,
+    query_length: 42,
+    results_count: 5,
+    total_tokens: 285,
+    success: true,
+    req_id: 'req_def456'
+  }
+});
+
+// Example: Writing a zep_error event
+await supabase.from('telemetry_events').insert({
+  user_id: userId,
+  session_id: sessionId,
+  type: 'zep_error',
+  payload_json: {
+    zep_ms: 15000, // Timeout after 15s
+    operation: 'search',
+    error_status: 502,
+    error_message: 'Memory service temporarily unavailable',
+    original_error: 'ETIMEDOUT: timeout of 15000ms exceeded',
+    query_length: 42,
+    req_id: 'req_ghi789'
   }
 });
 ```
