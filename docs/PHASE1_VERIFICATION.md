@@ -211,7 +211,7 @@ HTTP/1.1 401 Unauthorized
 ### Test 3: Get Valid Token (via Supabase Dashboard)
 
 1. Create user in http://localhost:3000/login
-2. Open developer tools and copy `Cookie` from Network log header
+2. Open developer tools, select `RAW` and copy `Cookie` from Network log header
 3. Decode `Cookie` with https://www.urldecoder.org/ and copy `access_token` value
 
 Or use the Admin app to get a token (see Admin testing section).
@@ -266,7 +266,7 @@ HTTP/1.1 200 OK
 
 ```bash
 # From allowed origin - should succeed
-curl -v http://localhost:3000/api/auth/status \
+curl -v http://localhost:3000/api/me \
   -H "Origin: http://localhost:3001" \
   -H "Authorization: Bearer $TOKEN"
 
@@ -278,7 +278,8 @@ curl -v http://localhost:3000/api/auth/status \
 curl -v -X OPTIONS http://localhost:3000/api/me \
   -H "Origin: http://evil.com" \
   -H "Access-Control-Request-Method: GET" \
-  -H "Access-Control-Request-Headers: Authorization"
+  -H "Access-Control-Request-Headers: Authorization" \
+  -H "Authorization: Bearer $TOKEN"
 
 # Expected response:
 HTTP/1.1 403 Forbidden

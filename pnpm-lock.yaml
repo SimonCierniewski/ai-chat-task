@@ -134,7 +134,18 @@ importers:
         specifier: ^5.3.0
         version: 5.9.2
 
-  packages/shared: {}
+  packages/shared:
+    dependencies:
+      ajv:
+        specifier: ^8.12.0
+        version: 8.17.1
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.11
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.2
 
 packages:
 

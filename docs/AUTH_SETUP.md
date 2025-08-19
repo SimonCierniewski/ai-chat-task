@@ -246,6 +246,21 @@ UPDATE profiles SET role = 'user' WHERE user_id = 'USER_UUID_HERE';
 SELECT demote_to_user('USER_UUID_HERE');
 ```
 
+#### ⚠️ Important: Token Caching Issue
+
+**After changing a user's role in the database, the old JWT token still contains the cached role!**
+
+To get the new role:
+1. **Sign out** from the application
+2. **Sign in again** to get a fresh token with updated role
+3. The new token will have the correct role from the database
+
+This is because:
+- JWTs are stateless and contain the role at token creation time
+- Tokens are valid for 1 hour by default
+- Role changes in the database don't affect existing tokens
+- You must get a new token to see role changes
+
 #### Finding User IDs
 
 ```sql
