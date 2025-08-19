@@ -22,7 +22,7 @@ Authorization: Bearer <jwt-token>
 
 ### 1. Chat Streaming
 
-Stream AI responses via Server-Sent Events (SSE).
+Stream AI responses via Server-Sent Events (SSE) with memory context and token budget enforcement.
 
 #### `POST /api/v1/chat`
 
@@ -33,7 +33,15 @@ interface ChatRequest {
   message: string;         // Required, 1-4000 chars
   useMemory?: boolean;     // Default: false
   sessionId?: string;      // Format: session-YYYYMMDD-HHMMSS-XXXX
-  model?: string;          // Enum: ['gpt-4-mini', 'gpt-4', 'gpt-3.5-turbo']
+  model?: string;          // Enum: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo']
+}
+
+// Internal Context Budget (Phase 5)
+interface TokenBudget {
+  total: 4000;       // Total prompt budget
+  memory: 1500;      // Max tokens for memory context
+  system: 200;       // Max tokens for system prompt
+  user: 2000;        // Max tokens for user message
 }
 ```
 

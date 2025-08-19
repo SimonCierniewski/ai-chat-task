@@ -27,7 +27,7 @@ The main event storage table that captures all telemetry data in real-time.
    - Required payload fields:
      - `duration_ms`: Total request duration
 
-2. **openai_call** - API calls OpenAI
+2. **openai_call** - API calls OpenAI (Phase 5 Enhanced)
    - Required payload fields:
      - `openai_ms`: OpenAI API response time
      - `model`: Model used (e.g., "gpt-4o-mini")
@@ -36,6 +36,15 @@ The main event storage table that captures all telemetry data in real-time.
      - `cost_usd`: Calculated cost in USD
    - Optional payload fields:
      - `ttft_ms`: Time to first token (for streaming)
+     - `has_provider_usage`: Boolean indicating if usage came from OpenAI or was estimated
+     - `prompt_plan`: Object containing prompt assembly details:
+       - `total_tokens`: Total tokens in assembled prompt
+       - `memory_tokens`: Tokens used for memory context
+       - `system_tokens`: Tokens used for system prompt
+       - `user_tokens`: Tokens used for user message
+       - `items_included`: Number of memory items included
+       - `items_excluded`: Number of memory items excluded
+       - `excluded_reasons`: Array of reasons for exclusions
 
 3. **zep_upsert** - Memory facts written to Zep
    - Required payload fields:

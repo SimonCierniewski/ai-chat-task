@@ -32,7 +32,11 @@ export const config = {
   
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
-    defaultModel: process.env.OPENAI_DEFAULT_MODEL || 'gpt-4-mini',
+    defaultModel: process.env.OPENAI_DEFAULT_MODEL || 'gpt-4o-mini',
+    connectTimeoutMs: parseInt(process.env.OPENAI_CONNECT_TIMEOUT_MS || '5000', 10),
+    timeoutMs: parseInt(process.env.OPENAI_TIMEOUT_MS || '30000', 10),
+    retryMax: parseInt(process.env.OPENAI_RETRY_MAX || '1', 10),
+    sseHeartbeatMs: parseInt(process.env.OPENAI_SSE_HEARTBEAT_MS || '30000', 10),
   },
   
   zep: {

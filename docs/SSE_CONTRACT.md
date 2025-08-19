@@ -41,6 +41,15 @@ The SSE stream contains four event types, delivered in a specific sequence:
 3. **`done`** - Stream completion (single event)
 4. **`error`** - Error occurred (replaces normal flow)
 
+### OpenAI Semantic Mapping
+
+The OpenAI streaming API provides deltas that are mapped to our SSE events:
+
+- **OpenAI `delta.content`** → **`token` event** - Each content delta from OpenAI becomes a token event
+- **OpenAI `usage` (with `stream_options.include_usage`)** → **`usage` event** - Final usage stats
+- **OpenAI `finish_reason`** → **`done` event** - Stream completion with reason
+- **OpenAI errors/timeouts** → **`error` event** - Connection or API errors
+
 ## Event Format
 
 Each SSE event follows this format:

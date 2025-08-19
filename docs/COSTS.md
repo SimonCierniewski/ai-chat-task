@@ -73,20 +73,22 @@ const formatted = `$${displayCost.toFixed(4)}`;
 
 ### Priority Order (Source of Truth)
 
-1. **API-Reported Usage** (Highest Priority)
-   - OpenAI streaming response: `usage` field in final chunk
+1. **API-Reported Usage** (Primary Path - Highest Priority)
+   - OpenAI streaming response: `usage` field with `stream_options.include_usage: true`
    - OpenAI completion: `usage` object in response
    - Most accurate as it includes exact tokenization
+   - Tracked with `has_provider_usage: true` in telemetry
 
-2. **Model-Specific Tokenizer** (Fallback 1)
+2. **Model-Specific Tokenizer** (Fallback 1 - Not implemented in Phase 5)
    - Use tiktoken or model-specific tokenizer
    - Calculate based on actual text
    - Add 10% buffer for safety
 
-3. **Approximate Count** (Fallback 2)
-   - Estimate: ~1 token per 4 characters (English)
-   - Estimate: ~1 token per 2 characters (code)
-   - Add 15% buffer for safety
+3. **Approximate Count** (Fallback 2 - Phase 5 Implementation)
+   - Estimate: ~1 token per 4 characters (average)
+   - Combines word-based (1.3 tokens/word) and character-based (1 token/4 chars) estimates
+   - No additional buffer needed due to averaging approach
+   - Tracked with `has_provider_usage: false` in telemetry
 
 ### Data Flow
 

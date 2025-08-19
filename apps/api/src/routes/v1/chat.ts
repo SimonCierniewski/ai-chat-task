@@ -22,6 +22,10 @@ import {
   calculateTotalTokens 
 } from '@shared/telemetry-memory';
 import { CONFIG_PRESETS } from '@shared/memory-config';
+import { OpenAIProvider } from '../../providers/openai-provider';
+import { UsageService } from '../../services/usage-service';
+import { PromptAssembler } from '../../services/prompt-assembler';
+import { TelemetryService } from '../../services/telemetry-service';
 
 // ============================================================================
 // Types & Schemas  
@@ -71,61 +75,11 @@ interface MemoryContext {
 // Stub Provider (Phase 4 implementation)
 // ============================================================================
 
-/**
- * Stub streaming provider for Phase 4 - to be replaced with OpenAI in Phase 5
- */
-class StubStreamingProvider implements StreamingProvider {
-  async streamCompletion(options: {
-    message: string;
-    model?: string;
-    context?: string;
-    sessionId?: string;
-    onToken: (text: string) => void;
-    onUsage: (usage: UsageEventData) => void;
-    onDone: (reason: 'stop' | 'length' | 'content_filter' | 'error') => void;
-    onError: (error: Error) => void;
-  }): Promise<void> {
-    const { message, model = 'gpt-4o-mini', context, onToken, onUsage, onDone } = options;
-    
-    try {
-      // Simulate streaming response
-      const response = `I understand you said: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}". `;
-      const contextResponse = context ? `Based on your history, I remember: ${context.substring(0, 100)}... ` : '';
-      const fullResponse = response + contextResponse + 'This is a stub response for Phase 4.';
-      
-      // Stream tokens with realistic timing
-      const words = fullResponse.split(' ');
-      for (let i = 0; i < words.length; i++) {
-        const token = i === words.length - 1 ? words[i] : words[i] + ' ';
-        onToken(token);
-        
-        // Simulate realistic streaming delay (20-100ms per token)
-        await new Promise(resolve => setTimeout(resolve, Math.random() * 80 + 20));
-      }
-      
-      // Send usage information
-      const tokensIn = Math.ceil(message.length / 4) + (context ? Math.ceil(context.length / 4) : 0);
-      const tokensOut = Math.ceil(fullResponse.length / 4);
-      const costUsd = (tokensIn * 0.000015 + tokensOut * 0.00006); // Rough gpt-4o-mini pricing
-      
-      onUsage({
-        tokens_in: tokensIn,
-        tokens_out: tokensOut,
-        cost_usd: Number(costUsd.toFixed(8)),
-        model
-      });
-      
-      // Complete the stream
-      onDone('stop');
-      
-    } catch (error) {
-      onError(error as Error);
-    }
-  }
-}
-
-// Global provider instance
-const streamingProvider = new StubStreamingProvider();
+// Initialize services
+const openAIProvider = new OpenAIProvider();
+const usageService = new UsageService();
+const promptAssembler = new PromptAssembler();
+const telemetryService = new TelemetryService();
 
 // ============================================================================
 // Memory Integration (from memory routes)
@@ -330,6 +284,7 @@ async function chatHandler(
     
     try {
       let memoryContext: MemoryContext | null = null;
+      let memoryMs = 0;
       
       // Retrieve memory context if requested
       if (useMemory) {
@@ -341,7 +296,7 @@ async function chatHandler(
         
         const memoryStartTime = Date.now();
         memoryContext = await retrieveMemoryContext(userId, message, sessionId);
-        const memoryMs = Date.now() - memoryStartTime;
+        memoryMs = Date.now() - memoryStartTime;
         
         logger.info('Memory retrieval completed', {
           req_id: req.id,
@@ -351,49 +306,177 @@ async function chatHandler(
           total_tokens: memoryContext?.total_tokens || 0
         });
         
-        // TODO: Emit zep_search telemetry event
+        // Log zep_search telemetry event
+        if (memoryContext) {
+          await telemetryService.logZepSearch(
+            userId,
+            sessionId,
+            memoryMs,
+            memoryContext.results.length,
+            memoryContext.total_tokens
+          );
+        }
       }
       
-      // Stream response via provider
-      await streamingProvider.streamCompletion({
+      // Assemble prompt with memory context
+      const promptPlan = promptAssembler.assemblePrompt({
+        userMessage: message,
+        memoryBundle: memoryContext?.results,
+        systemPrompt: 'You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.'
+      });
+      
+      // Track streaming metrics
+      let ttftMs: number | undefined;
+      let openAIStartTime = Date.now();
+      let outputText = '';
+      let hasProviderUsage = false;
+      
+      // Stream response via OpenAI provider
+      await openAIProvider.streamCompletion({
         message,
         model,
-        context: memoryContext?.context_text,
-        sessionId,
+        messages: promptPlan.messages,
+        onFirstToken: () => {
+          ttftMs = Date.now() - openAIStartTime;
+        },
         onToken: (text: string) => {
           if (!stream.isClosed()) {
+            outputText += text;
             stream.sendEvent(ChatEventType.TOKEN, { text });
           }
         },
-        onUsage: (usage: UsageEventData) => {
+        onUsage: async (usage: UsageEventData) => {
           if (!stream.isClosed()) {
-            stream.sendEvent(ChatEventType.USAGE, usage);
+            hasProviderUsage = true;
+            const openAIMs = Date.now() - openAIStartTime;
             
-            // TODO: Emit message_sent and openai_call telemetry events
+            // Calculate cost with UsageService
+            const usageCalc = await usageService.calculateFromProvider(usage, model);
+            
+            // Send usage event to client
+            stream.sendEvent(ChatEventType.USAGE, {
+              tokens_in: usageCalc.tokens_in,
+              tokens_out: usageCalc.tokens_out,
+              cost_usd: usageCalc.cost_usd,
+              model
+            });
+            
+            // Log telemetry events
             const totalMs = Date.now() - startTime;
+            
+            await telemetryService.logMessageSent(
+              userId,
+              sessionId,
+              totalMs,
+              message.length
+            );
+            
+            await telemetryService.logOpenAICall(
+              userId,
+              sessionId,
+              {
+                model,
+                tokens_in: usageCalc.tokens_in,
+                tokens_out: usageCalc.tokens_out,
+                cost_usd: usageCalc.cost_usd,
+                ttft_ms: ttftMs,
+                openai_ms: openAIMs,
+                has_provider_usage: true,
+                prompt_plan: promptAssembler.getPromptPlanSummary(promptPlan)
+              }
+            );
+            
             logger.info('Chat completion finished', {
               req_id: req.id,
               user_id: userId,
               total_ms: totalMs,
-              tokens_in: usage.tokens_in,
-              tokens_out: usage.tokens_out,
-              cost_usd: usage.cost_usd
+              ttft_ms: ttftMs,
+              openai_ms: openAIMs,
+              tokens_in: usageCalc.tokens_in,
+              tokens_out: usageCalc.tokens_out,
+              cost_usd: usageCalc.cost_usd,
+              has_provider_usage: true
             });
           }
         },
-        onDone: (reason: 'stop' | 'length' | 'content_filter' | 'error') => {
+        onDone: async (reason: 'stop' | 'length' | 'content_filter' | 'error') => {
           if (!stream.isClosed()) {
+            const openAIMs = Date.now() - openAIStartTime;
+            
+            // Fallback: estimate usage if not provided by provider
+            if (!hasProviderUsage && reason !== 'error') {
+              const promptText = promptPlan.messages.map(m => m.content).join('\n');
+              const usageCalc = await usageService.estimateUsage(
+                promptText,
+                outputText,
+                model
+              );
+              
+              // Send estimated usage
+              stream.sendEvent(ChatEventType.USAGE, {
+                tokens_in: usageCalc.tokens_in,
+                tokens_out: usageCalc.tokens_out,
+                cost_usd: usageCalc.cost_usd,
+                model
+              });
+              
+              // Log telemetry with fallback flag
+              const totalMs = Date.now() - startTime;
+              
+              await telemetryService.logMessageSent(
+                userId,
+                sessionId,
+                totalMs,
+                message.length
+              );
+              
+              await telemetryService.logOpenAICall(
+                userId,
+                sessionId,
+                {
+                  model,
+                  tokens_in: usageCalc.tokens_in,
+                  tokens_out: usageCalc.tokens_out,
+                  cost_usd: usageCalc.cost_usd,
+                  ttft_ms: ttftMs,
+                  openai_ms: openAIMs,
+                  has_provider_usage: false,
+                  prompt_plan: promptAssembler.getPromptPlanSummary(promptPlan)
+                }
+              );
+              
+              logger.info('Chat completion finished (fallback usage)', {
+                req_id: req.id,
+                user_id: userId,
+                total_ms: totalMs,
+                ttft_ms: ttftMs,
+                openai_ms: openAIMs,
+                tokens_in: usageCalc.tokens_in,
+                tokens_out: usageCalc.tokens_out,
+                cost_usd: usageCalc.cost_usd,
+                has_provider_usage: false
+              });
+            }
+            
             stream.sendEvent(ChatEventType.DONE, { finish_reason: reason });
             stream.close();
           }
         },
-        onError: (error: Error) => {
+        onError: async (error: Error) => {
           if (!stream.isClosed()) {
             logger.error('Streaming provider error', {
               req_id: req.id,
               user_id: userId,
               error: error.message
             });
+            
+            // Log error telemetry
+            await telemetryService.logError(
+              userId,
+              sessionId,
+              error,
+              { model, request_id: req.id }
+            );
             
             stream.sendEvent(ChatEventType.ERROR, {
               error: 'Streaming service temporarily unavailable',
@@ -402,8 +485,6 @@ async function chatHandler(
             
             stream.sendEvent(ChatEventType.DONE, { finish_reason: 'error' });
             stream.close();
-            
-            // TODO: Emit error telemetry event
           }
         }
       });
