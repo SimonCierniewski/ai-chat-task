@@ -4,10 +4,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { config } from '../config';
-import { logger } from '../config/logger';
-import { ModelPricing, calculateCost } from '@shared/pricing';
-import { UsageEventData } from '@shared/api/chat';
+import { config, logger } from '../config';
+import { ModelPricing, calculateCost } from '@prototype/shared/pricing';
+import { UsageEventData } from '@prototype/shared/api/chat';
 
 // ============================================================================
 // Types

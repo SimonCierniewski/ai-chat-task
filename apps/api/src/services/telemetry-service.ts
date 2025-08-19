@@ -4,9 +4,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { config } from '../config';
-import { logger } from '../config/logger';
-import { TelemetryEventType, TelemetryPayload } from '@shared/telemetry';
+import { config, logger } from '../config';
+import { TelemetryEventType, TelemetryPayload } from '@prototype/shared/telemetry';
 
 // ============================================================================
 // Telemetry Service

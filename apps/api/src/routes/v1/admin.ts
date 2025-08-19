@@ -3,7 +3,7 @@
  * Admin-only endpoints for user management, metrics, and pricing configuration
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginAsync } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import { requireAuth, requireAdmin } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
@@ -584,10 +584,4 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
       }
     }
   }, updateModelPricingHandler);
-
-  logger.info('Admin routes registered', { 
-    routes: ['/users', '/metrics', '/models', '/models/pricing'],
-    auth_required: true,
-    admin_required: true
-  });
 };

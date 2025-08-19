@@ -3,7 +3,7 @@
  * Zep memory system integration with telemetry and validation
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginAsync } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import { requireAuth } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
@@ -18,8 +18,8 @@ import {
   sortByRelevance,
   filterByScore,
   trimToTokenBudget
-} from '@shared/telemetry-memory';
-import { CONFIG_PRESETS } from '@shared/memory-config';
+} from '@prototype/shared/telemetry-memory';
+import { CONFIG_PRESETS } from '@prototype/shared/memory-config';
 
 // ============================================================================
 // Types & Schemas
@@ -593,9 +593,4 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       }
     }
   }, searchMemoryHandler);
-
-  logger.info('Memory routes registered', { 
-    routes: ['/upsert', '/search'],
-    auth_required: true 
-  });
 };

@@ -8,8 +8,51 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./api/chat": {
+      "types": "./dist/api/chat.d.ts",
+      "require": "./dist/api/chat.js"
+    },
+    "./api/memory": {
+      "types": "./dist/api/memory.d.ts",
+      "require": "./dist/api/memory.js"
+    },
+    "./api/admin": {
+      "types": "./dist/api/admin.d.ts",
+      "require": "./dist/api/admin.js"
+    },
+    "./api": {
+      "types": "./dist/api/index.d.ts",
+      "require": "./dist/api/index.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry.d.ts",
+      "require": "./dist/telemetry.js"
+    },
+    "./telemetry-memory": {
+      "types": "./dist/telemetry-memory.d.ts",
+      "require": "./dist/telemetry-memory.js"
+    },
+    "./memory-config": {
+      "types": "./dist/memory-config.d.ts",
+      "require": "./dist/memory-config.js"
+    },
+    "./pricing": {
+      "types": "./dist/pricing.d.ts",
+      "require": "./dist/pricing.js"
+    },
+    "./graph": {
+      "types": "./dist/graph.d.ts",
+      "require": "./dist/graph.js"
+    },
+    "./aggregates": {
+      "types": "./dist/aggregates.d.ts",
+      "require": "./dist/aggregates.js"
+    },
+    "./admin-settings": {
+      "types": "./dist/admin-settings.d.ts",
+      "require": "./dist/admin-settings.js"
     }
   },
   "scripts": {

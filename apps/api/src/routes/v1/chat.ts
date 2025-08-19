@@ -3,7 +3,7 @@
  * Validates requests, retrieves memory context, and streams responses via SSE
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginAsync } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import { requireAuth } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
@@ -16,12 +16,12 @@ import {
   DoneEventData,
   ErrorEventData,
   formatSSEEvent
-} from '@shared/api/chat';
+} from '@prototype/shared/api/chat';
 import { 
   RetrievalResult,
   calculateTotalTokens 
-} from '@shared/telemetry-memory';
-import { CONFIG_PRESETS } from '@shared/memory-config';
+} from '@prototype/shared/telemetry-memory';
+import { CONFIG_PRESETS } from '@prototype/shared/memory-config';
 import { OpenAIProvider } from '../../providers/openai-provider';
 import { UsageService } from '../../services/usage-service';
 import { PromptAssembler } from '../../services/prompt-assembler';
@@ -611,10 +611,4 @@ export const chatRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) =
       }
     }
   }, chatHandler);
-
-  logger.info('Chat routes registered', { 
-    routes: ['/'],
-    auth_required: true,
-    sse_enabled: true
-  });
 };

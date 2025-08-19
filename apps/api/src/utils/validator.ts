@@ -13,6 +13,25 @@ addFormats(ajv);
 
 export const validator = ajv;
 
+export function createValidator<T = any>(schema: any) {
+  const validate = ajv.compile(schema);
+  
+  return (data: unknown): { valid: boolean; errors?: any; data?: T } => {
+    const valid = validate(data);
+    if (valid) {
+      return { valid: true, data: data as T };
+    }
+    return { 
+      valid: false, 
+      errors: validate.errors?.map(err => ({
+        field: err.instancePath || err.schemaPath,
+        message: err.message,
+        params: err.params
+      }))
+    };
+  };
+}
+
 export const schemas = {
   chatRequest: {
     type: 'object',
