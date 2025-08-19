@@ -96,9 +96,9 @@
 ## 🔑 Important Configuration
 
 ### Supabase Project (When Created)
-- **URL**: `https://pjktmicpanriimktvcam.supabase.co` (placeholder in code)
+- **URL**: `https://fgscwpqqadqncgjknsmk.supabase.co` (placeholder in code)
 - **Region**: EU (Frankfurt/Amsterdam)
-- **JWKS**: `https://pjktmicpanriimktvcam.supabase.co/auth/v1/.well-known/jwks.json`
+- **JWKS**: `https://fgscwpqqadqncgjknsmk.supabase.co/auth/v1/.well-known/jwks.json`
 
 ### Current Tech Stack
 - **API**: Fastify + TypeScript (Node.js)

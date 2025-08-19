@@ -21,9 +21,9 @@ export interface AuthPluginOptions {
 }
 
 const DEFAULT_OPTIONS: AuthPluginOptions = {
-  jwksUri: 'https://pjktmicpanriimktvcam.supabase.co/auth/v1/.well-known/jwks.json',
+  jwksUri: 'https://fgscwpqqadqncgjknsmk.supabase.co/auth/v1/.well-known/jwks.json',
   audience: 'authenticated',
-  issuer: 'https://pjktmicpanriimktvcam.supabase.co/auth/v1',
+  issuer: 'https://fgscwpqqadqncgjknsmk.supabase.co/auth/v1',
   cacheMaxAge: 600000, // 10 minutes
   excludePaths: ['/health', '/metrics', '/', '/docs', '/auth/on-signup'],
 };
@@ -36,7 +36,7 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
   opts
 ) => {
   const options = { ...DEFAULT_OPTIONS, ...opts };
-  
+
   // Initialize JWKS client
   const client = jwksClient({
     jwksUri: options.jwksUri!,
@@ -71,14 +71,14 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
       }
 
       const algorithm = decoded.header.alg;
-      
+
       // If HS256, use shared secret
       if (algorithm === 'HS256') {
         const secret = options.jwtSecret || process.env.SUPABASE_JWT_SECRET;
         if (!secret) {
           return reject(new Error('JWT secret not configured for HS256 tokens'));
         }
-        
+
         jwt.verify(
           token,
           secret,
@@ -95,7 +95,7 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
             }
           }
         );
-      } 
+      }
       // If RS256, use JWKS
       else if (algorithm === 'RS256') {
         jwt.verify(
@@ -175,18 +175,18 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
     try {
       // Verify JWT token
       const payload = await verifyToken(token);
-      
+
       // Load user context
       const user = await loadUserContext(payload);
-      
+
       // Attach user to request
       request.user = user;
-      
+
       // Log successful auth
       fastify.log.debug({ userId: user.id, role: user.role }, 'User authenticated');
     } catch (error) {
       fastify.log.warn({ error }, 'Authentication failed');
-      
+
       // Determine error type and message
       let message = 'Invalid or expired token';
       if (error instanceof Error) {
@@ -198,7 +198,7 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
           message = 'Token verification failed';
         }
       }
-      
+
       return reply.code(401).send({
         error: 'Unauthorized',
         message,

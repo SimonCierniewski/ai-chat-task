@@ -64,7 +64,7 @@ SELECT auth.jwt() as token;
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
-  'https://pjktmicpanriimktvcam.supabase.co',
+  'https://fgscwpqqadqncgjknsmk.supabase.co',
   'YOUR_ANON_KEY'
 );
 
@@ -135,9 +135,9 @@ curl http://localhost:3000/api/admin/users \
 
 ```bash
 # Required
-SUPABASE_URL=https://pjktmicpanriimktvcam.supabase.co
+SUPABASE_URL=https://fgscwpqqadqncgjknsmk.supabase.co
 SUPABASE_JWT_AUD=authenticated
-JWKS_URI=https://pjktmicpanriimktvcam.supabase.co/auth/v1/.well-known/jwks.json
+JWKS_URI=https://fgscwpqqadqncgjknsmk.supabase.co/auth/v1/.well-known/jwks.json
 
 # Optional
 PORT=3000
