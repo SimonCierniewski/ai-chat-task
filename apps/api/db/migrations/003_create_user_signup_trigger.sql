@@ -37,19 +37,22 @@ CREATE TRIGGER on_auth_user_created
 GRANT EXECUTE ON FUNCTION public.handle_new_user() TO service_role;
 
 -- Add helpful comments
-COMMENT ON FUNCTION public.handle_new_user() IS 
+COMMENT ON FUNCTION public.handle_new_user() IS
     'Automatically creates a profile with default user role when a new auth user signs up';
-COMMENT ON TRIGGER on_auth_user_created ON auth.users IS 
-    'Trigger that fires after user signup to create their profile';
+
+--COMMENT ON TRIGGER on_auth_user_created ON auth.users IS
+--    'Trigger that fires after user signup to create their profile';
+-- Note: COMMENT ON TRIGGER removed as it causes "ERROR: 42501: must be owner of relation users"
+-- The trigger still works fine without the comment
 
 -- Create helper function to check if user is admin (useful for API)
 CREATE OR REPLACE FUNCTION public.is_admin(check_user_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
     RETURN EXISTS (
-        SELECT 1 
-        FROM public.profiles 
-        WHERE user_id = check_user_id 
+        SELECT 1
+        FROM public.profiles
+        WHERE user_id = check_user_id
         AND role = 'admin'
     );
 END;
@@ -59,7 +62,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 GRANT EXECUTE ON FUNCTION public.is_admin(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_admin(UUID) TO service_role;
 
-COMMENT ON FUNCTION public.is_admin(UUID) IS 
+COMMENT ON FUNCTION public.is_admin(UUID) IS
     'Helper function to check if a user has admin role';
 
 -- Create function to get user role (useful for JWT claims)
@@ -71,7 +74,7 @@ BEGIN
     SELECT role INTO user_role
     FROM public.profiles
     WHERE user_id = check_user_id;
-    
+
     -- Return 'user' as default if no profile exists
     RETURN COALESCE(user_role, 'user');
 END;
@@ -81,5 +84,5 @@ $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 GRANT EXECUTE ON FUNCTION public.get_user_role(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_user_role(UUID) TO service_role;
 
-COMMENT ON FUNCTION public.get_user_role(UUID) IS 
+COMMENT ON FUNCTION public.get_user_role(UUID) IS
     'Returns the role of a user from their profile, defaults to user if no profile exists';

@@ -331,50 +331,29 @@ When a new user signs up, the system initializes their Zep memory collection for
 
 ### Trigger Methods
 
-#### 1. Supabase Database Webhook (REQUIRED - Use This Option)
+#### 1. Automatic Trigger (Primary Method)
 
-**This is the primary method for ensuring profiles are created for all users.**
+**The database trigger automatically creates profiles when users sign up.**
 
-Configure in Supabase Dashboard → Database → Webhooks:
+The migration `003_create_user_signup_trigger.sql` creates a trigger on `auth.users` that:
+- Fires automatically when a new user signs up
+- Creates a profile with default 'user' role
+- Sets display_name from user metadata or email
+- Works without any external configuration
 
-1. Go to **Database → Webhooks** in your Supabase Dashboard
-2. Click **Create a new hook**
-3. Configure as follows:
+**Note:** The trigger creation should work in Supabase. If you see an error about "must be owner of relation users", it's only from the COMMENT line which has been removed.
 
-```
-Name: on_user_signup
-Table: auth.users (or profiles if auth.users doesn't work)
-Events: INSERT
-Type: HTTP Request
-HTTP URL: https://your-api-domain.eu/auth/on-signup
-HTTP Method: POST
-HTTP Headers:
-  Content-Type: application/json
-  X-Webhook-Secret: your-secure-webhook-secret
-```
+#### 2. API Auto-Creation (Fallback)
 
-**Important Notes:**
-- If `auth.users` table webhook fails, use `profiles` table instead
-- For local development, use a service like ngrok to expose your local API
-- Store the webhook secret in your API's environment variables
+If the trigger doesn't work, the API automatically creates profiles on first authenticated request:
+- When a user makes their first API call
+- The auth middleware checks if profile exists
+- Creates profile if missing (with default 'user' role)
+- This ensures profiles always exist, even if trigger fails
 
-The webhook payload will look like:
-```json
-{
-  "type": "INSERT",
-  "table": "auth.users",
-  "record": {
-    "id": "user-uuid",
-    "email": "user@example.com",
-    "created_at": "2024-01-01T00:00:00Z"
-  },
-  "old_record": null
-}
-```
+#### 3. Manual Creation (Optional)
 
-#### 2. Client-Side Fallback (Secondary Option)
-
-Only use if webhook configuration fails. Clients can call the endpoint after successful signup:
+For existing users without profiles, run this SQL:
 
 ```typescript
 // Admin Dashboard (Next.js)

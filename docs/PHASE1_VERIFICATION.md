@@ -117,39 +117,24 @@ WHERE routine_schema = 'public'
 AND routine_name IN ('promote_to_admin', 'is_admin', 'list_admins');
 ```
 
-### 2. Configure Database Webhook (REQUIRED)
+### 2. Verify Profile Auto-Creation
 
-**This is critical for profile creation! Without this, the profiles table will remain empty.**
+**Profiles are created automatically via database trigger when users sign up.**
 
-1. **Go to Supabase Dashboard → Database → Webhooks**
-2. **Click "Create a new hook"**
-3. **Configure as follows:**
+The trigger in migration `003_create_user_signup_trigger.sql`:
+- Fires automatically on user signup
+- Creates profile with 'user' role
+- No webhook configuration needed
 
-```
-Name: on_user_signup
-Table: auth.users (or profiles if auth.users doesn't work)
-Events: INSERT
-Type: HTTP Request
-HTTP URL: https://your-api-url/auth/on-signup
-   - For local dev: Use ngrok (e.g., https://abc123.ngrok.io/auth/on-signup)
-   - For production: Your deployed API URL
-HTTP Method: POST
-HTTP Headers:
-  Content-Type: application/json
-  X-Webhook-Secret: your-secure-webhook-secret
-```
-
-4. **Add webhook secret to API environment:**
-```bash
-# In apps/api/.env.local
-WEBHOOK_SECRET=your-secure-webhook-secret
-```
-
-5. **Test webhook:**
-```bash
-# Sign up a new user and check if profile is created
+**Test the trigger:**
+```sql
+-- Sign up a new user, then check:
 SELECT * FROM profiles ORDER BY created_at DESC LIMIT 5;
 ```
+
+**If profiles are still empty, the API has a fallback:**
+- Profiles are auto-created on first authenticated API request
+- This ensures profiles always exist
 
 ### 3. Create Test Users
 
