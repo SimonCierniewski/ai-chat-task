@@ -1,15 +1,14 @@
 import { startServer } from './server';
+import { validateConfig } from './config';
 
-// Load environment variables
-import * as dotenv from 'dotenv';
-import * as path from 'path';
+async function main() {
+  try {
+    validateConfig();
+    await startServer();
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
 
-// Load .env.local if it exists
-dotenv.config({ path: path.join(__dirname, '../.env.local') });
-dotenv.config({ path: path.join(__dirname, '../.env') });
-
-// Start the server
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+main();

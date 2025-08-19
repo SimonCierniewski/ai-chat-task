@@ -1,11 +1,15 @@
-import Fastify from 'fastify';
-import { FastifyRequest, FastifyReply } from 'fastify';
+import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { nanoid } from 'nanoid';
+import cors from '@fastify/cors';
 import authPlugin from './plugins/auth';
-import corsPlugin from './plugins/cors';
-import authRoutes from './routes/auth';
-import { requireAdmin, requireAuth } from './utils/guards';
+import { config } from './config';
+import { errorHandler } from './utils/error-handler';
+import { healthRoutes } from './routes/health';
+import { v1Routes } from './routes/v1';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+
+const startTime = Date.now();
 
 const getVersion = () => {
   try {
@@ -18,11 +22,12 @@ const getVersion = () => {
   }
 };
 
-/**
- * Build Fastify server instance
- */
-export async function buildServer() {
-  const fastify = Fastify({
+export function getUptime(): number {
+  return Math.floor((Date.now() - startTime) / 1000);
+}
+
+export async function buildServer(): Promise<FastifyInstance> {
+  const server = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || 'info',
       transport:
@@ -32,152 +37,164 @@ export async function buildServer() {
               options: {
                 translateTime: 'HH:MM:ss Z',
                 ignore: 'pid,hostname',
+                messageFormat: '[{req_id}] {msg}',
               },
             }
           : undefined,
+      serializers: {
+        req(request) {
+          return {
+            method: request.method,
+            url: request.url,
+            path: request.routerPath,
+            parameters: request.params,
+            headers: request.headers,
+          };
+        },
+        res(reply) {
+          return {
+            statusCode: reply.statusCode,
+          };
+        },
+      },
+    },
+    requestIdLogLabel: 'req_id',
+    genReqId: () => nanoid(12),
+    disableRequestLogging: false,
+    requestIdHeader: 'x-request-id',
+    ajv: {
+      customOptions: {
+        removeAdditional: true,
+        useDefaults: true,
+        coerceTypes: true,
+        allErrors: true,
+        strict: false,
+      },
     },
   });
 
-  // Register CORS plugin - MUST be registered before other plugins
-  await fastify.register(corsPlugin, {
-    adminOrigin: process.env.APP_ORIGIN_ADMIN,
-    androidDevOrigin: process.env.APP_ORIGIN_ANDROID_DEV,
+  server.decorateRequest('startTime', null);
+
+  server.addHook('onRequest', async (request: FastifyRequest) => {
+    (request as any).startTime = Date.now();
+    request.log.info({
+      req_id: request.id,
+      method: request.method,
+      url: request.url,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'],
+    }, 'Incoming request');
   });
 
-  // Register auth plugin
-  await fastify.register(authPlugin, {
-    // Options can be overridden via environment variables
+  server.addHook('onResponse', async (request: FastifyRequest, reply: FastifyReply) => {
+    const responseTime = Date.now() - (request as any).startTime;
+    request.log.info({
+      req_id: request.id,
+      method: request.method,
+      url: request.url,
+      statusCode: reply.statusCode,
+      responseTime,
+    }, 'Request completed');
+  });
+
+  await server.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) {
+        return cb(null, true);
+      }
+
+      const allowedOrigins = [
+        process.env.APP_ORIGIN_ADMIN,
+        process.env.APP_ORIGIN_ANDROID_DEV,
+      ].filter(Boolean);
+
+      if (allowedOrigins.length === 0) {
+        server.log.warn({ origin }, 'CORS: No allowed origins configured, blocking request');
+        cb(new Error('CORS not configured'), false);
+        return;
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        cb(null, true);
+      } else {
+        server.log.warn({ origin, allowedOrigins, req_id: (server as any).id }, 'CORS: Blocked origin');
+        cb(new Error('Not allowed by CORS'), false);
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'],
+    exposedHeaders: ['x-request-id'],
+  });
+
+  server.setErrorHandler(errorHandler);
+
+  server.setNotFoundHandler((request, reply) => {
+    request.log.warn({
+      req_id: request.id,
+      method: request.method,
+      url: request.url,
+    }, 'Route not found');
+    
+    reply.code(404).send({
+      error: 'Not Found',
+      message: `Route ${request.method} ${request.url} not found`,
+      statusCode: 404,
+      req_id: request.id,
+    });
+  });
+
+  await server.register(authPlugin, {
     jwksUri: process.env.JWKS_URI,
     jwtSecret: process.env.SUPABASE_JWT_SECRET,
     audience: process.env.SUPABASE_JWT_AUD,
     issuer: process.env.JWT_ISSUER,
   });
 
-  // Register auth routes (on-signup hook, etc.)
-  await fastify.register(authRoutes);
+  await server.register(healthRoutes);
 
-  // Health check endpoint (no auth required)
-  fastify.get('/health', async (request, reply) => {
-    return { 
-      ok: true, 
-      version: getVersion(),
-      environment: process.env.NODE_ENV || 'development',
-      timestamp: new Date().toISOString()
-    };
-  });
+  await server.register(v1Routes, { prefix: '/api/v1' });
 
-  // Root endpoint (no auth required)
-  fastify.get('/', async (request, reply) => {
+  server.get('/', async (request, reply) => {
     return {
       name: 'AI Chat Task API',
-      version: '0.0.1',
+      version: getVersion(),
       docs: '/docs',
     };
   });
 
-  // Protected endpoint - requires authentication
-  fastify.get(
-    '/api/me',
-    { preHandler: requireAuth },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      return {
-        user: request.user,
-      };
-    }
-  );
-
-  // Admin-only endpoint
-  fastify.get(
-    '/api/admin/users',
-    { preHandler: requireAdmin },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      // TODO: Implement actual user listing from database
-      return {
-        users: [
-          { id: 'test-user-id', email: 'user@example.com', role: 'user' },
-          { id: 'test-admin-id', email: 'admin@example.com', role: 'admin' },
-        ],
-        total: 2,
-      };
-    }
-  );
-
-  // Test endpoint to check auth status
-  fastify.get('/api/auth/status', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.user) {
-      return {
-        authenticated: false,
-        message: 'No valid token provided',
-      };
-    }
-
-    return {
-      authenticated: true,
-      userId: request.user.id,
-      role: request.user.role,
-      email: request.user.email,
-    };
+  server.addHook('onClose', async () => {
+    server.log.info('Server is shutting down');
   });
-
-  // Example admin metrics endpoint
-  fastify.get(
-    '/api/admin/metrics',
-    { preHandler: requireAdmin },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      // TODO: Implement actual metrics from telemetry
-      return {
-        metrics: {
-          totalUsers: 2,
-          totalMessages: 0,
-          avgResponseTime: 0,
-        },
-        timestamp: new Date().toISOString(),
-      };
-    }
-  );
-
-  // Error handler
-  fastify.setErrorHandler((error, request, reply) => {
-    fastify.log.error(error);
-
-    // Don't expose internal errors in production
-    if (process.env.NODE_ENV === 'production') {
-      reply.status(500).send({
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred',
-      });
-    } else {
-      reply.status(error.statusCode || 500).send({
-        error: error.name,
-        message: error.message,
-        stack: error.stack,
-      });
-    }
-  });
-
-  return fastify;
-}
-
-/**
- * Start the server
- */
-export async function startServer() {
-  const server = await buildServer();
-  const port = parseInt(process.env.PORT || '3000', 10);
-  const host = process.env.HOST || '0.0.0.0';
-
-  try {
-    await server.listen({ port, host });
-    console.log(`🚀 Server listening at http://${host}:${port}`);
-  } catch (err) {
-    server.log.error(err);
-    process.exit(1);
-  }
 
   return server;
 }
 
-// Start server if this file is run directly
+export async function startServer(): Promise<FastifyInstance> {
+  const server = await buildServer();
+  const port = parseInt(process.env.PORT || '3000', 10);
+  const host = process.env.HOST || '0.0.0.0';
+  
+  try {
+    await server.listen({ port, host });
+    
+    server.log.info({
+      address: `http://${host}:${port}`,
+      environment: process.env.NODE_ENV || 'development',
+      version: getVersion(),
+      corsOrigins: {
+        admin: process.env.APP_ORIGIN_ADMIN || 'not configured',
+        androidDev: process.env.APP_ORIGIN_ANDROID_DEV || 'not configured',
+      },
+    }, 'Server started successfully');
+    
+    return server;
+  } catch (err) {
+    server.log.fatal(err, 'Failed to start server');
+    process.exit(1);
+  }
+}
+
 if (require.main === module) {
   startServer();
 }
