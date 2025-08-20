@@ -9,6 +9,7 @@ import { requireAuth } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
 import { logger } from '../../utils/logger';
 import { config } from '../../config';
+import { ZepClient } from '@getzep/zep-cloud';
 import {
   CreateGraphEdge,
   createGraphEdgeSchema,
@@ -103,45 +104,52 @@ const validateSearchQuery = createValidator(searchQuerySchema);
 // ============================================================================
 
 /**
- * Zep v3 adapter for memory storage and retrieval
+ * Zep v3 adapter for memory storage and retrieval using official SDK
  */
 class ZepAdapter {
-  private apiKey: string;
-  private baseUrl: string;
-  private headers: Record<string, string>;
+  private client: ZepClient;
 
   constructor() {
-    this.apiKey = config.zep.apiKey;
-    this.baseUrl = config.zep.baseUrl;
+    const apiKey = config.zep.apiKey;
     
-    if (!this.apiKey) {
+    if (!apiKey) {
       logger.error('ZEP_API_KEY is not configured');
       throw new Error('Zep API key is required');
     }
 
-    // Set up headers for all Zep API requests
-    this.headers = {
-      'Authorization': `Bearer ${this.apiKey}`,
-      'Content-Type': 'application/json'
-    };
+    // Initialize Zep SDK client
+    this.client = new ZepClient({
+      apiKey
+    });
 
-    logger.info('Zep v3 adapter initialized', { 
-      baseUrl: this.baseUrl,
-      apiKeyPrefix: this.apiKey.substring(0, 10) + '...'
+    logger.info('Zep v3 SDK adapter initialized', { 
+      apiKeyPrefix: apiKey.substring(0, 10) + '...'
     });
   }
 
   /**
-   * Get or create user in Zep v3
+   * Get or create user in Zep v3 using SDK
    */
-  private async ensureUser(userId: string): Promise<string> {
+  private async ensureUser(userId: string, metadata?: Record<string, any>): Promise<void> {
     try {
-      // In Zep v3, users are created automatically when first referenced
-      // We just need to return the userId to use in API calls
-      logger.debug('Using Zep v3 user', { userId });
-      return userId;
+      // Try to get the user first
+      try {
+        await this.client.user.get(userId);
+        logger.debug('Zep user exists', { userId });
+      } catch (error: any) {
+        // If user doesn't exist, create it
+        if (error.statusCode === 404 || error.message?.includes('not found')) {
+          await this.client.user.add({
+            userId: userId,
+            metadata: metadata || {}
+          });
+          logger.info('Created new Zep user', { userId });
+        } else {
+          throw error;
+        }
+      }
     } catch (error) {
-      logger.error('Error with Zep user', { error, userId });
+      logger.error('Error ensuring Zep user', { error, userId });
       throw error;
     }
   }
@@ -151,51 +159,41 @@ class ZepAdapter {
     sessionId?: string
   ): Promise<{ success: boolean; upserted: number }> {
     try {
-      const zepUserId = await this.ensureUser(userId);
+      await this.ensureUser(userId);
       
-      // Convert edges to Zep v3 fact format
-      const facts = edges.map(edge => ({
-        fact: `${edge.subject} ${edge.predicate} ${edge.object}`,
-        rating: edge.confidence || 1.0,
-        created_at: new Date().toISOString(),
-        metadata: {
-          ...edge.metadata,
-          session_id: sessionId,
-          source_message_id: edge.source_message_id,
-          subject: edge.subject,
-          predicate: edge.predicate,
-          object: edge.object
-        }
-      }));
+      // Convert edges to Zep graph format
+      const graphData = {
+        nodes: edges.map(edge => ({
+          id: edge.subject,
+          type: 'entity',
+          properties: {
+            name: edge.subject
+          }
+        })),
+        relationships: edges.map(edge => ({
+          source: edge.subject,
+          target: edge.object,
+          type: edge.predicate,
+          properties: {
+            confidence: edge.confidence || 1.0,
+            session_id: sessionId,
+            source_message_id: edge.source_message_id
+          }
+        }))
+      };
 
-      // Add facts to Zep v3 knowledge graph
-      const response = await fetch(`${this.baseUrl}/users/${zepUserId}/facts`, {
-        method: 'POST',
-        headers: this.headers,
-        body: JSON.stringify({ facts })
-      });
+      // Add to Zep graph
+      await this.client.graph.add(userId, graphData);
 
-      if (!response.ok) {
-        const error = await response.text();
-        logger.error('Failed to upsert facts to Zep', { 
-          status: response.status, 
-          error,
-          userId,
-          factCount: facts.length 
-        });
-        return { success: false, upserted: 0 };
-      }
-
-      const result = await response.json();
-      logger.info('Facts upserted to Zep', {
+      logger.info('Facts upserted to Zep via SDK', {
         userId,
-        upserted: result.upserted || facts.length,
+        upserted: edges.length,
         sessionId
       });
 
       return {
         success: true,
-        upserted: result.upserted || facts.length
+        upserted: edges.length
       };
     } catch (error) {
       logger.error('Error upserting facts to Zep', { error, userId });
@@ -216,59 +214,36 @@ class ZepAdapter {
     } = {}
   ): Promise<TelemetryRetrievalResult[]> {
     try {
-      const zepUserId = await this.ensureUser(userId);
+      await this.ensureUser(userId);
       const limit = options.limit || CONFIG_PRESETS.DEFAULT.top_k;
       const minScore = options.minScore || 0.7;
 
-      // Build search request for Zep v3
-      const searchRequest: any = {
-        text: query,  // v3 uses 'text' instead of 'query'
-        search_scope: 'messages',  // Search in messages
-        search_type: 'similarity',  // Semantic search
+      // Search threads using SDK
+      const searchResults = await this.client.thread.search({
+        userId,
+        query,
         limit
-      };
-
-      // Add session filter if provided
-      if (options.sessionId) {
-        searchRequest.session_id = options.sessionId;
-      }
-
-      // Search Zep v3 memory
-      const response = await fetch(`${this.baseUrl}/users/${zepUserId}/searchSessions`, {
-        method: 'POST',
-        headers: this.headers,
-        body: JSON.stringify(searchRequest)
       });
 
-      if (!response.ok) {
-        const error = await response.text();
-        logger.error('Failed to search Zep memory', { 
-          status: response.status, 
-          error,
-          userId,
-          query 
-        });
-        return [];
-      }
-
-      const searchResult = await response.json();
-      
-      // Convert Zep v3 results to TelemetryRetrievalResult format
-      const results: TelemetryRetrievalResult[] = (searchResult.results || []).map((result: any) => ({
-        id: result.message?.uuid || `result-${Date.now()}-${Math.random()}`,
-        session_id: result.session?.session_id || null,
-        text: result.message?.content || '',
-        score: result.score || result.distance || 0,
-        source_type: 'message',
-        tokens_estimate: estimateTokens(result.message?.content || ''),
-        metadata: {
-          ...result.message?.metadata,
-          message_id: result.message?.uuid,
-          timestamp: result.message?.created_at,
-          role: result.message?.role,
-          confidence: result.score || result.distance
-        }
-      }));
+      // Convert SDK results to TelemetryRetrievalResult format
+      const results: TelemetryRetrievalResult[] = (searchResults.results || []).map((result: any) => {
+        // Extract content and metadata
+        const content = result.content || result.text || '';
+        const resultId = result.id || `result-${Date.now()}-${Math.random()}`;
+        
+        return {
+          id: resultId,
+          session_id: result.sessionId || result.thread_id || null,
+          text: content,
+          score: result.score || result.relevance || 0,
+          source_type: 'message',
+          tokens_estimate: estimateTokens(content),
+          metadata: {
+            ...result.metadata,
+            confidence: result.score || result.relevance
+          }
+        };
+      });
 
       // Apply additional filtering and sorting
       const filtered = filterByScore(results, minScore);
@@ -280,7 +255,7 @@ class ZepAdapter {
         return trimToTokenBudget(limited, options.tokenBudget);
       }
 
-      logger.info('Zep search completed', {
+      logger.info('Zep SDK search completed', {
         userId,
         query: query.substring(0, 50),
         resultsCount: limited.length,
@@ -289,13 +264,13 @@ class ZepAdapter {
 
       return limited;
     } catch (error) {
-      logger.error('Error searching Zep memory', { error, userId, query });
+      logger.error('Error searching Zep memory via SDK', { error, userId, query });
       return [];
     }
   }
 
   /**
-   * Store a message in Zep memory
+   * Store a message in Zep memory using SDK
    */
   async storeMessage(
     userId: string,
@@ -305,38 +280,21 @@ class ZepAdapter {
     metadata?: Record<string, any>
   ): Promise<boolean> {
     try {
-      const zepUserId = await this.ensureUser(userId);
+      await this.ensureUser(userId);
       
-      // Store message in Zep v3
-      const response = await fetch(
-        `${this.baseUrl}/users/${zepUserId}/sessions/${sessionId}/messages`,
+      // Store message in thread
+      await this.client.thread.addMessages(sessionId, [
         {
-          method: 'POST',
-          headers: this.headers,
-          body: JSON.stringify({
-            role,
-            content,
-            metadata: {
-              ...metadata,
-              timestamp: new Date().toISOString()
-            }
-          })
+          roleType: role === 'user' ? 'user' : 'assistant',
+          content,
+          metadata: {
+            ...metadata,
+            timestamp: new Date().toISOString()
+          }
         }
-      );
+      ]);
 
-      if (!response.ok) {
-        const error = await response.text();
-        logger.error('Failed to store message in Zep', {
-          status: response.status,
-          error,
-          userId,
-          sessionId,
-          role
-        });
-        return false;
-      }
-
-      logger.info('Message stored in Zep', {
+      logger.info('Message stored in Zep via SDK', {
         userId,
         sessionId,
         role,
@@ -345,7 +303,7 @@ class ZepAdapter {
 
       return true;
     } catch (error) {
-      logger.error('Error storing message in Zep', { error, userId, sessionId });
+      logger.error('Error storing message in Zep via SDK', { error, userId, sessionId });
       return false;
     }
   }

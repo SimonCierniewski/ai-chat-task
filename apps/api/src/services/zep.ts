@@ -1,27 +1,14 @@
 /**
  * Zep Memory Service Client
  * 
- * This is a stub implementation for Phase 1.
- * Full implementation will be added in Phase 3 (Zep v3 Integration).
+ * Uses the official Zep SDK for v3 API integration.
  */
 
 import { FastifyBaseLogger } from 'fastify';
-
-interface ZepUser {
-  user_id: string;
-  email?: string;
-  metadata?: Record<string, any>;
-}
-
-interface ZepCollection {
-  name: string;
-  description?: string;
-  metadata?: Record<string, any>;
-}
+import { ZepClient as ZepSDKClient } from '@getzep/zep-cloud';
 
 export class ZepClient {
-  private apiKey: string;
-  private baseUrl: string;
+  private client: ZepSDKClient;
   private logger?: FastifyBaseLogger;
 
   constructor(config: {
@@ -29,21 +16,25 @@ export class ZepClient {
     baseUrl?: string;
     logger?: FastifyBaseLogger;
   }) {
-    this.apiKey = config.apiKey || process.env.ZEP_API_KEY || '';
-    this.baseUrl = config.baseUrl || process.env.ZEP_BASE_URL || 'https://api.getzep.com';
+    const apiKey = config.apiKey || process.env.ZEP_API_KEY || '';
     this.logger = config.logger;
     
     // Fail fast if Zep is not configured
-    if (!this.apiKey) {
+    if (!apiKey) {
       throw new Error('ZEP_API_KEY is not configured. Cannot initialize Zep client.');
     }
     
-    this.logger?.info({ baseUrl: this.baseUrl }, 'Zep client initialized');
+    // Initialize the SDK client
+    this.client = new ZepSDKClient({
+      apiKey
+    });
+    
+    this.logger?.info('Zep SDK client initialized');
   }
 
   /**
-   * Initialize a new user in Zep memory system
-   * This creates a user namespace and default collection for storing chat history
+   * Initialize a new user in Zep memory system using SDK
+   * This creates a user in Zep for storing chat history and memory
    * 
    * @param userId - The user's ID from Supabase auth
    * @param email - The user's email address
@@ -54,42 +45,52 @@ export class ZepClient {
     error?: string;
     timings?: {
       createUser?: number;
-      createCollection?: number;
       total: number;
     };
   }> {
     const startTime = Date.now();
 
     try {
-      // Phase 3 TODO: Implement actual Zep API calls
-      // For now, this is a stub that simulates the operations
+      this.logger?.info({ userId, email }, 'Initializing Zep user via SDK');
       
-      this.logger?.info({ userId, email }, 'Initializing Zep user (stub)');
-      
-      // Simulate user creation
+      // Create or update user using SDK
       const userStartTime = Date.now();
-      // const user = await this.createUser({
-      //   user_id: `user:${userId}`,
-      //   email,
-      //   metadata: {
-      //     created_at: new Date().toISOString(),
-      //     source: 'signup_hook',
-      //   },
-      // });
+      
+      try {
+        // Check if user exists
+        await this.client.user.get(userId);
+        
+        // User exists, update metadata if email provided
+        if (email) {
+          await this.client.user.update(userId, {
+            email,
+            metadata: {
+              updated_at: new Date().toISOString(),
+              source: 'signup_hook',
+            },
+          });
+        }
+        
+        this.logger?.info({ userId }, 'Zep user already exists, updated metadata');
+      } catch (error: any) {
+        // User doesn't exist, create new one
+        if (error.statusCode === 404 || error.message?.includes('not found')) {
+          await this.client.user.add({
+            userId,
+            email,
+            metadata: {
+              created_at: new Date().toISOString(),
+              source: 'signup_hook',
+            },
+          });
+          
+          this.logger?.info({ userId }, 'Created new Zep user');
+        } else {
+          throw error;
+        }
+      }
+      
       const userTime = Date.now() - userStartTime;
-      
-      // Simulate collection creation
-      const collectionStartTime = Date.now();
-      // const collection = await this.createCollection({
-      //   name: `user:${userId}:default`,
-      //   description: `Default chat history for user ${userId}`,
-      //   metadata: {
-      //     user_id: userId,
-      //     type: 'chat_history',
-      //   },
-      // });
-      const collectionTime = Date.now() - collectionStartTime;
-      
       const totalTime = Date.now() - startTime;
       
       this.logger?.info(
@@ -97,18 +98,16 @@ export class ZepClient {
           userId,
           timings: {
             createUser: userTime,
-            createCollection: collectionTime,
             total: totalTime,
           },
         },
-        'Zep user initialized successfully (stub)'
+        'Zep user initialized successfully via SDK'
       );
       
       return {
         success: true,
         timings: {
           createUser: userTime,
-          createCollection: collectionTime,
           total: totalTime,
         },
       };
@@ -122,7 +121,7 @@ export class ZepClient {
           error: errorMessage,
           duration: totalTime,
         },
-        'Failed to initialize Zep user'
+        'Failed to initialize Zep user via SDK'
       );
       
       return {
@@ -135,37 +134,6 @@ export class ZepClient {
     }
   }
 
-  /**
-   * Create a user in Zep (Phase 3 implementation)
-   */
-  private async createUser(user: ZepUser): Promise<void> {
-    // Phase 3 TODO: Implement actual API call
-    // POST /users
-    // Body: { user_id, email, metadata }
-    
-    // Stub implementation
-    await this.simulateApiDelay(50, 150);
-  }
-
-  /**
-   * Create a collection in Zep (Phase 3 implementation)
-   */
-  private async createCollection(collection: ZepCollection): Promise<void> {
-    // Phase 3 TODO: Implement actual API call
-    // POST /collections
-    // Body: { name, description, metadata }
-    
-    // Stub implementation
-    await this.simulateApiDelay(50, 150);
-  }
-
-  /**
-   * Simulate API delay for stub implementation
-   */
-  private async simulateApiDelay(min: number, max: number): Promise<void> {
-    const delay = Math.floor(Math.random() * (max - min + 1)) + min;
-    await new Promise(resolve => setTimeout(resolve, delay));
-  }
 
   /**
    * Check if Zep is enabled (always true if initialized)
