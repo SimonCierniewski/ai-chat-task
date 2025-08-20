@@ -151,3 +151,4 @@
 6. **Acceptance-driven output:** For each change, state which Acceptance Criteria it satisfies or advances.
 7. **SSE always real:** Don’t simulate streaming; ensure headers/format/event names match the contract.
 8. **Error handling:** Log structured errors and emit `error` telemetry with context (no secrets), then fail fast.
+9. **Fail fast:** Create code to crash fast and return error if any required data is missing. Don't create stubs in such case.
