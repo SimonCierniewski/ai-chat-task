@@ -72,6 +72,14 @@ interface ModelPricingRequest {
   cached_input_per_mtok?: number;
 }
 
+interface UpdateUserRoleParams {
+  userId: string;
+}
+
+interface UpdateUserRoleBody {
+  role: 'user' | 'admin';
+}
+
 // Validation schemas
 const metricsQuerySchema = {
   type: 'object',
@@ -521,6 +529,66 @@ async function updateModelPricingHandler(
   }
 }
 
+/**
+ * PUT /api/v1/admin/users/:userId/role
+ * Update a user's role in the profiles table
+ */
+async function updateUserRoleHandler(
+  req: FastifyRequest<{ Params: UpdateUserRoleParams; Body: UpdateUserRoleBody }>,
+  reply: FastifyReply
+) {
+  try {
+    const { userId } = req.params as UpdateUserRoleParams;
+    const { role } = req.body as UpdateUserRoleBody;
+
+    if (!userId) {
+      return reply.status(400).send({ error: 'Missing userId' });
+    }
+
+    if (role !== 'user' && role !== 'admin') {
+      return reply.status(400).send({ error: 'Invalid role' });
+    }
+
+    logger.info('Admin updating user role', {
+      req_id: req.id,
+      admin_id: (req as any).user.id,
+      target_user: userId,
+      role,
+    });
+
+    // Try update; do not create profile if missing
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({ role, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .select('user_id, role')
+      .maybeSingle();
+
+    if (updateError) {
+      logger.error('Failed to update user role', {
+        req_id: req.id,
+        error: updateError.message,
+      });
+      return reply.status(500).send({ error: 'Failed to update user role' });
+    }
+
+    if (!updated) {
+      return reply.status(404).send({
+        error: 'PROFILE_NOT_FOUND',
+        message: 'User profile not found. It should be created by the signup trigger.',
+      });
+    }
+
+    return reply.send({ success: true, user_id: updated.user_id, role: updated.role });
+  } catch (error) {
+    logger.error('Admin update user role handler error', {
+      req_id: req.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return reply.status(500).send({ error: 'Failed to update user role' });
+  }
+}
+
 // ============================================================================
 // Routes Registration
 // ============================================================================
@@ -544,4 +612,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
   // POST /api/v1/admin/models/pricing - Update model pricing  
   fastify.post('/models/pricing', updateModelPricingHandler);
+
+  // PUT /api/v1/admin/users/:userId/role - Update user role
+  fastify.put('/users/:userId/role', updateUserRoleHandler);
 };
