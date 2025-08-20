@@ -14,11 +14,11 @@ export async function PUT(
   { params }: { params: { userId: string } }
 ) {
   try {
-    // Check authentication
+    // Get session with access token
     const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    if (authError || !user) {
+    if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -26,7 +26,7 @@ export async function PUT(
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
-      .eq('user_id', user.id)
+      .eq('user_id', session.user.id)
       .single();
     
     if (profileError || profile?.role !== 'admin') {
@@ -41,7 +41,7 @@ export async function PUT(
     }
 
     // Prevent self-demotion
-    if (params.userId === user.id && body.role !== 'admin') {
+    if (params.userId === session.user.id && body.role !== 'admin') {
       return NextResponse.json({ 
         error: 'Cannot demote yourself. Ask another admin to change your role.' 
       }, { status: 400 });
@@ -52,7 +52,7 @@ export async function PUT(
     const updateResponse = await fetch(apiUrl.toString(), {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${user.access_token}`,
+        'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ role: body.role }),

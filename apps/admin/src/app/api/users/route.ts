@@ -7,11 +7,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication
+    // Get session with access token
     const supabase = createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,9 +19,9 @@ export async function GET(request: NextRequest) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
-      .eq('user_id', user.id)
+      .eq('user_id', session.user.id)
       .single();
-    
+
     if (profileError || profile?.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(apiUrl.toString(), {
       headers: {
-        'Authorization': `Bearer ${user.access_token}`,
+        'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       const errorText = await response.text();
       console.error('Backend API error:', response.status, errorText);
       return NextResponse.json(
-        { error: 'Backend API not available. Please ensure the API server is running.' },
+        { error: errorText },
         { status: response.status || 502 }
       );
     }
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Error fetching users:', error);
-    
+
     return NextResponse.json(
       { error: 'Failed to fetch users' },
       { status: 500 }
