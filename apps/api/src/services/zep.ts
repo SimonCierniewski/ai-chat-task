@@ -23,7 +23,6 @@ export class ZepClient {
   private apiKey: string;
   private baseUrl: string;
   private logger?: FastifyBaseLogger;
-  private enabled: boolean;
 
   constructor(config: {
     apiKey?: string;
@@ -34,14 +33,12 @@ export class ZepClient {
     this.baseUrl = config.baseUrl || process.env.ZEP_BASE_URL || 'https://api.getzep.com';
     this.logger = config.logger;
     
-    // Zep is only enabled if we have an API key
-    this.enabled = Boolean(this.apiKey);
-    
-    if (!this.enabled) {
-      this.logger?.info('Zep client initialized in disabled mode (no API key)');
-    } else {
-      this.logger?.info({ baseUrl: this.baseUrl }, 'Zep client initialized');
+    // Fail fast if Zep is not configured
+    if (!this.apiKey) {
+      throw new Error('ZEP_API_KEY is not configured. Cannot initialize Zep client.');
     }
+    
+    this.logger?.info({ baseUrl: this.baseUrl }, 'Zep client initialized');
   }
 
   /**
@@ -62,17 +59,6 @@ export class ZepClient {
     };
   }> {
     const startTime = Date.now();
-    
-    // If Zep is not enabled, return success (no-op)
-    if (!this.enabled) {
-      this.logger?.debug({ userId }, 'Zep disabled, skipping user initialization');
-      return {
-        success: true,
-        timings: {
-          total: Date.now() - startTime,
-        },
-      };
-    }
 
     try {
       // Phase 3 TODO: Implement actual Zep API calls
@@ -182,10 +168,10 @@ export class ZepClient {
   }
 
   /**
-   * Check if Zep is enabled (has API key)
+   * Check if Zep is enabled (always true if initialized)
    */
   isEnabled(): boolean {
-    return this.enabled;
+    return true;
   }
 }
 

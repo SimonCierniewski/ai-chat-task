@@ -28,7 +28,7 @@ export function validateEnvironment(): void {
   
   // Critical variables that must be present
   const required = {
-    SUPABASE_URL: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     ZEP_API_KEY: process.env.ZEP_API_KEY,
@@ -61,7 +61,7 @@ export function validateEnvironment(): void {
     console.error('\n❌ CRITICAL CONFIGURATION ERRORS:\n');
     errors.forEach(error => console.error(`   • ${error}`));
     console.error('\n📝 Required environment variables:');
-    console.error('   • SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL');
+    console.error('   • SUPABASE_URL');
     console.error('   • SUPABASE_SERVICE_ROLE_KEY');
     console.error('   • OPENAI_API_KEY');
     console.error('   • ZEP_API_KEY');
