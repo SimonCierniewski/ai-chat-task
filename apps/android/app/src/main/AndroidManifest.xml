@@ -15,6 +15,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AIChat"
+        android:networkSecurityConfig="${networkSecurityConfig}"
         tools:targetApi="31">
         
         <activity
