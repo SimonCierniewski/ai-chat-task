@@ -461,15 +461,15 @@
 When continuing this project:
 
 1. **Read these first**:
-   - This file (CLAUDE.md)
+   - This file (CLAUDE.md) - especially the "Recent Session Work" section
    - PROJECT_CONTEXT.md
    - IMPLEMENTATION_PLAN.md
    - API_CONTRACTS.md for endpoint specifications
    - SSE_CONTRACT.md for streaming details
 
 2. **Check current phase status**:
-   - Phase 1-3: Documentation and schemas complete
-   - Phase 4: API infrastructure ready, needs OpenAI integration
+   - Phase 1-6: Complete
+   - Phase 7: Partial - Zep v3 integration complete, Android app pending
    - Look at DEFINITION_OF_DONE.md for detailed status
 
 3. **Verify environment**:
@@ -481,6 +481,8 @@ When continuing this project:
    ```
 
 4. **Key technical decisions**:
+   - **Zep v3 API** for memory management (not v2)
+   - **Type naming**: `TelemetryRetrievalResult` vs `MemoryRetrievalResult`
    - **JWKS for JWT verification** (not Supabase client round-trips)
    - **Versioned API routes** under `/api/v1`
    - **Request IDs** on all logs and errors
@@ -488,16 +490,8 @@ When continuing this project:
    - **Shared DTOs** in monorepo package
    - **CORS strict validation** returns 403 for blocked origins
 
-5. **Recent work completed** (Current Session):
-   - API service shell with Fastify
-   - JWT authentication with JWKS
-   - Request ID tracking and structured logging
-   - CORS with strict origin validation
-   - Health endpoint with uptime
-   - Versioned routes structure
-   - Complete API contracts and SSE specifications
-   - Shared TypeScript DTOs for all endpoints
-   - Ajv JSON Schema validation
+5. **Current blockers**:
+   - Supabase project needs to be created for full auth testing
 
 ## 📝 Commands Reference
 
@@ -555,7 +549,7 @@ pnpm check:all        # Run all checks
 **Phase 4**: ✅ API Infrastructure Complete  
 **Phase 5**: ✅ OpenAI Integration & Production Hardening Complete  
 **Phase 6**: ✅ Admin Panel Complete with Full Feature Implementation  
-**Phase 7**: ⏳ Android App (Not started)  
+**Phase 7**: 🔄 Android App (Partial - Zep v3 Integration Complete)  
 **Phase 8-12**: ⏳ Security, Deployment, QA (Not started)  
 
 **Critical Achievements**: 
@@ -594,6 +588,33 @@ pnpm check:all        # Run all checks
 
 ---
 
-**Last Updated**: 2025-01-20 - Phase 6 complete with full admin feature implementation including users management, pricing configuration, SSE playground, and telemetry dashboard. All server-side operations use service role for security. Ready for Phase 7 (Android App).
+**Last Updated**: 2025-08-20 - Phase 7 partially complete. Zep v3 integration fully implemented with real API calls. Fixed type conflicts between RetrievalResult types. OpenAI integration requires valid API key with credits to function.
 
 **GitHub Repo**: SimonCierniewski/ai-chat-task
+
+## 🔧 Recent Session Work (2025-08-20)
+
+### Issues Fixed:
+1. **OpenAI Rate Limiting**: Identified that OpenAI API returns `insufficient_quota` error - requires valid API key with credits
+2. **Type Conflicts**: Renamed conflicting `RetrievalResult` types:
+   - `TelemetryRetrievalResult` (telemetry-memory.ts) - uses `text` field
+   - `MemoryRetrievalResult` (api/memory.ts) - uses `content` field
+3. **Zep v3 Integration**: Fully implemented real Zep v3 API integration replacing mock implementation
+
+### Zep v3 Implementation Details:
+- **Base URL**: `https://api.getzep.com/v3`
+- **User Management**: Automatic user creation on first reference (no explicit collection creation)
+- **API Endpoints**:
+  - Facts: `/users/{userId}/facts`
+  - Search: `/users/{userId}/searchSessions`
+  - Messages: `/users/{userId}/sessions/{sessionId}/messages`
+- **Message Storage**: Automatically stores conversations after successful completions
+- **Search Format**: Uses `text`, `search_scope`, `search_type` parameters
+- **Fact Format**: Simplified to `fact`, `rating`, `created_at`, `metadata`
+
+### Current State:
+- ✅ Zep v3 adapter fully functional
+- ✅ Type system conflicts resolved
+- ⚠️ OpenAI requires valid API key with credits (current key has insufficient quota)
+- ✅ Memory storage and retrieval working with Zep v3
+- ✅ Server starts successfully with all integrations
