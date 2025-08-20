@@ -33,43 +33,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     try {
-      // First try the API server /api/me endpoint if configured
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
-      if (apiBaseUrl && session?.access_token) {
-        try {
-          const response = await fetch(`${apiBaseUrl}/api/me`, {
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          })
-          
-          if (response.ok) {
-            const data = await response.json()
-            setProfile({
-              id: userId,
-              email: data.user.email,
-              role: data.user.role,
-            })
-            return
-          }
-        } catch (apiError) {
-          console.warn('Failed to fetch from API server, falling back to local endpoint:', apiError)
-        }
+      if (!apiBaseUrl || !session?.access_token) {
+        throw new Error('Missing NEXT_PUBLIC_API_BASE_URL or session token')
       }
-      
-      // Fallback to local Next.js API route which has access to service role key
-      const response = await fetch('/api/auth/check-role')
-      
+
+      const response = await fetch(`${apiBaseUrl}/api/v1/me`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to fetch user role')
+        const error = await response.text()
+        throw new Error(`Failed to fetch profile: ${response.status} ${error}`)
       }
-      
+
       const data = await response.json()
       setProfile({
         id: userId,
-        email: data.email,
-        role: data.role,
+        email: data.user.email,
+        role: data.user.role,
       })
     } catch (error) {
       console.error('Error fetching profile:', error)
@@ -80,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        
+
         if (session) {
           setSession(session)
           setUser(session.user)
@@ -100,13 +84,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
-      
+
       if (session?.user) {
         await fetchProfile(session.user.id)
       } else {
         setProfile(null)
       }
-      
+
       setLoading(false)
     })
 
@@ -129,20 +113,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     // Sign out from Supabase
     await supabase.auth.signOut()
-    
+
     // Clear local state
     setUser(null)
     setProfile(null)
     setSession(null)
-    
+
     // Clear all storage to remove any cached tokens
     if (typeof window !== 'undefined') {
       // Clear localStorage
       localStorage.clear()
-      
+
       // Clear sessionStorage
       sessionStorage.clear()
-      
+
       // Clear all cookies for this domain
       document.cookie.split(";").forEach((c) => {
         const eqPos = c.indexOf("=")
@@ -152,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         document.cookie = `${name.trim()}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${window.location.hostname}`
       })
     }
-    
+
     // Navigate to login
     router.push('/login')
   }

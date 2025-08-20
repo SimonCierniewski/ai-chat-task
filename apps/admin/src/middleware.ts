@@ -69,28 +69,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Check admin role using service role key
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  
-  if (!serviceRoleKey) {
-    // Fail fast - no service role key means we can't verify admin access
-    throw new Error('CRITICAL: SUPABASE_SERVICE_ROLE_KEY is not configured. Cannot verify admin access.')
-  }
-  
+  // Verify admin role using regular Supabase session RLS
   try {
-
-    const supabaseAdmin = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      serviceRoleKey,
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false
-        }
-      }
-    )
-
-    const { data: profile } = await supabaseAdmin
+    const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('user_id', user.id)
