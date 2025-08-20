@@ -3,7 +3,8 @@
  * Handles streaming completions from OpenAI API with usage tracking
  */
 
-import { config, logger } from '../config';
+import { config } from '../config';
+import { logger } from '../utils/logger';
 import { UsageEventData } from '@prototype/shared/api/chat';
 import { httpsKeepAliveAgent } from '../utils/http-agents';
 

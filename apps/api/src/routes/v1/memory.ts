@@ -7,7 +7,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginAsync } fro
 import { Type } from '@sinclair/typebox';
 import { requireAuth } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
-import { logger } from '../../config';
+import { logger } from '../../utils/logger';
 import { 
   CreateGraphEdge, 
   createGraphEdgeSchema,

@@ -5,7 +5,8 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fp from 'fastify-plugin';
-import { config, logger } from '../config';
+import { config } from '../config';
+import { logger } from '../utils/logger';
 
 // ============================================================================
 // Types

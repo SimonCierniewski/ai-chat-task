@@ -3,7 +3,7 @@
  * Assembles prompts with memory context while enforcing token budgets
  */
 
-import { logger } from '../config';
+import { logger } from '../utils/logger';
 import { RetrievalResult } from '@prototype/shared/telemetry-memory';
 import { CONFIG_PRESETS, MemoryConfig } from '@prototype/shared/memory-config';
 

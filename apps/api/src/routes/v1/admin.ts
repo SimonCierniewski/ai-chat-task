@@ -7,7 +7,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginAsync } fro
 import { Type } from '@sinclair/typebox';
 import { requireAuth, requireAdmin } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
-import { logger } from '../../config';
+import { logger } from '../../utils/logger';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../../config';
 import { ModelRegistry } from '../../services/model-registry';
