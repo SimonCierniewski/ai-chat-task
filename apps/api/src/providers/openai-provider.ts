@@ -145,7 +145,16 @@ export class OpenAIProvider {
         // Handle non-2xx responses
         if (!response.ok) {
           const errorText = await response.text();
-          const error = new Error(`OpenAI API error: ${response.status} ${errorText}`);
+          let errorDetails: any = {};
+          
+          // Try to parse error as JSON for better logging
+          try {
+            errorDetails = JSON.parse(errorText);
+          } catch {
+            errorDetails = { message: errorText };
+          }
+          
+          const error = new Error(`OpenAI API error: ${response.status} ${errorDetails.error?.message || errorDetails.message || errorText}`);
 
           // Handle rate limiting (429)
           if (response.status === 429) {
@@ -155,11 +164,17 @@ export class OpenAIProvider {
               const delay = retryAfter ? parseInt(retryAfter) * 1000 : 2000 + Math.random() * 1000;
               logger.warn('OpenAI rate limit, retrying', {
                 retry_count: retryCount,
-                delay_ms: delay
+                delay_ms: delay,
+                retry_after: retryAfter,
+                error_details: errorDetails
               });
               await new Promise(resolve => setTimeout(resolve, delay));
               continue;
             }
+            logger.error('OpenAI rate limit exceeded after retries', {
+              retry_count: retryCount,
+              error_details: errorDetails
+            });
             onError(error, 429);
             return { ttftMs, openAiMs, retryCount };
           }
@@ -168,8 +183,10 @@ export class OpenAIProvider {
           if (response.status >= 400 && response.status < 500) {
             logger.error('OpenAI client error', {
               status: response.status,
-              error: errorText,
-              retry_count: retryCount
+              error_details: errorDetails,
+              retry_count: retryCount,
+              model,
+              api_key_prefix: this.apiKey.substring(0, 10) + '...'
             });
             onError(error, response.status);
             return { ttftMs, openAiMs, retryCount };
@@ -181,12 +198,18 @@ export class OpenAIProvider {
             const jitter = Math.random() * 1000;
             logger.warn('OpenAI server error, retrying', {
               status: response.status,
+              error_details: errorDetails,
               retry_count: retryCount
             });
             await new Promise(resolve => setTimeout(resolve, 1000 + jitter));
             continue;
           }
 
+          logger.error('OpenAI API error', {
+            status: response.status,
+            error_details: errorDetails,
+            retry_count: retryCount
+          });
           onError(error, response.status);
           return { ttftMs, openAiMs, retryCount };
         }
