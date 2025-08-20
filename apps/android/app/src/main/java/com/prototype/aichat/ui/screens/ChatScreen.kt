@@ -1,20 +1,33 @@
 package com.prototype.aichat.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.prototype.aichat.domain.models.ChatMessage
 import com.prototype.aichat.domain.models.MessageRole
 import com.prototype.aichat.domain.models.StreamingState
+import com.prototype.aichat.ui.components.*
+import com.prototype.aichat.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -24,124 +37,222 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChatScreen(
     onNavigateToSession: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    chatViewModel: ChatViewModel = viewModel()
 ) {
-    var messageText by remember { mutableStateOf("") }
-    var useMemory by remember { mutableStateOf(true) }
-    var messages by remember { mutableStateOf(listOf<ChatMessage>()) }
-    var streamingState by remember { mutableStateOf<StreamingState>(StreamingState.Idle) }
+    val uiState by chatViewModel.uiState.collectAsState()
+    val messages by chatViewModel.messages.collectAsState()
+    val streamingState by chatViewModel.streamingState.collectAsState()
+    
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val keyboardController = LocalSoftwareKeyboardController.current
+    
+    // Auto-scroll behavior
+    var userScrolled by remember { mutableStateOf(false) }
+    
+    // Detect user scroll
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            userScrolled = true
+        }
+    }
+    
+    // Auto-scroll on new messages if user hasn't scrolled up
+    LaunchedEffect(messages.size) {
+        if (!userScrolled && messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+    
+    // Reset auto-scroll when at bottom
+    LaunchedEffect(listState.canScrollForward) {
+        if (!listState.canScrollForward) {
+            userScrolled = false
+        }
+    }
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("AI Chat") },
-                actions = {
-                    IconButton(onClick = { useMemory = !useMemory }) {
-                        Icon(
-                            imageVector = if (useMemory) Icons.Default.Memory else Icons.Default.MemoryOutlined,
-                            contentDescription = "Toggle Memory",
-                            tint = if (useMemory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(onClick = onNavigateToSession) {
-                        Icon(Icons.Default.History, contentDescription = "Sessions")
-                    }
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.Default.Logout, contentDescription = "Logout")
-                    }
-                }
+            ChatTopBar(
+                useMemory = uiState.useMemory,
+                selectedModel = uiState.selectedModel,
+                availableModels = uiState.availableModels,
+                onToggleMemory = { chatViewModel.toggleMemory() },
+                onSelectModel = { chatViewModel.selectModel(it) },
+                onNavigateToSession = onNavigateToSession,
+                onLogout = onLogout
             )
         },
         bottomBar = {
             ChatInputBar(
-                messageText = messageText,
-                onMessageChange = { messageText = it },
+                messageText = uiState.currentInput,
+                onMessageChange = { chatViewModel.updateInput(it) },
                 onSendMessage = {
-                    if (messageText.isNotBlank() && streamingState is StreamingState.Idle) {
-                        // Add user message
-                        messages = messages + ChatMessage(
-                            content = messageText,
-                            role = MessageRole.USER,
-                            sessionId = "current"
-                        )
-                        
-                        // TODO: Send message via ViewModel
-                        messageText = ""
-                        
-                        // Scroll to bottom
-                        scope.launch {
-                            listState.animateScrollToItem(messages.size - 1)
-                        }
-                    }
+                    keyboardController?.hide()
+                    chatViewModel.sendMessage(uiState.currentInput)
+                    userScrolled = false // Reset to auto-scroll
                 },
-                isStreaming = streamingState !is StreamingState.Idle,
-                useMemory = useMemory
+                isStreaming = uiState.isStreaming,
+                onCancelStreaming = { chatViewModel.cancelStreaming() }
             )
         }
     ) { paddingValues ->
-        LazyColumn(
-            state = listState,
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(paddingValues)
         ) {
-            items(messages) { message ->
-                MessageBubble(message = message)
+            MessageList(
+                messages = messages,
+                listState = listState,
+                isStreaming = streamingState is StreamingState.Streaming
+            )
+            
+            // Error snackbar
+            uiState.error?.let { error ->
+                ErrorSnackbar(
+                    error = error,
+                    onDismiss = { chatViewModel.clearError() },
+                    onRetry = if (uiState.lastRequest != null) {
+                        { chatViewModel.retryLastMessage() }
+                    } else null
+                )
             }
             
-            // Show streaming indicator
-            if (streamingState is StreamingState.Streaming) {
-                item {
-                    StreamingIndicator()
-                }
+            // Scroll to bottom FAB when scrolled up
+            AnimatedVisibility(
+                visible = userScrolled && listState.canScrollForward,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+            ) {
+                ScrollToBottomFab(
+                    onClick = {
+                        scope.launch {
+                            listState.animateScrollToItem(messages.size - 1)
+                            userScrolled = false
+                        }
+                    }
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MessageBubble(message: ChatMessage) {
-    val isUser = message.role == MessageRole.USER
+fun ChatTopBar(
+    useMemory: Boolean,
+    selectedModel: String,
+    availableModels: List<String>,
+    onToggleMemory: () -> Unit,
+    onSelectModel: (String) -> Unit,
+    onNavigateToSession: () -> Unit,
+    onLogout: () -> Unit
+) {
+    var showModelMenu by remember { mutableStateOf(false) }
     
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
-    ) {
-        Card(
-            modifier = Modifier
-                .widthIn(max = 280.dp)
-                .padding(horizontal = 8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isUser) 
-                    MaterialTheme.colorScheme.primaryContainer 
-                else 
-                    MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp)
+    TopAppBar(
+        title = { Text("AI Chat") },
+        actions = {
+            // Memory toggle
+            IconButton(
+                onClick = onToggleMemory,
+                modifier = Modifier.semantics {
+                    contentDescription = if (useMemory) "Memory enabled" else "Memory disabled"
+                }
             ) {
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyMedium
+                Icon(
+                    imageVector = if (useMemory) Icons.Default.Memory else Icons.Default.MemoryOutlined,
+                    contentDescription = null,
+                    tint = if (useMemory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
-                message.metadata?.let { metadata ->
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = buildString {
-                            metadata.tokensIn?.let { append("↑$it ") }
-                            metadata.tokensOut?.let { append("↓$it ") }
-                            metadata.costUsd?.let { append("${'$'}%.4f".format(it)) }
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            
+            // Model selector
+            Box {
+                TextButton(
+                    onClick = { showModelMenu = true },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Select model: $selectedModel"
+                    }
+                ) {
+                    Text(selectedModel.substringAfterLast("-"))
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
+                
+                DropdownMenu(
+                    expanded = showModelMenu,
+                    onDismissRequest = { showModelMenu = false }
+                ) {
+                    availableModels.forEach { model ->
+                        DropdownMenuItem(
+                            text = { Text(model) },
+                            onClick = {
+                                onSelectModel(model)
+                                showModelMenu = false
+                            },
+                            leadingIcon = if (model == selectedModel) {
+                                { Icon(Icons.Default.Check, contentDescription = null) }
+                            } else null
+                        )
+                    }
+                }
+            }
+            
+            // Session history
+            IconButton(
+                onClick = onNavigateToSession,
+                modifier = Modifier.semantics {
+                    contentDescription = "View session history"
+                }
+            ) {
+                Icon(Icons.Default.History, contentDescription = null)
+            }
+            
+            // Logout
+            IconButton(
+                onClick = onLogout,
+                modifier = Modifier.semantics {
+                    contentDescription = "Sign out"
+                }
+            ) {
+                Icon(Icons.Default.Logout, contentDescription = null)
+            }
+        }
+    )
+}
+
+@Composable
+fun MessageList(
+    messages: List<ChatMessage>,
+    listState: LazyListState,
+    isStreaming: Boolean
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(
+            items = messages,
+            key = { it.id }
+        ) { message ->
+            MessageBubbleWithUsage(message = message)
+        }
+        
+        // Streaming indicator
+        if (isStreaming && messages.lastOrNull()?.content?.isEmpty() == true) {
+            item {
+                StreamingIndicator()
             }
         }
     }
@@ -153,7 +264,7 @@ fun ChatInputBar(
     onMessageChange: (String) -> Unit,
     onSendMessage: () -> Unit,
     isStreaming: Boolean,
-    useMemory: Boolean
+    onCancelStreaming: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -168,49 +279,84 @@ fun ChatInputBar(
             OutlinedTextField(
                 value = messageText,
                 onValueChange = onMessageChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = "Message input field" },
                 placeholder = { Text("Type a message...") },
                 maxLines = 3,
-                enabled = !isStreaming
+                enabled = !isStreaming,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = { if (messageText.isNotBlank()) onSendMessage() }
+                )
             )
             
             Spacer(modifier = Modifier.width(8.dp))
             
-            FilledIconButton(
-                onClick = onSendMessage,
-                enabled = messageText.isNotBlank() && !isStreaming
-            ) {
-                Icon(
-                    imageVector = if (isStreaming) Icons.Default.Stop else Icons.Default.Send,
-                    contentDescription = "Send"
-                )
+            if (isStreaming) {
+                // Cancel button during streaming
+                FilledTonalIconButton(
+                    onClick = onCancelStreaming,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Cancel streaming"
+                    }
+                ) {
+                    Icon(Icons.Default.Stop, contentDescription = null)
+                }
+            } else {
+                // Send button
+                FilledIconButton(
+                    onClick = onSendMessage,
+                    enabled = messageText.isNotBlank(),
+                    modifier = Modifier.semantics {
+                        contentDescription = "Send message"
+                    }
+                ) {
+                    Icon(Icons.Default.Send, contentDescription = null)
+                }
             }
         }
     }
 }
 
 @Composable
-fun StreamingIndicator() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "AI is thinking...",
-                style = MaterialTheme.typography.bodyMedium
-            )
+fun ScrollToBottomFab(onClick: () -> Unit) {
+    SmallFloatingActionButton(
+        onClick = onClick,
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier.semantics {
+            contentDescription = "Scroll to bottom"
         }
+    ) {
+        Icon(
+            Icons.Default.KeyboardArrowDown,
+            contentDescription = null
+        )
+    }
+}
+
+@Composable
+fun ErrorSnackbar(
+    error: String,
+    onDismiss: () -> Unit,
+    onRetry: (() -> Unit)?
+) {
+    Snackbar(
+        modifier = Modifier.padding(16.dp),
+        action = {
+            Row {
+                if (onRetry != null) {
+                    TextButton(onClick = onRetry) {
+                        Text("Retry")
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Dismiss")
+                }
+            }
+        }
+    ) {
+        Text(error)
     }
 }
