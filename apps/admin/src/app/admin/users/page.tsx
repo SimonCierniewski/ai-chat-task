@@ -12,6 +12,7 @@ interface User {
   role: 'user' | 'admin';
   last_sign_in_at?: string;
   message_count?: number;
+  total_cost_usd?: number;
 }
 
 interface UsersResponse {
@@ -60,7 +61,7 @@ export default function UsersPage() {
       if (search) params.append('search', search);
 
       const response = await fetch(`/api/users?${params}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch users');
       }
@@ -88,7 +89,7 @@ export default function UsersPage() {
   const handleRoleUpdate = async (userId: string, newRole: 'user' | 'admin') => {
     try {
       setUpdatingRole(userId);
-      
+
       const response = await fetch(`/api/users/${userId}/role`, {
         method: 'PUT',
         headers: {
@@ -104,7 +105,7 @@ export default function UsersPage() {
       }
 
       // Update local state
-      setUsers(users.map(user => 
+      setUsers(users.map(user =>
         user.id === userId ? { ...user, role: newRole } : user
       ));
 
@@ -132,8 +133,8 @@ export default function UsersPage() {
   if (loading && users.length === 0) {
     return (
       <>
-        <AdminHeader 
-          title="Users" 
+        <AdminHeader
+          title="Users"
           subtitle="Manage user accounts and roles"
         />
         <div className="p-8">
@@ -147,11 +148,11 @@ export default function UsersPage() {
 
   return (
     <>
-      <AdminHeader 
-        title="Users" 
+      <AdminHeader
+        title="Users"
         subtitle="Manage user accounts and roles"
       />
-      
+
       <div className="p-8">
         {/* Search and Stats */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4">
@@ -175,7 +176,7 @@ export default function UsersPage() {
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
             <p className="text-red-700">{error}</p>
-            <button 
+            <button
               onClick={fetchUsers}
               className="mt-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
             >
@@ -208,6 +209,9 @@ export default function UsersPage() {
                     </th>
                   )}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Cost (USD)
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -227,8 +231,8 @@ export default function UsersPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs rounded-full ${
-                        user.role === 'admin' 
-                          ? 'bg-purple-100 text-purple-800' 
+                        user.role === 'admin'
+                          ? 'bg-purple-100 text-purple-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
                         {user.role}
@@ -245,6 +249,11 @@ export default function UsersPage() {
                         {user.message_count?.toLocaleString() || '0'}
                       </td>
                     )}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {typeof user.total_cost_usd === 'number'
+                        ? `$${user.total_cost_usd.toFixed(2)}`
+                        : '$0.00'}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {user.id !== currentUserId ? (
                         <div className="flex gap-2">
@@ -292,11 +301,11 @@ export default function UsersPage() {
               >
                 Previous
               </button>
-              
+
               <div className="text-sm text-gray-600">
                 Page {page} of {totalPages}
               </div>
-              
+
               <button
                 onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page === totalPages || loading}
