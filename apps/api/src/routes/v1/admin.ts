@@ -181,6 +181,32 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
 
     const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
 
+    // Fetch usage stats (sum of calls and cost across all time)
+    const usageByUser = new Map<string, { message_count: number; total_cost_usd: number }>();
+    if (userIds.length > 0) {
+      const { data: usageRows, error: usageError } = await supabaseAdmin
+        .from('daily_usage_view')
+        .select('user_id, calls, cost_usd')
+        .in('user_id', userIds);
+
+      if (usageError) {
+        logger.warn('Failed to fetch usage stats for users', {
+          req_id: req.id,
+          error: usageError.message,
+        });
+      } else if (usageRows) {
+        for (const row of usageRows as any[]) {
+          const uid = row.user_id as string;
+          const calls = Number(row.calls || 0);
+          const cost = typeof row.cost_usd === 'string' ? parseFloat(row.cost_usd) : Number(row.cost_usd || 0);
+          const acc = usageByUser.get(uid) || { message_count: 0, total_cost_usd: 0 };
+          acc.message_count += calls;
+          acc.total_cost_usd += cost;
+          usageByUser.set(uid, acc);
+        }
+      }
+    }
+
     // TODO: Get usage stats from daily_usage table
     // const { data: usageStats } = await supabaseAdmin
     //   .from('daily_usage')
@@ -190,14 +216,15 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
     // Combine data and redact sensitive fields
     const adminUsers: AdminUser[] = authUsers.map(u => {
       const p = profileMap.get(u.id);
+      const usage = usageByUser.get(u.id);
       return {
         id: u.id,
         email: u.email || '',
         role: (p?.role as 'user' | 'admin') || 'user',
         created_at: (u.created_at as string) || new Date().toISOString(),
         last_sign_in_at: (u.last_sign_in_at as string) || undefined,
-        message_count: 0,
-        total_cost_usd: 0,
+        message_count: usage?.message_count || 0,
+        total_cost_usd: usage ? Number(usage.total_cost_usd.toFixed(6)) : 0,
       };
     });
 
