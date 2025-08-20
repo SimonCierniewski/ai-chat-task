@@ -34,7 +34,7 @@
 **Environment Variables**:
 
 - `SUPABASE_URL` - Supabase project URL
-- `SUPABASE_SERVICE_KEY` - Service role key (server-only)
+- `SUPABASE_SERVICE_ROLE_KEY` - Service role key (server-only)
 - `ZEP_API_KEY` - Zep API key (server-only)
 - `ZEP_BASE_URL` - Zep API endpoint
 - `OPENAI_API_KEY` - OpenAI API key

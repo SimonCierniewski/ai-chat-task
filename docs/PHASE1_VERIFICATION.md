@@ -54,7 +54,7 @@ cp local.properties.example local.properties
 ```bash
 # Required for Phase 1
 ✅ SUPABASE_URL=https://xxxx.supabase.co
-✅ SUPABASE_SERVICE_KEY=eyJhbG...  # Service role key
+✅ SUPABASE_SERVICE_ROLE_KEY=eyJhbG...  # Service role key
 ✅ SUPABASE_JWT_SECRET=your-secret-at-least-32-chars
 ✅ SUPABASE_JWT_AUD=authenticated
 ✅ SUPABASE_PROJECT_REF=xxxx

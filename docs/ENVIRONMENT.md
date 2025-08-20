@@ -79,7 +79,7 @@
 ```bash
 # Supabase Auth (Phase 1)
 SUPABASE_URL=https://xxxxxxxxxxxxxxxxxxxx.supabase.co
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # Service role key (⚠️ SERVER ONLY)
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # Service role key (⚠️ SERVER ONLY)
 SUPABASE_JWT_SECRET=your-super-secret-jwt-secret-with-at-least-32-characters
 SUPABASE_JWT_AUD=authenticated
 SUPABASE_PROJECT_REF=xxxxxxxxxxxxxxxxxxxx
@@ -101,7 +101,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx 
 NEXT_PUBLIC_APP_URL=http://localhost:3001  # For auth redirects
 
 # Phase 2: Server-side only (for API routes/SSR)
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # ⚠️ NEVER expose to client
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # ⚠️ NEVER expose to client
 ```
 
 #### Android App (`/apps/android`)
@@ -131,7 +131,7 @@ http://localhost:8081/auth/callback     # Android dev (if using web view)
 ```bash
 # Phase 2: Telemetry Writing (SERVER ONLY)
 # Uses existing SUPABASE_URL from Phase 1
-# Uses existing SUPABASE_SERVICE_KEY from Phase 1
+# Uses existing SUPABASE_SERVICE_ROLE_KEY from Phase 1
 # Service role key required for:
 # - Writing to telemetry_events table
 # - Updating daily_usage aggregates
@@ -146,7 +146,7 @@ http://localhost:8081/auth/callback     # Android dev (if using web view)
 # For Next.js API routes and SSR pages that read telemetry
 
 # Server-side variables (NOT prefixed with NEXT_PUBLIC_)
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # ⚠️ SERVER ONLY
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # ⚠️ SERVER ONLY
 
 # These are used in:
 # - /api/admin/metrics - Read telemetry_events and daily_usage
@@ -160,7 +160,7 @@ SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxxxxxx  # ⚠️
 |----------|-----|---------------|----------------|---------|
 | `SUPABASE_URL` | ✅ | ✅ | ✅ (public) | ✅ |
 | `SUPABASE_ANON_KEY` | ❌ | ❌ | ✅ (public) | ✅ |
-| `SUPABASE_SERVICE_KEY` | ✅ | ✅ (SSR only) | ❌ NEVER | ❌ NEVER |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | ✅ (SSR only) | ❌ NEVER | ❌ NEVER |
 
 ### Telemetry Data Flow
 
@@ -223,7 +223,7 @@ railway variables set PORT=3000
 railway variables set OPENAI_API_KEY=sk-proj-xxx
 railway variables set ZEP_API_KEY=z_xxx
 railway variables set SUPABASE_URL=https://xxx.supabase.co
-railway variables set SUPABASE_SERVICE_KEY=eyJhbG...
+railway variables set SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
 railway variables set DATABASE_URL=postgresql://...
 railway variables set APP_ORIGIN_ADMIN=https://admin.yourdomain.eu
 railway variables set APP_ORIGIN_ANDROID_DEV=https://api.yourdomain.eu
@@ -265,7 +265,7 @@ vercel --prod
 # Settings → API → Copy:
 # - Project URL → SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL
 # - Anon Key → NEXT_PUBLIC_SUPABASE_ANON_KEY (client apps)
-# - Service Key → SUPABASE_SERVICE_KEY (API only!)
+# - Service Key → SUPABASE_SERVICE_ROLE_KEY (API only!)
 
 # 3. Configure Auth
 # Authentication → Settings → Site URL

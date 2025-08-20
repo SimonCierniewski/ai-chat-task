@@ -19,7 +19,7 @@ This document defines the security boundaries for all secrets and credentials in
 |--------|------|------------|--------------|--------------|---------|---------|--------|
 | `SUPABASE_URL` | Public | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `SUPABASE_ANON_KEY` | Public | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ |
-| `SUPABASE_SERVICE_KEY` | **SENSITIVE** | ✅ | ✅ SSR | ❌ **NEVER** | ❌ **NEVER** | ✅ | ✅ Server |
+| `SUPABASE_SERVICE_ROLE_KEY` | **SENSITIVE** | ✅ | ✅ SSR | ❌ **NEVER** | ❌ **NEVER** | ✅ | ✅ Server |
 | `SUPABASE_JWT_SECRET` | **SENSITIVE** | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | `JWKS_URI` | Public | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
 
@@ -28,7 +28,7 @@ This document defines the security boundaries for all secrets and credentials in
 | Secret | Type | API Service | Admin Server | Admin Client | Android | Railway | Vercel |
 |--------|------|------------|--------------|--------------|---------|---------|--------|
 | **Telemetry Write Access** | | | | | | | |
-| `SUPABASE_SERVICE_KEY` | **SENSITIVE** | ✅ Write | ✅ Read | ❌ | ❌ | ✅ | ✅ Server |
+| `SUPABASE_SERVICE_ROLE_KEY` | **SENSITIVE** | ✅ Write | ✅ Read | ❌ | ❌ | ✅ | ✅ Server |
 | **RLS Enforcement** | | | | | | | |
 | `telemetry_events` access | Service Role | ✅ R/W | ✅ R | ❌ Blocked | ❌ Blocked | - | - |
 | `daily_usage` access | Service Role | ✅ R/W | ✅ R | ❌ Blocked | ❌ Blocked | - | - |
@@ -49,7 +49,7 @@ This document defines the security boundaries for all secrets and credentials in
 ```bash
 # Required secrets for API deployment
 railway variables set SUPABASE_URL="https://xxx.supabase.co"
-railway variables set SUPABASE_SERVICE_KEY="eyJ..."  # Service role key
+railway variables set SUPABASE_SERVICE_ROLE_KEY="eyJ..."  # Service role key
 railway variables set SUPABASE_JWT_SECRET="your-secret"
 railway variables set OPENAI_API_KEY="sk-proj-..."
 railway variables set ZEP_API_KEY="z_..."
@@ -68,7 +68,7 @@ vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY  # Anon key only!
 vercel env add NEXT_PUBLIC_API_BASE_URL
 
 # Server-side variables (for API routes/SSR)
-vercel env add SUPABASE_SERVICE_KEY  # For telemetry reading
+vercel env add SUPABASE_SERVICE_ROLE_KEY  # For telemetry reading
 # ⚠️ CRITICAL: Do NOT prefix with NEXT_PUBLIC_
 ```
 
@@ -88,7 +88,7 @@ api.baseUrl=https://api.yourdomain.eu
 ```mermaid
 graph TB
     subgraph "🔴 High Security - Server Only"
-        A[SUPABASE_SERVICE_KEY]
+        A[SUPABASE_SERVICE_ROLE_KEY]
         B[OPENAI_API_KEY]
         C[ZEP_API_KEY]
         D[JWT_SECRET]
@@ -144,7 +144,7 @@ graph TB
 // apps/api/src/services/telemetry.ts
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY  // Service role for writes
+  process.env.SUPABASE_SERVICE_ROLE_KEY  // Service role for writes
 );
 
 await supabase.from('telemetry_events').insert({
@@ -171,7 +171,7 @@ export async function GET(request: Request) {
   // Use service role for server-side reads
   const supabase = createClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!  // NOT prefixed with NEXT_PUBLIC_
+    process.env.SUPABASE_SERVICE_ROLE_KEY!  // NOT prefixed with NEXT_PUBLIC_
   );
   
   const { data } = await supabase
@@ -203,7 +203,7 @@ const ClientComponent = () => {
 
 ### Before Deployment
 
-- [ ] Verify `SUPABASE_SERVICE_KEY` is only in server environments
+- [ ] Verify `SUPABASE_SERVICE_ROLE_KEY` is only in server environments
 - [ ] Confirm no `NEXT_PUBLIC_` prefix on sensitive keys
 - [ ] Check Railway has all required API secrets
 - [ ] Verify Vercel has server-side secrets for SSR
@@ -215,16 +215,16 @@ const ClientComponent = () => {
 
 ```bash
 # Check for exposed service keys in client code
-grep -r "SUPABASE_SERVICE_KEY" apps/admin/app --exclude-dir=api
-grep -r "SUPABASE_SERVICE_KEY" apps/android
+grep -r "SUPABASE_SERVICE_ROLE_KEY" apps/admin/app --exclude-dir=api
+grep -r "SUPABASE_SERVICE_ROLE_KEY" apps/android
 
 # Check for NEXT_PUBLIC_ prefix on sensitive keys
 grep -r "NEXT_PUBLIC_.*SERVICE" apps/admin
 grep -r "NEXT_PUBLIC_.*SECRET" apps/admin
 
 # Verify server-only usage
-grep -r "process.env.SUPABASE_SERVICE_KEY" apps/admin/app/api
-grep -r "process.env.SUPABASE_SERVICE_KEY" apps/api
+grep -r "process.env.SUPABASE_SERVICE_ROLE_KEY" apps/admin/app/api
+grep -r "process.env.SUPABASE_SERVICE_ROLE_KEY" apps/api
 ```
 
 ## 🚨 Emergency Response
@@ -233,7 +233,7 @@ grep -r "process.env.SUPABASE_SERVICE_KEY" apps/api
 
 1. **Immediately regenerate** in Supabase Dashboard
 2. **Update all deployments**:
-   - Railway: `railway variables set SUPABASE_SERVICE_KEY="new-key"`
+   - Railway: `railway variables set SUPABASE_SERVICE_ROLE_KEY="new-key"`
    - Vercel: Update in dashboard or CLI
 3. **Audit database logs** for unauthorized access
 4. **Review telemetry_events** for suspicious writes
@@ -244,7 +244,7 @@ grep -r "process.env.SUPABASE_SERVICE_KEY" apps/api
 
 | Secret | Rotation Frequency | Last Rotated | Next Rotation |
 |--------|-------------------|--------------|---------------|
-| `SUPABASE_SERVICE_KEY` | Quarterly | - | - |
+| `SUPABASE_SERVICE_ROLE_KEY` | Quarterly | - | - |
 | `OPENAI_API_KEY` | Monthly | - | - |
 | `ZEP_API_KEY` | Quarterly | - | - |
 | `JWT_SECRET` | Annually | - | - |
