@@ -1,24 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { publicConfig, serverConfig, validateServerConfig } from '../../../../lib/config';
+import { publicConfig } from '../../../../lib/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-interface User {
-  id: string;
-  email: string;
-  created_at: string;
-  role: 'user' | 'admin';
-  last_sign_in_at?: string;
-  message_count?: number;
-}
-
 export async function GET(request: NextRequest) {
   try {
-    // Validate server config
-    validateServerConfig();
-    
     // Check authentication
     const supabase = createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -43,94 +31,31 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const search = searchParams.get('search') || '';
-    const offset = (page - 1) * limit;
 
-    // Try to fetch from backend API first
-    try {
-      const apiUrl = new URL('/api/v1/admin/users', publicConfig.apiBaseUrl);
-      apiUrl.searchParams.append('page', page.toString());
-      apiUrl.searchParams.append('limit', limit.toString());
-      if (search) apiUrl.searchParams.append('search', search);
+    // Fetch from backend API - this is the only way to get users
+    const apiUrl = new URL('/api/v1/admin/users', publicConfig.apiBaseUrl);
+    apiUrl.searchParams.append('page', page.toString());
+    apiUrl.searchParams.append('limit', limit.toString());
+    if (search) apiUrl.searchParams.append('search', search);
 
-      const response = await fetch(apiUrl.toString(), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+    const response = await fetch(apiUrl.toString(), {
+      headers: {
+        'Authorization': `Bearer ${user.access_token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-      if (response.ok) {
-        const data = await response.json();
-        return NextResponse.json(data);
-      }
-    } catch (error) {
-      console.log('Backend API not available, fetching directly from Supabase');
-    }
-
-    // Fallback to direct Supabase query
-    // First get users from auth.users (requires service role)
-    const authUsersResponse = await fetch(
-      `${publicConfig.supabaseUrl}/auth/v1/admin/users`,
-      {
-        headers: {
-          'apikey': serverConfig.supabaseServiceKey,
-          'Authorization': `Bearer ${serverConfig.supabaseServiceKey}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    if (!authUsersResponse.ok) {
-      throw new Error('Failed to fetch users from auth');
-    }
-
-    const { users: authUsers } = await authUsersResponse.json();
-
-    // Get profiles for role information
-    const userIds = authUsers.map((u: any) => u.id);
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('user_id, role')
-      .in('user_id', userIds);
-
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
-    }
-
-    // Merge auth users with profile data
-    const profileMap = new Map(profiles?.map(p => [p.user_id, p.role]) || []);
-    
-    let users: User[] = authUsers.map((authUser: any) => ({
-      id: authUser.id,
-      email: authUser.email || '',
-      created_at: authUser.created_at,
-      role: profileMap.get(authUser.id) || 'user',
-      last_sign_in_at: authUser.last_sign_in_at,
-    }));
-
-    // Apply search filter
-    if (search) {
-      const searchLower = search.toLowerCase();
-      users = users.filter(u => 
-        u.email.toLowerCase().includes(searchLower) ||
-        u.id.toLowerCase().includes(searchLower)
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Backend API error:', response.status, errorText);
+      return NextResponse.json(
+        { error: 'Backend API not available. Please ensure the API server is running.' },
+        { status: response.status || 502 }
       );
     }
 
-    // Calculate pagination
-    const total = users.length;
-    const totalPages = Math.ceil(total / limit);
-    const paginatedUsers = users.slice(offset, offset + limit);
-
-    return NextResponse.json({
-      users: paginatedUsers,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages,
-      },
-    });
+    const data = await response.json();
+    return NextResponse.json(data);
 
   } catch (error) {
     console.error('Error fetching users:', error);

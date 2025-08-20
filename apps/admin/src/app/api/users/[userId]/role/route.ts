@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { serverConfig, validateServerConfig } from '../../../../../../lib/config';
+import { publicConfig } from '../../../../../../lib/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,9 +14,6 @@ export async function PUT(
   { params }: { params: { userId: string } }
 ) {
   try {
-    // Validate server config
-    validateServerConfig();
-    
     // Check authentication
     const supabase = createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -50,107 +47,35 @@ export async function PUT(
       }, { status: 400 });
     }
 
-    // Update the user's role in profiles table using service role
-    // We need to use service role to bypass RLS
-    const updateResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles?user_id=eq.${params.userId}`,
-      {
-        method: 'PATCH',
-        headers: {
-          'apikey': serverConfig.supabaseServiceKey,
-          'Authorization': `Bearer ${serverConfig.supabaseServiceKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation',
-        },
-        body: JSON.stringify({ role: body.role }),
-      }
-    );
+    // Call the backend API to update the role
+    const apiUrl = new URL(`/api/v1/admin/users/${params.userId}/role`, publicConfig.apiBaseUrl);
+    const updateResponse = await fetch(apiUrl.toString(), {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${user.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ role: body.role }),
+    });
 
     if (!updateResponse.ok) {
       const errorText = await updateResponse.text();
-      console.error('Failed to update role:', errorText);
+      console.error('Backend API error:', updateResponse.status, errorText);
       
-      // Check if profile doesn't exist
-      if (updateResponse.status === 404 || errorText.includes('0 rows')) {
-        // Create profile if it doesn't exist
-        const createResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles`,
-          {
-            method: 'POST',
-            headers: {
-              'apikey': serverConfig.supabaseServiceKey,
-              'Authorization': `Bearer ${serverConfig.supabaseServiceKey}`,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=representation',
-            },
-            body: JSON.stringify({ 
-              user_id: params.userId,
-              role: body.role,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }),
-          }
-        );
-
-        if (!createResponse.ok) {
-          throw new Error('Failed to create profile');
-        }
-
-        const createdProfile = await createResponse.json();
+      if (updateResponse.status === 404) {
         return NextResponse.json({ 
-          success: true,
-          user_id: params.userId,
-          role: body.role,
-          message: 'Profile created and role set',
-        });
+          error: 'User profile not found. User may need to sign in first.' 
+        }, { status: 404 });
       }
       
-      throw new Error('Failed to update role');
-    }
-
-    const updatedProfiles = await updateResponse.json();
-    
-    if (!updatedProfiles || updatedProfiles.length === 0) {
-      // Profile might not exist, try to create it
-      const createResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/profiles`,
-        {
-          method: 'POST',
-          headers: {
-            'apikey': serverConfig.supabaseServiceKey,
-            'Authorization': `Bearer ${serverConfig.supabaseServiceKey}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation',
-          },
-          body: JSON.stringify({ 
-            user_id: params.userId,
-            role: body.role,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }),
-        }
+      return NextResponse.json(
+        { error: 'Failed to update role via backend API' },
+        { status: updateResponse.status || 500 }
       );
-
-      if (createResponse.ok) {
-        return NextResponse.json({ 
-          success: true,
-          user_id: params.userId,
-          role: body.role,
-          message: 'Profile created and role set',
-        });
-      }
-      
-      return NextResponse.json({ 
-        error: 'User profile not found. User may need to sign in first.' 
-      }, { status: 404 });
     }
 
-    return NextResponse.json({ 
-      success: true,
-      user_id: params.userId,
-      role: body.role,
-      message: 'Role updated successfully',
-    });
+    const result = await updateResponse.json();
+    return NextResponse.json(result);
 
   } catch (error) {
     console.error('Error updating user role:', error);

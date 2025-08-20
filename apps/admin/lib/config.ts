@@ -32,30 +32,11 @@ export const publicConfig = {
 } as const;
 
 // ============================================================================
-// Server Configuration (server-only - NEVER expose to client)
+// Note: Server-only configuration has been removed from the admin app.
+// The admin app should only use public configuration and rely on the API
+// backend for all server-side operations. Service role keys and database
+// connections should only exist in the API backend.
 // ============================================================================
-
-export const serverConfig = {
-  // Supabase Service Role (SERVER ONLY - CRITICAL)
-  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  
-  // Database Direct Connection (SERVER ONLY)
-  databaseUrl: process.env.DATABASE_URL || '',
-  
-  // Internal API Configuration (SERVER ONLY)
-  internalApiKey: process.env.INTERNAL_API_KEY || '',
-  
-  // Monitoring & Analytics (SERVER ONLY)
-  sentryDsn: process.env.SENTRY_DSN || '',
-  analyticsKey: process.env.ANALYTICS_KEY || '',
-  
-  // Admin Configuration (SERVER ONLY)
-  adminEmails: (process.env.ADMIN_EMAILS || '').split(',').filter(Boolean),
-  
-  // Rate Limiting (SERVER ONLY)
-  rateLimitWindow: parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10),
-  rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
-} as const;
 
 // ============================================================================
 // Runtime Validation
@@ -74,26 +55,8 @@ export function validatePublicConfig(): void {
   }
 }
 
-/**
- * Validates that required server config is present
- * ONLY run on server
- */
-export function validateServerConfig(): void {
-  if (typeof window !== 'undefined') {
-    throw new Error('validateServerConfig called on client - this is a security issue!');
-  }
-  
-  const required = ['supabaseServiceKey'] as const;
-  const missing = required.filter(key => !serverConfig[key]);
-  
-  if (missing.length > 0 && process.env.NODE_ENV === 'production') {
-    throw new Error(`Missing required server config: ${missing.join(', ')}`);
-  }
-}
-
 // ============================================================================
 // Type Exports
 // ============================================================================
 
 export type PublicConfig = typeof publicConfig;
-export type ServerConfig = typeof serverConfig;
