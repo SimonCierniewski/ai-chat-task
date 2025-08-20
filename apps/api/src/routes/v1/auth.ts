@@ -79,11 +79,11 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
       userId: request.user.id,
       role: request.user.role,
       email: request.user.email,
-      profile: dbProfile ? {
+      profile: {
         role: dbProfile.role,
         created_at: dbProfile.created_at,
         updated_at: dbProfile.updated_at,
-      } : null,
+      },
     };
   });
   
@@ -130,24 +130,8 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
       });
     }
     
-    // Fetch the actual profile from database to get the latest role
+    // Fetch the actual profile from database - will throw if not found
     const dbProfile = await profilesClient.getProfile(request.user.id);
-    
-    if (!dbProfile) {
-      // Create profile if it doesn't exist
-      await profilesClient.createProfile(request.user.id, request.user.email || '');
-      const newProfile = await profilesClient.getProfile(request.user.id);
-      
-      return {
-        user: {
-          id: request.user.id,
-          email: request.user.email || '',
-          role: newProfile?.role || 'user',
-          created_at: newProfile?.created_at || new Date().toISOString(),
-          updated_at: newProfile?.updated_at || new Date().toISOString(),
-        },
-      };
-    }
     
     return {
       user: {

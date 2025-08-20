@@ -60,14 +60,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Fallback to local Next.js API route which has access to service role key
       const response = await fetch('/api/auth/check-role')
       
-      if (response.ok) {
-        const data = await response.json()
-        setProfile({
-          id: userId,
-          email: data.email,
-          role: data.role,
-        })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to fetch user role')
       }
+      
+      const data = await response.json()
+      setProfile({
+        id: userId,
+        email: data.email,
+        role: data.role,
+      })
     } catch (error) {
       console.error('Error fetching profile:', error)
     }

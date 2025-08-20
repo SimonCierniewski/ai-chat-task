@@ -15,23 +15,22 @@ export async function GET() {
     )
   }
 
-  try {
-    // Use service role key for admin operations (SERVER ONLY)
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    
-    console.log('Service role key configured:', !!serviceRoleKey)
-    console.log('User ID:', user.id)
+  // Use service role key for admin operations (SERVER ONLY)
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!serviceRoleKey) {
+    // Fail fast - this is a critical configuration error
+    return NextResponse.json(
+      { 
+        error: 'Configuration Error',
+        message: 'SUPABASE_SERVICE_ROLE_KEY is not configured. Cannot verify user roles.',
+        details: 'Please set SUPABASE_SERVICE_ROLE_KEY in .env.local'
+      },
+      { status: 500 }
+    )
+  }
 
-    if (!serviceRoleKey) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY not configured - please set it in .env.local')
-      return NextResponse.json({
-        authenticated: true,
-        userId: user.id,
-        email: user.email,
-        role: 'user', // Default to user if service key missing
-        warning: 'Service role key not configured - cannot fetch actual role from profiles table'
-      })
-    }
+  try {
 
     // Create admin client with service role
     const supabaseAdmin = createAdminClient(
@@ -57,36 +56,39 @@ export async function GET() {
 
     if (profileError) {
       console.error('Error fetching profile:', profileError)
-
-      // Create profile if it doesn't exist
+      
+      // Fail fast - user must have a profile
       if (profileError.code === 'PGRST116') {
-        const { data: newProfile, error: createError } = await supabaseAdmin
-          .from('profiles')
-          .insert({
-            user_id: user.id,
-            email: user.email,
-            role: 'user'
-          })
-          .select('role')
-          .single()
-
-        if (createError) {
-          console.error('Error creating profile:', createError)
-          return NextResponse.json({
-            authenticated: true,
-            userId: user.id,
-            email: user.email,
-            role: 'user'
-          })
-        }
-
-        return NextResponse.json({
-          authenticated: true,
-          userId: user.id,
-          email: user.email,
-          role: newProfile.role
-        })
+        return NextResponse.json(
+          {
+            error: 'Profile Not Found',
+            message: `No profile found for user ${user.id}. User must be properly onboarded.`,
+            userId: user.id
+          },
+          { status: 404 }
+        )
       }
+      
+      // Other database errors
+      return NextResponse.json(
+        {
+          error: 'Database Error',
+          message: 'Failed to fetch user profile from database',
+          details: profileError.message
+        },
+        { status: 500 }
+      )
+    }
+    
+    if (!profile) {
+      return NextResponse.json(
+        {
+          error: 'Profile Not Found', 
+          message: 'Profile data is null',
+          userId: user.id
+        },
+        { status: 404 }
+      )
     }
 
     console.log('Returning role:', profile?.role || 'user')

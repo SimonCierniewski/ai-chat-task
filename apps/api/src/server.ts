@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import authPlugin from './plugins/auth';
 import { config } from './config';
 import { errorHandler } from './utils/error-handler';
+import { validateEnvironment } from './utils/validate-env';
 import { healthRoutes } from './routes/health';
 import { v1Routes } from './routes/v1';
 import { readFileSync } from 'fs';
@@ -215,6 +216,14 @@ export async function buildServer(): Promise<FastifyInstance> {
 }
 
 export async function startServer(): Promise<FastifyInstance> {
+  // Validate environment before starting
+  try {
+    validateEnvironment();
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+  
   const server = await buildServer();
   const port = parseInt(process.env.PORT || '3000', 10);
   const host = process.env.HOST || '0.0.0.0';
