@@ -5,9 +5,9 @@ import { NextResponse } from 'next/server'
 export async function GET() {
   // Regular client for auth
   const supabase = createClient()
-  
+
   const { data: { user }, error: userError } = await supabase.auth.getUser()
-  
+
   if (userError || !user) {
     return NextResponse.json(
       { error: 'Not authenticated' },
@@ -18,14 +18,14 @@ export async function GET() {
   try {
     // Use service role key for admin operations (SERVER ONLY)
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    
+
     if (!serviceRoleKey) {
       console.error('SUPABASE_SERVICE_ROLE_KEY not configured')
       return NextResponse.json({
         authenticated: true,
         userId: user.id,
         email: user.email,
-        role: 'user', // Default to user if service key missing
+        role: user.role
       })
     }
 
@@ -50,7 +50,7 @@ export async function GET() {
 
     if (profileError) {
       console.error('Error fetching profile:', profileError)
-      
+
       // Create profile if it doesn't exist
       if (profileError.code === 'PGRST116') {
         const { data: newProfile, error: createError } = await supabaseAdmin
@@ -81,7 +81,7 @@ export async function GET() {
         })
       }
     }
-    
+
     return NextResponse.json({
       authenticated: true,
       userId: user.id,
@@ -90,7 +90,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Error in role check:', error)
-    
+
     return NextResponse.json({
       authenticated: true,
       userId: user.id,

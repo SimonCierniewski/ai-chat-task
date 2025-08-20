@@ -1,29 +1,29 @@
+import { createClient } from '@supabase/supabase-js';
 import { ProfileRow } from '../types/auth';
 
 /**
- * Thin database client for profiles table
- * TODO: Replace stub with actual Supabase client when database is wired
+ * Database client for profiles table
+ * Uses Supabase service role key for admin operations
  */
 export class ProfilesClient {
-  private stubProfiles: Map<string, ProfileRow> = new Map();
+  private supabaseAdmin: any;
 
   constructor() {
-    // Initialize with some stub data for testing
-    this.stubProfiles.set('test-user-id', {
-      user_id: 'test-user-id',
-      role: 'user',
-      display_name: 'Test User',
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
+    // Initialize Supabase admin client with service role key
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    this.stubProfiles.set('test-admin-id', {
-      user_id: 'test-admin-id',
-      role: 'admin',
-      display_name: 'Test Admin',
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.warn('Supabase credentials not configured, using stub mode');
+      this.supabaseAdmin = null;
+    } else {
+      this.supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      });
+    }
   }
 
   /**
@@ -31,39 +31,37 @@ export class ProfilesClient {
    * Returns null if profile doesn't exist
    */
   async getProfile(userId: string): Promise<ProfileRow | null> {
-    // TODO: Replace with actual database query
-    // const { data, error } = await supabaseAdmin
-    //   .from('profiles')
-    //   .select('*')
-    //   .eq('user_id', userId)
-    //   .single();
-    
-    // Stub implementation
-    const profile = this.stubProfiles.get(userId);
-    if (!profile) {
-      console.warn(`Profile not found for user: ${userId}, creating default user profile`);
-      // Simulate auto-creation like the trigger would do
-      const newProfile: ProfileRow = {
-        user_id: userId,
-        role: 'user',
-        display_name: null,
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
-      this.stubProfiles.set(userId, newProfile);
-      return newProfile;
+    try {
+      const { data, error } = await this.supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No profile found
+          console.warn(`Profile not found for user: ${userId}`);
+          return null;
+        }
+        console.error('Error fetching profile:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in getProfile:', error);
+      return null;
     }
-    
-    return profile;
   }
 
   /**
    * Get user role
    * Returns 'user' as default if profile doesn't exist
    */
-  async getUserRole(userId: string): Promise<'user' | 'admin'> {
+  async getUserRole(userId: string): Promise<'user' | 'admin' | "null"> {
     const profile = await this.getProfile(userId);
-    return profile?.role || 'user';
+    return profile?.role;
   }
 
   /**
@@ -76,21 +74,29 @@ export class ProfilesClient {
 
   /**
    * Update user role (admin operation)
-   * TODO: Add proper authorization check
    */
   async updateRole(userId: string, newRole: 'user' | 'admin'): Promise<void> {
-    // TODO: Replace with actual database update
-    // const { error } = await supabaseAdmin
-    //   .from('profiles')
-    //   .update({ role: newRole, updated_at: new Date() })
-    //   .eq('user_id', userId);
-    
-    // Stub implementation
-    const profile = await this.getProfile(userId);
-    if (profile) {
-      profile.role = newRole;
-      profile.updated_at = new Date();
-      this.stubProfiles.set(userId, profile);
+    if (!this.supabaseAdmin) {
+      console.warn('Cannot update role without database connection');
+      return;
+    }
+
+    try {
+      const { error } = await this.supabaseAdmin
+        .from('profiles')
+        .update({
+          role: newRole,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error updating role:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in updateRole:', error);
+      throw error;
     }
   }
 }

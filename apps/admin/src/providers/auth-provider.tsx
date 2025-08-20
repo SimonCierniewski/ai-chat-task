@@ -33,18 +33,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/me`, {
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-      })
+      // First try the API server /api/me endpoint if configured
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (apiBaseUrl && session?.access_token) {
+        try {
+          const response = await fetch(`${apiBaseUrl}/api/me`, {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            setProfile({
+              id: userId,
+              email: data.user.email,
+              role: data.user.role,
+            })
+            return
+          }
+        } catch (apiError) {
+          console.warn('Failed to fetch from API server, falling back to local endpoint:', apiError)
+        }
+      }
+      
+      // Fallback to local Next.js API route which has access to service role key
+      const response = await fetch('/api/auth/check-role')
       
       if (response.ok) {
         const data = await response.json()
         setProfile({
           id: userId,
-          email: data.user.email,
-          role: data.user.role,
+          email: data.email,
+          role: data.role,
         })
       }
     } catch (error) {
@@ -87,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [supabase])
 
   const signInWithEmail = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({

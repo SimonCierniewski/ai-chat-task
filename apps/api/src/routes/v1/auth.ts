@@ -87,6 +87,79 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
     };
   });
   
+  // /api/me endpoint - returns current user info from database
+  server.get('/me', {
+    schema: {
+      description: 'Get current user profile information',
+      tags: ['Auth'],
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                email: { type: 'string' },
+                role: { type: 'string', enum: ['user', 'admin'] },
+                created_at: { type: 'string' },
+                updated_at: { type: 'string' },
+              },
+            },
+          },
+        },
+        401: {
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+            code: { type: 'string' },
+            req_id: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) {
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'Authentication required',
+        code: 'UNAUTHENTICATED',
+        req_id: request.id,
+      });
+    }
+    
+    // Fetch the actual profile from database to get the latest role
+    const dbProfile = await profilesClient.getProfile(request.user.id);
+    
+    if (!dbProfile) {
+      // Create profile if it doesn't exist
+      await profilesClient.createProfile(request.user.id, request.user.email || '');
+      const newProfile = await profilesClient.getProfile(request.user.id);
+      
+      return {
+        user: {
+          id: request.user.id,
+          email: request.user.email || '',
+          role: newProfile?.role || 'user',
+          created_at: newProfile?.created_at || new Date().toISOString(),
+          updated_at: newProfile?.updated_at || new Date().toISOString(),
+        },
+      };
+    }
+    
+    return {
+      user: {
+        id: request.user.id,
+        email: dbProfile.email || request.user.email || '',
+        role: dbProfile.role,
+        created_at: dbProfile.created_at,
+        updated_at: dbProfile.updated_at,
+      },
+    };
+  });
+  
   server.post<{ Body: OnSignupBody }>('/on-signup', {
     schema: {
       body: {

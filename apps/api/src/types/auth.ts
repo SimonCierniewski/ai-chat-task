@@ -26,8 +26,9 @@ export interface JWTPayload {
 
 export interface ProfileRow {
   user_id: string;
+  email?: string;
   role: 'user' | 'admin';
-  display_name?: string;
-  created_at: Date;
-  updated_at: Date;
+  display_name?: string | null;
+  created_at: string;
+  updated_at: string;
 }
