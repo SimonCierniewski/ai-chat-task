@@ -125,57 +125,23 @@ class ZepAdapter {
       'Content-Type': 'application/json'
     };
 
-    logger.info('Zep adapter initialized', { baseUrl: this.baseUrl });
+    logger.info('Zep v3 adapter initialized', { 
+      baseUrl: this.baseUrl,
+      apiKeyPrefix: this.apiKey.substring(0, 10) + '...'
+    });
   }
 
   /**
-   * Get or create user collection
+   * Get or create user in Zep v3
    */
-  private async ensureUserCollection(userId: string): Promise<string> {
-    const collectionName = `user:${userId}`;
-    
+  private async ensureUser(userId: string): Promise<string> {
     try {
-      // Try to get existing collection
-      const response = await fetch(`${this.baseUrl}/collections/${collectionName}`, {
-        headers: this.headers
-      });
-
-      if (response.ok) {
-        return collectionName;
-      }
-
-      // Create new collection if it doesn't exist
-      if (response.status === 404) {
-        const createResponse = await fetch(`${this.baseUrl}/collections`, {
-          method: 'POST',
-          headers: this.headers,
-          body: JSON.stringify({
-            name: collectionName,
-            description: `Memory collection for user ${userId}`,
-            metadata: {
-              user_id: userId,
-              created_at: new Date().toISOString()
-            }
-          })
-        });
-
-        if (!createResponse.ok) {
-          const error = await createResponse.text();
-          logger.error('Failed to create Zep collection', { 
-            status: createResponse.status, 
-            error,
-            userId 
-          });
-          throw new Error(`Failed to create collection: ${error}`);
-        }
-
-        logger.info('Created new Zep collection', { collectionName });
-        return collectionName;
-      }
-
-      throw new Error(`Unexpected response from Zep: ${response.status}`);
+      // In Zep v3, users are created automatically when first referenced
+      // We just need to return the userId to use in API calls
+      logger.debug('Using Zep v3 user', { userId });
+      return userId;
     } catch (error) {
-      logger.error('Error ensuring user collection', { error, userId });
+      logger.error('Error with Zep user', { error, userId });
       throw error;
     }
   }
@@ -185,24 +151,25 @@ class ZepAdapter {
     sessionId?: string
   ): Promise<{ success: boolean; upserted: number }> {
     try {
-      const collectionName = await this.ensureUserCollection(userId);
+      const zepUserId = await this.ensureUser(userId);
       
-      // Convert edges to Zep knowledge format
+      // Convert edges to Zep v3 fact format
       const facts = edges.map(edge => ({
-        subject: edge.subject,
-        predicate: edge.predicate,
-        object: edge.object,
-        confidence: edge.confidence || 1.0,
+        fact: `${edge.subject} ${edge.predicate} ${edge.object}`,
+        rating: edge.confidence || 1.0,
+        created_at: new Date().toISOString(),
         metadata: {
           ...edge.metadata,
           session_id: sessionId,
           source_message_id: edge.source_message_id,
-          created_at: new Date().toISOString()
+          subject: edge.subject,
+          predicate: edge.predicate,
+          object: edge.object
         }
       }));
 
-      // Add facts to Zep knowledge graph
-      const response = await fetch(`${this.baseUrl}/collections/${collectionName}/knowledge`, {
+      // Add facts to Zep v3 knowledge graph
+      const response = await fetch(`${this.baseUrl}/users/${zepUserId}/facts`, {
         method: 'POST',
         headers: this.headers,
         body: JSON.stringify({ facts })
@@ -249,26 +216,25 @@ class ZepAdapter {
     } = {}
   ): Promise<TelemetryRetrievalResult[]> {
     try {
-      const collectionName = await this.ensureUserCollection(userId);
+      const zepUserId = await this.ensureUser(userId);
       const limit = options.limit || CONFIG_PRESETS.DEFAULT.top_k;
       const minScore = options.minScore || 0.7;
 
-      // Build search request
+      // Build search request for Zep v3
       const searchRequest: any = {
-        query,
-        limit,
-        min_score: minScore
+        text: query,  // v3 uses 'text' instead of 'query'
+        search_scope: 'messages',  // Search in messages
+        search_type: 'similarity',  // Semantic search
+        limit
       };
 
       // Add session filter if provided
       if (options.sessionId) {
-        searchRequest.filters = {
-          session_id: options.sessionId
-        };
+        searchRequest.session_id = options.sessionId;
       }
 
-      // Search Zep memory
-      const response = await fetch(`${this.baseUrl}/collections/${collectionName}/search`, {
+      // Search Zep v3 memory
+      const response = await fetch(`${this.baseUrl}/users/${zepUserId}/searchSessions`, {
         method: 'POST',
         headers: this.headers,
         body: JSON.stringify(searchRequest)
@@ -287,19 +253,20 @@ class ZepAdapter {
 
       const searchResult = await response.json();
       
-      // Convert Zep results to TelemetryRetrievalResult format
+      // Convert Zep v3 results to TelemetryRetrievalResult format
       const results: TelemetryRetrievalResult[] = (searchResult.results || []).map((result: any) => ({
-        id: result.message?.id || `result-${Date.now()}-${Math.random()}`,
-        session_id: result.session_id || null,
-        text: result.message?.content || result.content || '',
-        score: result.score || 0,
-        source_type: result.message ? 'message' : 'fact',
-        tokens_estimate: estimateTokens(result.message?.content || result.content || ''),
+        id: result.message?.uuid || `result-${Date.now()}-${Math.random()}`,
+        session_id: result.session?.session_id || null,
+        text: result.message?.content || '',
+        score: result.score || result.distance || 0,
+        source_type: 'message',
+        tokens_estimate: estimateTokens(result.message?.content || ''),
         metadata: {
-          ...result.metadata,
-          message_id: result.message?.id,
-          timestamp: result.message?.created_at || result.created_at,
-          confidence: result.score
+          ...result.message?.metadata,
+          message_id: result.message?.uuid,
+          timestamp: result.message?.created_at,
+          role: result.message?.role,
+          confidence: result.score || result.distance
         }
       }));
 
@@ -338,11 +305,11 @@ class ZepAdapter {
     metadata?: Record<string, any>
   ): Promise<boolean> {
     try {
-      const collectionName = await this.ensureUserCollection(userId);
+      const zepUserId = await this.ensureUser(userId);
       
-      // Store message in Zep
+      // Store message in Zep v3
       const response = await fetch(
-        `${this.baseUrl}/collections/${collectionName}/sessions/${sessionId}/messages`,
+        `${this.baseUrl}/users/${zepUserId}/sessions/${sessionId}/messages`,
         {
           method: 'POST',
           headers: this.headers,
