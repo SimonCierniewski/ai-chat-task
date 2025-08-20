@@ -55,7 +55,7 @@ export function AdminSidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-gray-900 text-white min-h-screen">
+    <aside className="w-64 bg-gray-900 text-white min-h-screen flex flex-col relative">
       <div className="p-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <span>🤖</span>
@@ -90,8 +90,8 @@ export function AdminSidebar() {
           );
         })}
       </nav>
-      
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-800">
+
+      <div className="mt-auto p-4 border-t border-gray-800">
         <UserInfo />
       </div>
     </aside>
