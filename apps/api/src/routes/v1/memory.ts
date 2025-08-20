@@ -8,6 +8,7 @@ import { Type } from '@sinclair/typebox';
 import { requireAuth } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
 import { logger } from '../../utils/logger';
+import { config } from '../../config';
 import {
   CreateGraphEdge,
   createGraphEdgeSchema,
@@ -98,33 +99,141 @@ const validateUpsertRequest = createValidator(upsertRequestSchema);
 const validateSearchQuery = createValidator(searchQuerySchema);
 
 // ============================================================================
-// Stub Zep Adapter (Phase 4 implementation)
+// Zep v3 Adapter - Real Implementation
 // ============================================================================
 
 /**
- * Stub Zep adapter for Phase 4 - to be replaced with real implementation
+ * Zep v3 adapter for memory storage and retrieval
  */
 class ZepAdapter {
+  private apiKey: string;
+  private baseUrl: string;
+  private headers: Record<string, string>;
+
+  constructor() {
+    this.apiKey = config.zep.apiKey;
+    this.baseUrl = config.zep.baseUrl;
+    
+    if (!this.apiKey) {
+      logger.error('ZEP_API_KEY is not configured');
+      throw new Error('Zep API key is required');
+    }
+
+    // Set up headers for all Zep API requests
+    this.headers = {
+      'Authorization': `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    logger.info('Zep adapter initialized', { baseUrl: this.baseUrl });
+  }
+
+  /**
+   * Get or create user collection
+   */
+  private async ensureUserCollection(userId: string): Promise<string> {
+    const collectionName = `user:${userId}`;
+    
+    try {
+      // Try to get existing collection
+      const response = await fetch(`${this.baseUrl}/collections/${collectionName}`, {
+        headers: this.headers
+      });
+
+      if (response.ok) {
+        return collectionName;
+      }
+
+      // Create new collection if it doesn't exist
+      if (response.status === 404) {
+        const createResponse = await fetch(`${this.baseUrl}/collections`, {
+          method: 'POST',
+          headers: this.headers,
+          body: JSON.stringify({
+            name: collectionName,
+            description: `Memory collection for user ${userId}`,
+            metadata: {
+              user_id: userId,
+              created_at: new Date().toISOString()
+            }
+          })
+        });
+
+        if (!createResponse.ok) {
+          const error = await createResponse.text();
+          logger.error('Failed to create Zep collection', { 
+            status: createResponse.status, 
+            error,
+            userId 
+          });
+          throw new Error(`Failed to create collection: ${error}`);
+        }
+
+        logger.info('Created new Zep collection', { collectionName });
+        return collectionName;
+      }
+
+      throw new Error(`Unexpected response from Zep: ${response.status}`);
+    } catch (error) {
+      logger.error('Error ensuring user collection', { error, userId });
+      throw error;
+    }
+  }
   async upsertFacts(
     userId: string,
     edges: CreateGraphEdge[],
     sessionId?: string
   ): Promise<{ success: boolean; upserted: number }> {
-    // Simulate Zep API call latency
-    const delay = Math.random() * 100 + 50; // 50-150ms
-    await new Promise(resolve => setTimeout(resolve, delay));
+    try {
+      const collectionName = await this.ensureUserCollection(userId);
+      
+      // Convert edges to Zep knowledge format
+      const facts = edges.map(edge => ({
+        subject: edge.subject,
+        predicate: edge.predicate,
+        object: edge.object,
+        confidence: edge.confidence || 1.0,
+        metadata: {
+          ...edge.metadata,
+          session_id: sessionId,
+          source_message_id: edge.source_message_id,
+          created_at: new Date().toISOString()
+        }
+      }));
 
-    logger.info('Zep upsert (stub)', {
-      userId,
-      edgeCount: edges.length,
-      sessionId,
-      edges: edges.map(e => ({ subject: e.subject, predicate: e.predicate, object: e.object }))
-    });
+      // Add facts to Zep knowledge graph
+      const response = await fetch(`${this.baseUrl}/collections/${collectionName}/knowledge`, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({ facts })
+      });
 
-    return {
-      success: true,
-      upserted: edges.length
-    };
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error('Failed to upsert facts to Zep', { 
+          status: response.status, 
+          error,
+          userId,
+          factCount: facts.length 
+        });
+        return { success: false, upserted: 0 };
+      }
+
+      const result = await response.json();
+      logger.info('Facts upserted to Zep', {
+        userId,
+        upserted: result.upserted || facts.length,
+        sessionId
+      });
+
+      return {
+        success: true,
+        upserted: result.upserted || facts.length
+      };
+    } catch (error) {
+      logger.error('Error upserting facts to Zep', { error, userId });
+      return { success: false, upserted: 0 };
+    }
   }
 
   async searchMemory(
@@ -139,60 +248,187 @@ class ZepAdapter {
       clipSentences?: number;
     } = {}
   ): Promise<TelemetryRetrievalResult[]> {
-    // Simulate Zep API call latency
-    const delay = Math.random() * 100 + 100; // 100-200ms
-    await new Promise(resolve => setTimeout(resolve, delay));
+    try {
+      const collectionName = await this.ensureUserCollection(userId);
+      const limit = options.limit || CONFIG_PRESETS.DEFAULT.top_k;
+      const minScore = options.minScore || 0.7;
 
-    const limit = options.limit || CONFIG_PRESETS.DEFAULT.top_k;
-    const minScore = options.minScore || 0.7;
+      // Build search request
+      const searchRequest: any = {
+        query,
+        limit,
+        min_score: minScore
+      };
 
-    logger.info('Zep search (stub)', {
-      userId,
-      query: query.substring(0, 100),
-      sessionId: options.sessionId,
-      limit,
-      minScore
-    });
-
-    // Generate mock retrieval results
-    const mockResults: TelemetryRetrievalResult[] = [
-      {
-        id: `result-1-${Date.now()}`,
-        session_id: options.sessionId || null,
-        text: `User mentioned: "${query.substring(0, 50)}..." in previous conversation.`,
-        score: 0.9,
-        source_type: 'message',
-        tokens_estimate: estimateTokens(`User mentioned: "${query.substring(0, 50)}..." in previous conversation.`),
-        metadata: {
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          confidence: 0.9
-        }
-      },
-      {
-        id: `result-2-${Date.now()}`,
-        session_id: null,
-        text: `User likes programming and works at tech company.`,
-        score: 0.8,
-        source_type: 'fact',
-        tokens_estimate: estimateTokens('User likes programming and works at tech company.'),
-        metadata: {
-          fact_id: 'fact-123',
-          confidence: 0.8
-        }
+      // Add session filter if provided
+      if (options.sessionId) {
+        searchRequest.filters = {
+          session_id: options.sessionId
+        };
       }
-    ];
 
-    // Apply filtering and sorting
-    const filtered = filterByScore(mockResults, minScore);
-    const sorted = sortByRelevance(filtered);
-    const limited = sorted.slice(0, limit);
+      // Search Zep memory
+      const response = await fetch(`${this.baseUrl}/collections/${collectionName}/search`, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify(searchRequest)
+      });
 
-    // Apply token budget trimming
-    if (options.tokenBudget) {
-      return trimToTokenBudget(limited, options.tokenBudget);
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error('Failed to search Zep memory', { 
+          status: response.status, 
+          error,
+          userId,
+          query 
+        });
+        return [];
+      }
+
+      const searchResult = await response.json();
+      
+      // Convert Zep results to TelemetryRetrievalResult format
+      const results: TelemetryRetrievalResult[] = (searchResult.results || []).map((result: any) => ({
+        id: result.message?.id || `result-${Date.now()}-${Math.random()}`,
+        session_id: result.session_id || null,
+        text: result.message?.content || result.content || '',
+        score: result.score || 0,
+        source_type: result.message ? 'message' : 'fact',
+        tokens_estimate: estimateTokens(result.message?.content || result.content || ''),
+        metadata: {
+          ...result.metadata,
+          message_id: result.message?.id,
+          timestamp: result.message?.created_at || result.created_at,
+          confidence: result.score
+        }
+      }));
+
+      // Apply additional filtering and sorting
+      const filtered = filterByScore(results, minScore);
+      const sorted = sortByRelevance(filtered);
+      const limited = sorted.slice(0, limit);
+
+      // Apply token budget trimming if specified
+      if (options.tokenBudget) {
+        return trimToTokenBudget(limited, options.tokenBudget);
+      }
+
+      logger.info('Zep search completed', {
+        userId,
+        query: query.substring(0, 50),
+        resultsCount: limited.length,
+        sessionId: options.sessionId
+      });
+
+      return limited;
+    } catch (error) {
+      logger.error('Error searching Zep memory', { error, userId, query });
+      return [];
     }
+  }
 
-    return limited;
+  /**
+   * Store a message in Zep memory
+   */
+  async storeMessage(
+    userId: string,
+    sessionId: string,
+    role: 'user' | 'assistant',
+    content: string,
+    metadata?: Record<string, any>
+  ): Promise<boolean> {
+    try {
+      const collectionName = await this.ensureUserCollection(userId);
+      
+      // Store message in Zep
+      const response = await fetch(
+        `${this.baseUrl}/collections/${collectionName}/sessions/${sessionId}/messages`,
+        {
+          method: 'POST',
+          headers: this.headers,
+          body: JSON.stringify({
+            role,
+            content,
+            metadata: {
+              ...metadata,
+              timestamp: new Date().toISOString()
+            }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error('Failed to store message in Zep', {
+          status: response.status,
+          error,
+          userId,
+          sessionId,
+          role
+        });
+        return false;
+      }
+
+      logger.info('Message stored in Zep', {
+        userId,
+        sessionId,
+        role,
+        contentLength: content.length
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('Error storing message in Zep', { error, userId, sessionId });
+      return false;
+    }
+  }
+
+  /**
+   * Store a conversation turn (user message + assistant response)
+   */
+  async storeConversationTurn(
+    userId: string,
+    sessionId: string,
+    userMessage: string,
+    assistantMessage: string,
+    metadata?: {
+      model?: string;
+      tokensIn?: number;
+      tokensOut?: number;
+      costUsd?: number;
+    }
+  ): Promise<boolean> {
+    try {
+      // Store user message
+      const userStored = await this.storeMessage(
+        userId,
+        sessionId,
+        'user',
+        userMessage,
+        { type: 'user_input' }
+      );
+
+      if (!userStored) {
+        return false;
+      }
+
+      // Store assistant response
+      const assistantStored = await this.storeMessage(
+        userId,
+        sessionId,
+        'assistant',
+        assistantMessage,
+        {
+          type: 'ai_response',
+          ...metadata
+        }
+      );
+
+      return assistantStored;
+    } catch (error) {
+      logger.error('Error storing conversation turn', { error, userId, sessionId });
+      return false;
+    }
   }
 }
 

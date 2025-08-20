@@ -274,6 +274,9 @@ async function chatHandler(
   const startTime = Date.now();
   const authReq = req as FastifyRequest & { user: { id: string; role: string } };
 
+  // Import the zepAdapter instance from memory.ts (would be better as shared service)
+  const { zepAdapter } = await import('./memory');
+
   try {
     // Validate request body
     const validation = validateChatRequest(req.body);
@@ -355,6 +358,7 @@ async function chatHandler(
       let openAIStartTime = Date.now();
       let outputText = '';
       let hasProviderUsage = false;
+      let usageCalc: any = null;
 
       // Stream response via OpenAI provider
       const metrics = await openAIProvider.streamCompletion({
@@ -377,7 +381,7 @@ async function chatHandler(
             const openAIMs = Date.now() - openAIStartTime;
 
             // Calculate cost with UsageService
-            const usageCalc = await usageService.calculateFromProvider(usage, model);
+            usageCalc = await usageService.calculateFromProvider(usage, model);
 
             // Send usage event to client
             stream.sendEvent(ChatEventType.USAGE, {
@@ -435,7 +439,7 @@ async function chatHandler(
             // Fallback: estimate usage if not provided by provider
             if (!hasProviderUsage && reason !== 'error') {
               const promptText = promptPlan.messages.map(m => m.content).join('\n');
-              const usageCalc = await usageService.estimateUsage(
+              usageCalc = await usageService.estimateUsage(
                 promptText,
                 outputText,
                 model
@@ -488,6 +492,38 @@ async function chatHandler(
                 cost_usd: usageCalc.cost_usd,
                 has_provider_usage: false
               });
+            }
+
+            // Store conversation in Zep if successful and session exists
+            if (reason === 'stop' && sessionId && outputText) {
+              try {
+                const stored = await zepAdapter.storeConversationTurn(
+                  userId,
+                  sessionId,
+                  message,
+                  outputText,
+                  {
+                    model,
+                    tokensIn: hasProviderUsage ? undefined : usageCalc?.tokens_in,
+                    tokensOut: hasProviderUsage ? undefined : usageCalc?.tokens_out,
+                    costUsd: hasProviderUsage ? undefined : usageCalc?.cost_usd
+                  }
+                );
+
+                if (stored) {
+                  logger.info('Conversation stored in Zep', {
+                    req_id: req.id,
+                    user_id: userId,
+                    session_id: sessionId
+                  });
+                }
+              } catch (error) {
+                // Don't fail the request if Zep storage fails
+                logger.error('Failed to store conversation in Zep', {
+                  req_id: req.id,
+                  error: error instanceof Error ? error.message : String(error)
+                });
+              }
             }
 
             stream.sendEvent(ChatEventType.DONE, { finish_reason: reason });
