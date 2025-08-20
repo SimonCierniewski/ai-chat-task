@@ -154,25 +154,12 @@ export default function MyComponent() {
 
 ## API Routes
 
-### Check Role Endpoint
+The admin panel provides server-side API routes for admin operations:
 
-Server-side role validation:
-
-```bash
-# Check current user's role (requires authentication)
-curl http://localhost:3001/api/auth/check-role \
-  -H "Cookie: [session-cookies]"
-```
-
-Response:
-```json
-{
-  "authenticated": true,
-  "userId": "user-id",
-  "email": "user@example.com",
-  "role": "admin"
-}
-```
+- `/api/users` - Get paginated list of users (admin only)
+- `/api/users/[userId]/role` - Update user role (admin only)
+- `/api/pricing` - Get/update model pricing (admin only)
+- `/api/telemetry/metrics` - Get telemetry metrics (admin only)
 
 ## Project Structure
 

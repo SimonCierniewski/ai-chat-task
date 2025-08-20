@@ -410,7 +410,6 @@
 - `/apps/admin/src/app/api/pricing/route.ts` - **Phase 6C: Pricing CRUD operations**
 - `/apps/admin/src/components/admin/sidebar.tsx` - **Phase 6: Navigation sidebar**
 - `/apps/admin/src/components/admin/user-info.tsx` - **Phase 6B: Session display**
-- `/apps/admin/src/app/api/auth/check-role/route.ts` - **Phase 6B: Server-side role check**
 - `/apps/admin/docs/ADMIN_ENV.md` - **Phase 6: Environment variable documentation**
 - `/apps/admin/docs/AUTH_ADMIN.md` - **Phase 6B: Auth testing guide**
 - `/apps/admin/docs/USERS_PRICING.md` - **Phase 6C: Users & pricing features documentation**

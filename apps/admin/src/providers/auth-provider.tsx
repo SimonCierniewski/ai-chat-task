@@ -32,46 +32,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
 
   const fetchProfile = async (userId: string) => {
-    // Skip fetching profile for admin pages - middleware already verified
-    // This is only needed for non-admin authenticated pages
+    // For admin pages, middleware has already verified the user is admin
     const isAdminPath = window.location.pathname.startsWith('/admin')
     
     if (isAdminPath) {
       // For admin paths, we know the user is admin (middleware verified)
       setProfile({
         id: userId,
-        email: session?.user?.email || '',
+        email: session?.user?.email || user?.email || '',
         role: 'admin',
       })
       return
     }
     
-    // For non-admin paths, fetch the actual role
+    // For non-admin paths, fetch the profile directly from Supabase
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
-      if (!apiBaseUrl || !session?.access_token) {
-        throw new Error('Missing NEXT_PUBLIC_API_BASE_URL or session token')
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', userId)
+        .single()
+      
+      if (error) {
+        console.error('Error fetching profile:', error)
+        // Default to user role if we can't fetch the profile
+        setProfile({
+          id: userId,
+          email: session?.user?.email || user?.email || '',
+          role: 'user',
+        })
+        return
       }
-
-      const response = await fetch(`${apiBaseUrl}/api/v1/me`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      })
-
-      if (!response.ok) {
-        const error = await response.text()
-        throw new Error(`Failed to fetch profile: ${response.status} ${error}`)
-      }
-
-      const data = await response.json()
+      
       setProfile({
         id: userId,
-        email: data.user.email,
-        role: data.user.role,
+        email: session?.user?.email || user?.email || '',
+        role: profile?.role || 'user',
       })
     } catch (error) {
       console.error('Error fetching profile:', error)
+      // Default to user role on any error
+      setProfile({
+        id: userId,
+        email: session?.user?.email || user?.email || '',
+        role: 'user',
+      })
     }
   }
 

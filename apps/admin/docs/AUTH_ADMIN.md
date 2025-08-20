@@ -135,28 +135,24 @@ All routes under `/admin/*` require:
    - Session cleared
 4. **Verify**: Try accessing `/admin` - should redirect to `/login`
 
-### Test Scenario 6: Role Check API
+### Test Scenario 6: Protected API Routes
 
-Test the server-side role check endpoint:
+Test the server-side protected endpoints:
 
 ```bash
 # First, get a valid session cookie by logging in via browser
-# Then test the API endpoint
+# Then test the protected API endpoints
 
-# Should return role info when authenticated
-curl http://localhost:3001/api/auth/check-role \
+# Test users endpoint (admin only)
+curl http://localhost:3001/api/users \
   -H "Cookie: [copy-cookies-from-browser]"
 
-# Expected response:
-{
-  "authenticated": true,
-  "userId": "uuid-here",
-  "email": "admin@example.com",
-  "role": "admin"
-}
+# Test pricing endpoint (admin only)
+curl http://localhost:3001/api/pricing \
+  -H "Cookie: [copy-cookies-from-browser]"
 
 # Without cookies (not authenticated)
-curl http://localhost:3001/api/auth/check-role
+curl http://localhost:3001/api/users
 
 # Expected response:
 {
