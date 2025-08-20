@@ -1,14 +1,11 @@
 package com.prototype.aichat.ui.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavHostController
+import androidx.navigation.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.prototype.aichat.ui.screens.ChatScreen
-import com.prototype.aichat.ui.screens.LoginScreen
-import com.prototype.aichat.ui.screens.SessionScreen
-import com.prototype.aichat.ui.screens.SplashScreen
+import com.prototype.aichat.ui.screens.*
 
 /**
  * Main navigation graph for the app
@@ -47,14 +44,66 @@ fun AppNavigation(
             )
         }
         
-        composable(Screen.Chat.route) {
+        composable(
+            route = Screen.Chat.routeWithArgs,
+            arguments = listOf(
+                navArgument(Screen.Chat.sessionIdArg) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString(Screen.Chat.sessionIdArg)
             ChatScreen(
+                sessionId = sessionId,
+                onNavigateToSessions = {
+                    navController.navigate(Screen.Sessions.route)
+                },
                 onNavigateToSession = {
                     navController.navigate(Screen.Session.route)
                 },
                 onLogout = {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
+        
+        composable(Screen.Sessions.route) {
+            SessionsScreen(
+                onNavigateToChat = { sessionId ->
+                    navController.navigate(Screen.Chat.createRoute(sessionId)) {
+                        popUpTo(Screen.Sessions.route) { inclusive = true }
+                    }
+                },
+                onNavigateToHistory = { sessionId ->
+                    navController.navigate(Screen.History.createRoute(sessionId))
+                },
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        composable(
+            route = Screen.History.routeWithArgs,
+            arguments = listOf(
+                navArgument(Screen.History.sessionIdArg) {
+                    type = NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString(Screen.History.sessionIdArg) ?: return@composable
+            HistoryScreen(
+                sessionId = sessionId,
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onContinueChat = {
+                    navController.navigate(Screen.Chat.createRoute(sessionId)) {
+                        popUpTo(Screen.Sessions.route)
                     }
                 }
             )
@@ -76,7 +125,30 @@ fun AppNavigation(
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
     object Login : Screen("login")
-    object Chat : Screen("chat")
+    
+    object Chat : Screen("chat") {
+        const val sessionIdArg = "sessionId"
+        val routeWithArgs = "$route?$sessionIdArg={$sessionIdArg}"
+        
+        fun createRoute(sessionId: String? = null): String {
+            return if (sessionId != null) {
+                "$route?$sessionIdArg=$sessionId"
+            } else {
+                route
+            }
+        }
+    }
+    
+    object Sessions : Screen("sessions")
+    
+    object History : Screen("history") {
+        const val sessionIdArg = "sessionId"
+        val routeWithArgs = "$route/{$sessionIdArg}"
+        
+        fun createRoute(sessionId: String): String {
+            return "$route/$sessionId"
+        }
+    }
+    
     object Session : Screen("session")
-    object History : Screen("history")
 }
