@@ -6,7 +6,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { ModelPricing } from '@prototype/shared/pricing';
+import { ModelPricing } from '@prototype/shared';
 
 // ============================================================================
 // Types

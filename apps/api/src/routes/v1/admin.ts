@@ -20,7 +20,7 @@ import { ModelRegistry } from '../../services/model-registry';
  */
 interface AdminMetricsQuery {
   from?: string;      // ISO date string
-  to?: string;        // ISO date string  
+  to?: string;        // ISO date string
   userId?: string;    // Filter by specific user
   model?: string;     // Filter by AI model
 }
@@ -138,7 +138,7 @@ const supabaseAdmin = createClient(
  */
 async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
   const startTime = Date.now();
-  
+
   try {
     // Parse pagination and search
     const query: any = (req as any).query || {};
@@ -237,7 +237,7 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
     });
 
     const totalMs = Date.now() - startTime;
-    
+
     logger.info('Admin users list completed', {
       req_id: req.id,
       user_count: adminUsers.length,
@@ -283,7 +283,7 @@ async function getMetricsHandler(
   reply: FastifyReply
 ) {
   const startTime = Date.now();
-  
+
   try {
     // Validate query parameters
     const validation = validateMetricsQuery(req.query);
@@ -296,7 +296,7 @@ async function getMetricsHandler(
     }
 
     const { from, to, userId, model } = req.query;
-    
+
     // Default date range: last 30 days
     const fromDate = from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const toDate = to || new Date().toISOString().split('T')[0];
@@ -320,7 +320,7 @@ async function getMetricsHandler(
     if (userId) {
       query = query.eq('user_id', userId);
     }
-    
+
     if (model) {
       query = query.eq('model', model);
     }
@@ -339,12 +339,12 @@ async function getMetricsHandler(
     const totalMessages = dailyUsage?.reduce((sum, d) => sum + (d.calls || 0), 0) || 0;
     const totalCostUsd = dailyUsage?.reduce((sum, d) => sum + (parseFloat(d.cost_usd || '0')), 0) || 0;
     const uniqueUsers = new Set(dailyUsage?.map(d => d.user_id) || []).size;
-    
+
     // Calculate weighted averages for timing metrics
     let totalTtftWeighted = 0;
     let totalDurationWeighted = 0;
     let totalCallsForAvg = 0;
-    
+
     dailyUsage?.forEach(d => {
       const calls = d.calls || 0;
       if (calls > 0) {
@@ -382,7 +382,7 @@ async function getMetricsHandler(
     };
 
     const totalMs = Date.now() - startTime;
-    
+
     logger.info('Admin metrics completed', {
       req_id: req.id,
       total_messages: totalMessages,
@@ -416,20 +416,20 @@ async function listModelsHandler(
 ) {
   try {
     const models = await modelRegistry.getAllModels();
-    
+
     logger.info('Admin listed models', {
       req_id: req.id,
       user_id: (req as any).user.id,
       models_count: models.length
     });
-    
-    return reply.send(models);
+
+    return reply.send({models});
   } catch (error) {
     logger.error('Failed to list models', {
       req_id: req.id,
       error: error instanceof Error ? error.message : String(error)
     });
-    
+
     return reply.status(500).send({
       error: 'INTERNAL_ERROR',
       message: 'Failed to list models'
@@ -446,7 +446,7 @@ async function updateModelPricingHandler(
   reply: FastifyReply
 ) {
   const startTime = Date.now();
-  
+
   try {
     // Validate request body
     const validation = validatePricingRequest(req.body);
@@ -496,9 +496,9 @@ async function updateModelPricingHandler(
 
     // Invalidate model registry cache to reflect changes immediately
     await modelRegistry.invalidateCache();
-    
+
     const totalMs = Date.now() - startTime;
-    
+
     logger.info('Admin pricing update completed', {
       req_id: req.id,
       model,
@@ -610,7 +610,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
   // GET /api/v1/admin/models - List available models
   fastify.get('/models', listModelsHandler);
 
-  // POST /api/v1/admin/models/pricing - Update model pricing  
+  // POST /api/v1/admin/models/pricing - Update model pricing
   fastify.post('/models/pricing', updateModelPricingHandler);
 
   // PUT /api/v1/admin/users/:userId/role - Update user role
