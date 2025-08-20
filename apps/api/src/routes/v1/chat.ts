@@ -287,12 +287,12 @@ async function chatHandler(
     }
 
     const { message, useMemory = false, sessionId } = req.body;
-    let { model } = req.body;
+    const requestedModel = (req.body as any).model as string | undefined;
     const userId = authReq.user.id;
 
     // Validate and resolve model
-    const modelValidation = await modelRegistry.validateModel(model);
-    model = modelValidation.model; // Use validated/default model
+    const modelValidation = await modelRegistry.validateModel(requestedModel);
+    const model: string = modelValidation.model; // Use validated/default model
 
     logger.info('Chat request received', {
       req_id: req.id,
