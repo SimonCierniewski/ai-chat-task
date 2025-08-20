@@ -218,29 +218,69 @@ class ZepAdapter {
       const limit = options.limit || CONFIG_PRESETS.DEFAULT.top_k;
       const minScore = options.minScore || 0.7;
 
-      // Search threads using SDK
-      const searchResults = await this.client.thread.search({
-        userId,
-        query,
-        limit
-      });
+      // If we have a specific session, get context from that thread
+      // Otherwise, get user context across all threads
+      let contextData: any;
+      
+      if (options.sessionId) {
+        // Get context for specific thread
+        try {
+          await this.ensureThread(options.sessionId, userId);
+          contextData = await this.client.thread.getUserContext(options.sessionId, {
+            mode: 'messages',
+            limit
+          });
+        } catch (error) {
+          logger.warn('Failed to get thread context, falling back to user threads', { 
+            sessionId: options.sessionId, 
+            error 
+          });
+          contextData = { messages: [] };
+        }
+      } else {
+        // Get user's threads and extract recent messages
+        const threads = await this.client.user.getThreads(userId, {
+          limit: 10 // Get recent threads
+        });
+        
+        // Collect messages from threads
+        const allMessages: any[] = [];
+        for (const thread of (threads.threads || [])) {
+          try {
+            const threadData = await this.client.thread.get(thread.threadId);
+            if (threadData.messages) {
+              allMessages.push(...threadData.messages);
+            }
+          } catch (error) {
+            logger.debug('Failed to get thread messages', { threadId: thread.threadId });
+          }
+        }
+        contextData = { messages: allMessages };
+      }
 
-      // Convert SDK results to TelemetryRetrievalResult format
-      const results: TelemetryRetrievalResult[] = (searchResults.results || []).map((result: any) => {
-        // Extract content and metadata
-        const content = result.content || result.text || '';
-        const resultId = result.id || `result-${Date.now()}-${Math.random()}`;
+      // Convert messages to TelemetryRetrievalResult format
+      const results: TelemetryRetrievalResult[] = (contextData.messages || []).map((message: any) => {
+        const content = message.content || '';
+        const resultId = message.uuid || message.id || `result-${Date.now()}-${Math.random()}`;
+        
+        // Calculate basic relevance score based on query match
+        let score = 0.5; // Default score
+        if (query && content.toLowerCase().includes(query.toLowerCase())) {
+          score = 0.8; // Higher score for direct matches
+        }
         
         return {
           id: resultId,
-          session_id: result.sessionId || result.thread_id || null,
+          session_id: message.threadId || options.sessionId || null,
           text: content,
-          score: result.score || result.relevance || 0,
+          score,
           source_type: 'message',
           tokens_estimate: estimateTokens(content),
           metadata: {
-            ...result.metadata,
-            confidence: result.score || result.relevance
+            ...message.metadata,
+            role: message.roleType,
+            timestamp: message.createdAt,
+            confidence: score
           }
         };
       });
@@ -255,7 +295,7 @@ class ZepAdapter {
         return trimToTokenBudget(limited, options.tokenBudget);
       }
 
-      logger.info('Zep SDK search completed', {
+      logger.info('Zep SDK memory retrieval completed', {
         userId,
         query: query.substring(0, 50),
         resultsCount: limited.length,
@@ -264,8 +304,33 @@ class ZepAdapter {
 
       return limited;
     } catch (error) {
-      logger.error('Error searching Zep memory via SDK', { error, userId, query });
+      logger.error('Error retrieving Zep memory via SDK', { error, userId, query });
       return [];
+    }
+  }
+
+  /**
+   * Ensure thread exists for session
+   */
+  private async ensureThread(sessionId: string, userId: string): Promise<void> {
+    try {
+      // Try to get the thread
+      await this.client.thread.get(sessionId);
+      logger.debug('Thread exists', { sessionId });
+    } catch (error: any) {
+      // If thread doesn't exist, create it
+      if (error.statusCode === 404 || error.message?.includes('not found')) {
+        await this.client.thread.create({
+          threadId: sessionId,
+          userId: userId,
+          metadata: {
+            created_at: new Date().toISOString()
+          }
+        });
+        logger.info('Created new Zep thread', { sessionId, userId });
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -280,7 +345,9 @@ class ZepAdapter {
     metadata?: Record<string, any>
   ): Promise<boolean> {
     try {
+      // Ensure user and thread exist
       await this.ensureUser(userId);
+      await this.ensureThread(sessionId, userId);
       
       // Store message in thread
       await this.client.thread.addMessages(sessionId, [

@@ -148,7 +148,8 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
       }
       
       try {
-        const { zepClient } = await import('../../services/zep');
+        const { getZepClient } = await import('../../services/zep');
+        const zepClient = getZepClient(request.log);
         await zepClient.initializeUser(userId);
         zepInitialized = true;
         
