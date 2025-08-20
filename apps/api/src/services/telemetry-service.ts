@@ -6,7 +6,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { TelemetryEventType, TelemetryPayload } from '@prototype/shared/telemetry';
+import { TelemetryEventType, TelemetryPayload } from '@prototype/shared';
 
 // ============================================================================
 // Telemetry Service
@@ -135,8 +135,8 @@ export class TelemetryService {
     context?: Record<string, any>
   ): Promise<void> {
     const errorPayload: TelemetryPayload = {
-      error: typeof error === 'string' 
-        ? error 
+      error: typeof error === 'string'
+        ? error
         : {
             message: error.message,
             code: (error as any).code,

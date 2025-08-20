@@ -8,8 +8,8 @@ import { Type } from '@sinclair/typebox';
 import { requireAuth } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
 import { logger } from '../../utils/logger';
-import { 
-  CreateGraphEdge, 
+import {
+  CreateGraphEdge,
   createGraphEdgeSchema,
   RetrievalResult,
   MemorySearchQuery,
@@ -18,8 +18,8 @@ import {
   sortByRelevance,
   filterByScore,
   trimToTokenBudget
-} from '@prototype/shared/telemetry-memory';
-import { CONFIG_PRESETS } from '@prototype/shared/memory-config';
+} from '@prototype/shared';
+import { CONFIG_PRESETS } from '@prototype/shared';
 
 // ============================================================================
 // Types & Schemas
@@ -106,21 +106,21 @@ const validateSearchQuery = createValidator(searchQuerySchema);
  */
 class ZepAdapter {
   async upsertFacts(
-    userId: string, 
-    edges: CreateGraphEdge[], 
+    userId: string,
+    edges: CreateGraphEdge[],
     sessionId?: string
   ): Promise<{ success: boolean; upserted: number }> {
     // Simulate Zep API call latency
     const delay = Math.random() * 100 + 50; // 50-150ms
     await new Promise(resolve => setTimeout(resolve, delay));
-    
-    logger.info('Zep upsert (stub)', { 
-      userId, 
-      edgeCount: edges.length, 
+
+    logger.info('Zep upsert (stub)', {
+      userId,
+      edgeCount: edges.length,
       sessionId,
       edges: edges.map(e => ({ subject: e.subject, predicate: e.predicate, object: e.object }))
     });
-    
+
     return {
       success: true,
       upserted: edges.length
@@ -142,18 +142,18 @@ class ZepAdapter {
     // Simulate Zep API call latency
     const delay = Math.random() * 100 + 100; // 100-200ms
     await new Promise(resolve => setTimeout(resolve, delay));
-    
+
     const limit = options.limit || CONFIG_PRESETS.DEFAULT.top_k;
     const minScore = options.minScore || 0.7;
-    
-    logger.info('Zep search (stub)', { 
-      userId, 
-      query: query.substring(0, 100), 
+
+    logger.info('Zep search (stub)', {
+      userId,
+      query: query.substring(0, 100),
       sessionId: options.sessionId,
       limit,
-      minScore 
+      minScore
     });
-    
+
     // Generate mock retrieval results
     const mockResults: RetrievalResult[] = [
       {
@@ -181,17 +181,17 @@ class ZepAdapter {
         }
       }
     ];
-    
+
     // Apply filtering and sorting
     const filtered = filterByScore(mockResults, minScore);
     const sorted = sortByRelevance(filtered);
     const limited = sorted.slice(0, limit);
-    
+
     // Apply token budget trimming
     if (options.tokenBudget) {
       return trimToTokenBudget(limited, options.tokenBudget);
     }
-    
+
     return limited;
   }
 }
@@ -210,7 +210,7 @@ function mapZepError(error: any): { status: number; message: string } {
   // Check if it's a Zep API error with status
   if (error.status || error.statusCode || error.response?.status) {
     const status = error.status || error.statusCode || error.response.status;
-    
+
     if (status >= 400 && status < 500) {
       // Client errors (4xx) -> 400 Bad Request
       return {
@@ -225,17 +225,17 @@ function mapZepError(error: any): { status: number; message: string } {
       };
     }
   }
-  
+
   // Network/timeout errors -> 502 Bad Gateway
-  if (error.code === 'ECONNREFUSED' || 
-      error.code === 'ETIMEDOUT' || 
+  if (error.code === 'ECONNREFUSED' ||
+      error.code === 'ETIMEDOUT' ||
       error.message?.includes('timeout')) {
     return {
       status: 502,
       message: 'Memory service temporarily unavailable'
     };
   }
-  
+
   // Unknown errors -> 502 Bad Gateway
   return {
     status: 502,
@@ -284,7 +284,7 @@ async function upsertMemoryHandler(
 ) {
   const startTime = Date.now();
   const authReq = req as FastifyRequest & { user: { id: string; role: string } };
-  
+
   try {
     // Validate request body
     const validation = validateUpsertRequest(req.body);
@@ -308,7 +308,7 @@ async function upsertMemoryHandler(
 
     // Measure Zep operation time
     const zapStartTime = Date.now();
-    
+
     try {
       const result = await zepAdapter.upsertFacts(userId, facts, sessionId);
       const zepMs = Date.now() - zapStartTime;
@@ -365,7 +365,7 @@ async function upsertMemoryHandler(
 
   } catch (error) {
     const totalMs = Date.now() - startTime;
-    
+
     logger.error('Memory upsert handler error', {
       req_id: req.id,
       error: error.message,
@@ -389,7 +389,7 @@ async function searchMemoryHandler(
 ) {
   const startTime = Date.now();
   const authReq = req as FastifyRequest & { user: { id: string; role: string } };
-  
+
   try {
     // Validate query parameters
     const queryParams = {
@@ -432,7 +432,7 @@ async function searchMemoryHandler(
 
     // Measure Zep operation time
     const zapStartTime = Date.now();
-    
+
     try {
       const results = await zepAdapter.searchMemory(userId, query, searchOptions);
       const zepMs = Date.now() - zapStartTime;
@@ -499,7 +499,7 @@ async function searchMemoryHandler(
 
   } catch (error) {
     const totalMs = Date.now() - startTime;
-    
+
     logger.error('Memory search handler error', {
       req_id: req.id,
       error: error.message,

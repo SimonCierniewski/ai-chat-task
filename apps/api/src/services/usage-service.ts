@@ -6,8 +6,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { ModelPricing, calculateCost } from '@prototype/shared/pricing';
-import { UsageEventData } from '@prototype/shared/api/chat';
+import { ModelPricing, calculateCost } from '@prototype/shared';
+import { UsageEventData } from '@prototype/shared';
 
 // ============================================================================
 // Types
@@ -51,7 +51,7 @@ export class UsageService {
     model: string
   ): Promise<UsageCalculation> {
     const pricing = await this.getModelPricing(model);
-    
+
     if (!pricing) {
       logger.warn('Model pricing not found, using fallback', { model });
       return {
@@ -95,12 +95,12 @@ export class UsageService {
     const tokensOut = Math.ceil(outputText.length / 4);
 
     const pricing = await this.getModelPricing(model);
-    
+
     if (!pricing) {
       // Use default pricing if model not found
       const defaultCost = this.calculateDefaultCost(tokensIn, tokensOut, model);
-      
-      logger.warn('Using default pricing for unknown model', { 
+
+      logger.warn('Using default pricing for unknown model', {
         model,
         tokens_in: tokensIn,
         tokens_out: tokensOut,
@@ -196,9 +196,9 @@ export class UsageService {
     }
 
     // Keep 6-8 decimal precision internally
-    const cost = (tokensIn / 1_000_000) * inputRate + 
+    const cost = (tokensIn / 1_000_000) * inputRate +
                  (tokensOut / 1_000_000) * outputRate;
-    
+
     return cost;
   }
 

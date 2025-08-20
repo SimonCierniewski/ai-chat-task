@@ -8,7 +8,7 @@ import { Type } from '@sinclair/typebox';
 import { requireAuth } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
 import { logger } from '../../utils/logger';
-import { 
+import {
   ChatRequest,
   ChatEventType,
   TokenEventData,
@@ -16,12 +16,12 @@ import {
   DoneEventData,
   ErrorEventData,
   formatSSEEvent
-} from '@prototype/shared/api/chat';
-import { 
+} from '@prototype/shared';
+import {
   RetrievalResult,
-  calculateTotalTokens 
-} from '@prototype/shared/telemetry-memory';
-import { CONFIG_PRESETS } from '@prototype/shared/memory-config';
+  calculateTotalTokens
+} from '@prototype/shared';
+import { CONFIG_PRESETS } from '@prototype/shared';
 import { OpenAIProvider } from '../../providers/openai-provider';
 import { UsageService } from '../../services/usage-service';
 import { PromptAssembler } from '../../services/prompt-assembler';
@@ -30,7 +30,7 @@ import { ModelRegistry } from '../../services/model-registry';
 import { config } from '../../config';
 
 // ============================================================================
-// Types & Schemas  
+// Types & Schemas
 // ============================================================================
 
 /**
@@ -101,7 +101,7 @@ async function retrieveMemoryContext(
     // Import the ZepAdapter class from memory.ts (would be better as shared service)
     const { ZepAdapter } = await import('./memory');
     const zepAdapter = new (ZepAdapter as any)();
-    
+
     const memoryConfig = CONFIG_PRESETS.DEFAULT;
     const results = await zepAdapter.searchMemory(userId, message, {
       sessionId,
@@ -110,22 +110,22 @@ async function retrieveMemoryContext(
       tokenBudget: memoryConfig.memory_token_budget,
       clipSentences: memoryConfig.clip_sentences
     });
-    
+
     if (results.length === 0) {
       return null;
     }
-    
+
     const totalTokens = calculateTotalTokens(results);
     const contextText = results
       .map((result, index) => `${index + 1}. ${result.text}`)
       .join('\n');
-    
+
     return {
       results,
       total_tokens: totalTokens,
       context_text: contextText
     };
-    
+
   } catch (error) {
     logger.warn('Memory retrieval failed', {
       userId,
@@ -147,11 +147,11 @@ class SSEStream {
   private heartbeatInterval?: NodeJS.Timeout;
   private closed = false;
   private abortController: AbortController;
-  
+
   constructor(reply: FastifyReply, requestId: string) {
     this.reply = reply;
     this.abortController = new AbortController();
-    
+
     // Set SSE headers and flush immediately
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -164,30 +164,30 @@ class SSEStream {
       'X-Accel-Buffering': 'no', // Nginx
       'Proxy-Buffering': 'off'   // Generic
     });
-    
+
     // Flush headers immediately before any upstream calls
     this.flush();
-    
+
     // Start heartbeat to keep connection alive
     this.startHeartbeat();
-    
+
     // Handle client disconnect
     reply.raw.on('close', () => {
       this.abortController.abort();
       this.close();
     });
-    
+
     reply.raw.on('error', (error) => {
       logger.warn('SSE stream error', { error: error.message });
       this.abortController.abort();
       this.close();
     });
-    
+
     // Send initial ping
     this.sendComment('Connected to chat stream');
     this.flush();
   }
-  
+
   /**
    * Send SSE comment (keeps connection alive)
    */
@@ -195,7 +195,7 @@ class SSEStream {
     if (this.closed) return;
     this.reply.raw.write(`: ${comment}\n\n`);
   }
-  
+
   /**
    * Send SSE event
    */
@@ -204,7 +204,7 @@ class SSEStream {
     this.reply.raw.write(formatSSEEvent(type, data));
     this.flush();
   }
-  
+
   /**
    * Flush the stream buffer
    */
@@ -214,7 +214,7 @@ class SSEStream {
       this.reply.raw.flushHeaders();
     }
   }
-  
+
   /**
    * Start periodic heartbeat
    */
@@ -227,32 +227,32 @@ class SSEStream {
       }
     }, heartbeatMs);
   }
-  
+
   /**
    * Close the stream
    */
   close() {
     if (this.closed) return;
     this.closed = true;
-    
+
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
     }
-    
+
     try {
       this.reply.raw.end();
     } catch (error) {
       // Ignore errors when closing
     }
   }
-  
+
   /**
    * Check if stream is closed
    */
   isClosed(): boolean {
     return this.closed;
   }
-  
+
   /**
    * Get abort signal for upstream cancellation
    */
@@ -274,7 +274,7 @@ async function chatHandler(
 ) {
   const startTime = Date.now();
   const authReq = req as FastifyRequest & { user: { id: string; role: string } };
-  
+
   try {
     // Validate request body
     const validation = validateChatRequest(req.body);
@@ -293,7 +293,7 @@ async function chatHandler(
     // Validate and resolve model
     const modelValidation = await modelRegistry.validateModel(model);
     model = modelValidation.model; // Use validated/default model
-    
+
     logger.info('Chat request received', {
       req_id: req.id,
       user_id: userId,
@@ -307,11 +307,11 @@ async function chatHandler(
 
     // Initialize SSE stream
     const stream = new SSEStream(reply, req.id);
-    
+
     try {
       let memoryContext: MemoryContext | null = null;
       let memoryMs = 0;
-      
+
       // Retrieve memory context if requested
       if (useMemory) {
         logger.info('Retrieving memory context', {
@@ -319,11 +319,11 @@ async function chatHandler(
           user_id: userId,
           session_id: sessionId
         });
-        
+
         const memoryStartTime = Date.now();
         memoryContext = await retrieveMemoryContext(userId, message, sessionId);
         memoryMs = Date.now() - memoryStartTime;
-        
+
         logger.info('Memory retrieval completed', {
           req_id: req.id,
           user_id: userId,
@@ -331,7 +331,7 @@ async function chatHandler(
           results_count: memoryContext?.results.length || 0,
           total_tokens: memoryContext?.total_tokens || 0
         });
-        
+
         // Log zep_search telemetry event
         if (memoryContext) {
           await telemetryService.logZepSearch(
@@ -343,20 +343,20 @@ async function chatHandler(
           );
         }
       }
-      
+
       // Assemble prompt with memory context
       const promptPlan = promptAssembler.assemblePrompt({
         userMessage: message,
         memoryBundle: memoryContext?.results,
         systemPrompt: 'You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.'
       });
-      
+
       // Track streaming metrics
       let ttftMs: number | undefined;
       let openAIStartTime = Date.now();
       let outputText = '';
       let hasProviderUsage = false;
-      
+
       // Stream response via OpenAI provider
       const metrics = await openAIProvider.streamCompletion({
         message,
@@ -376,10 +376,10 @@ async function chatHandler(
           if (!stream.isClosed()) {
             hasProviderUsage = true;
             const openAIMs = Date.now() - openAIStartTime;
-            
+
             // Calculate cost with UsageService
             const usageCalc = await usageService.calculateFromProvider(usage, model);
-            
+
             // Send usage event to client
             stream.sendEvent(ChatEventType.USAGE, {
               tokens_in: usageCalc.tokens_in,
@@ -387,17 +387,17 @@ async function chatHandler(
               cost_usd: usageCalc.cost_usd,
               model
             });
-            
+
             // Log telemetry events
             const totalMs = Date.now() - startTime;
-            
+
             await telemetryService.logMessageSent(
               userId,
               sessionId,
               totalMs,
               message.length
             );
-            
+
             await telemetryService.logOpenAICall(
               userId,
               sessionId,
@@ -415,7 +415,7 @@ async function chatHandler(
                 output_price_per_mtok: modelValidation.pricing?.output_per_mtok
               }
             );
-            
+
             logger.info('Chat completion finished', {
               req_id: req.id,
               user_id: userId,
@@ -432,7 +432,7 @@ async function chatHandler(
         onDone: async (reason: 'stop' | 'length' | 'content_filter' | 'error') => {
           if (!stream.isClosed()) {
             const openAIMs = Date.now() - openAIStartTime;
-            
+
             // Fallback: estimate usage if not provided by provider
             if (!hasProviderUsage && reason !== 'error') {
               const promptText = promptPlan.messages.map(m => m.content).join('\n');
@@ -441,7 +441,7 @@ async function chatHandler(
                 outputText,
                 model
               );
-              
+
               // Send estimated usage
               stream.sendEvent(ChatEventType.USAGE, {
                 tokens_in: usageCalc.tokens_in,
@@ -449,17 +449,17 @@ async function chatHandler(
                 cost_usd: usageCalc.cost_usd,
                 model
               });
-              
+
               // Log telemetry with fallback flag
               const totalMs = Date.now() - startTime;
-              
+
               await telemetryService.logMessageSent(
                 userId,
                 sessionId,
                 totalMs,
                 message.length
               );
-              
+
               await telemetryService.logOpenAICall(
                 userId,
                 sessionId,
@@ -477,7 +477,7 @@ async function chatHandler(
                   output_price_per_mtok: modelValidation.pricing?.output_per_mtok
                 }
               );
-              
+
               logger.info('Chat completion finished (fallback usage)', {
                 req_id: req.id,
                 user_id: userId,
@@ -490,7 +490,7 @@ async function chatHandler(
                 has_provider_usage: false
               });
             }
-            
+
             stream.sendEvent(ChatEventType.DONE, { finish_reason: reason });
             stream.close();
           }
@@ -502,7 +502,7 @@ async function chatHandler(
               user_id: userId,
               error: error.message
             });
-            
+
             // Log error telemetry
             await telemetryService.logError(
               userId,
@@ -510,11 +510,11 @@ async function chatHandler(
               error,
               { model, request_id: req.id, status_code: statusCode }
             );
-            
+
             // Send user-friendly error message based on status
             let userMessage = 'Service temporarily unavailable. Please try again.';
             let errorCode = 'PROVIDER_ERROR';
-            
+
             if (statusCode === 429) {
               userMessage = 'Overloaded, please try again soon.';
               errorCode = 'RATE_LIMIT';
@@ -525,16 +525,16 @@ async function chatHandler(
               userMessage = 'Request timed out. Please try again with a shorter message.';
               errorCode = 'OPENAI_TIMEOUT';
             }
-            
+
             // Send error as a token message for user visibility
             stream.sendEvent(ChatEventType.TOKEN, { text: userMessage });
-            
+
             stream.sendEvent(ChatEventType.DONE, { finish_reason: 'error' });
             stream.close();
           }
         }
       });
-      
+
       // Update telemetry with retry count
       if (metrics.retryCount > 0) {
         logger.info('Request completed with retries', {
@@ -544,7 +544,7 @@ async function chatHandler(
           openai_ms: metrics.openAiMs
         });
       }
-      
+
     } catch (error) {
       // Handle errors during request processing
       if (!stream.isClosed()) {
@@ -553,12 +553,12 @@ async function chatHandler(
           user_id: userId,
           error: error.message
         });
-        
+
         stream.sendEvent(ChatEventType.ERROR, {
           error: 'Internal server error',
           code: 'INTERNAL_ERROR'
         });
-        
+
         stream.sendEvent(ChatEventType.DONE, { finish_reason: 'error' });
         stream.close();
       }

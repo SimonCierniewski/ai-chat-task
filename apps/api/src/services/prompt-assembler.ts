@@ -4,8 +4,8 @@
  */
 
 import { logger } from '../utils/logger';
-import { RetrievalResult } from '@prototype/shared/telemetry-memory';
-import { CONFIG_PRESETS, MemoryConfig } from '@prototype/shared/memory-config';
+import { RetrievalResult } from '@prototype/shared';
+import { CONFIG_PRESETS, MemoryConfig } from '@prototype/shared';
 
 // ============================================================================
 // Types
@@ -44,9 +44,9 @@ interface TokenBudget {
 // ============================================================================
 
 export class PromptAssembler {
-  private readonly DEFAULT_SYSTEM_PROMPT = 
+  private readonly DEFAULT_SYSTEM_PROMPT =
     'You are a helpful AI assistant. Use the provided context to give accurate and relevant responses.';
-  
+
   private readonly TOKEN_BUDGET: TokenBudget = {
     total: 4000,      // Leave room for response
     memory: 1500,     // Max tokens for memory context
@@ -104,7 +104,7 @@ export class PromptAssembler {
         config,
         this.TOKEN_BUDGET.memory
       );
-      
+
       if (memoryContext.content) {
         // Add memory as part of system context
         const existingSystem = plan.messages.find(m => m.role === 'system');
@@ -116,7 +116,7 @@ export class PromptAssembler {
             content: '## Relevant Context\n' + memoryContext.content
           });
         }
-        
+
         plan.memoryTokens = memoryContext.tokens;
         plan.totalTokens += memoryContext.tokens;
         plan.itemsIncluded = memoryContext.itemsIncluded;
@@ -183,14 +183,14 @@ export class PromptAssembler {
     };
 
     // Sort by relevance score (descending)
-    const sorted = [...memoryBundle].sort((a, b) => 
+    const sorted = [...memoryBundle].sort((a, b) =>
       (b.relevance_score || 0) - (a.relevance_score || 0)
     );
 
     // Apply top_k limit
     const topK = Math.min(config.top_k || 10, sorted.length);
     const candidates = sorted.slice(0, topK);
-    
+
     if (sorted.length > topK) {
       result.itemsExcluded += sorted.length - topK;
       result.reasons.push(`${sorted.length - topK} items excluded by top_k=${topK} limit`);
@@ -249,11 +249,11 @@ export class PromptAssembler {
     // Average English word is ~4.7 characters, ~1.3 tokens per word
     const words = text.split(/\s+/).length;
     const chars = text.length;
-    
+
     // Use combination of word and character count for better estimate
     const wordBasedEstimate = words * 1.3;
     const charBasedEstimate = chars / 4;
-    
+
     // Average the two estimates
     return Math.ceil((wordBasedEstimate + charBasedEstimate) / 2);
   }
@@ -264,19 +264,19 @@ export class PromptAssembler {
   private truncateText(text: string, maxTokens: number): string {
     const estimatedCharsPerToken = 4;
     const maxChars = maxTokens * estimatedCharsPerToken;
-    
+
     if (text.length <= maxChars) {
       return text;
     }
-    
+
     // Try to truncate at a word boundary
     const truncated = text.substring(0, maxChars);
     const lastSpace = truncated.lastIndexOf(' ');
-    
+
     if (lastSpace > maxChars * 0.8) {
       return truncated.substring(0, lastSpace);
     }
-    
+
     return truncated;
   }
 
