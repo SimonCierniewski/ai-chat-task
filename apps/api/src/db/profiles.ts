@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { ProfileRow } from '../types/auth';
+import { config } from '../config';
 
 /**
  * Database client for profiles table
@@ -9,24 +10,17 @@ export class ProfilesClient {
   private supabaseAdmin: any;
 
   constructor() {
-    // Initialize Supabase admin client with service role key
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl) {
-      throw new Error('SUPABASE_URL is not configured. Cannot connect to database.');
-    }
-    
-    if (!serviceRoleKey) {
-      throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured. Cannot authenticate with database.');
-    }
-
-    this.supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    // Initialize Supabase admin client with service role key via central config
+    this.supabaseAdmin = createClient(
+      config.supabase.url,
+      config.supabase.serviceRoleKey,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      }
+    );
   }
 
   /**
