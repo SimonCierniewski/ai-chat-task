@@ -4,8 +4,8 @@
  */
 
 import { logger } from '../utils/logger';
-import { RetrievalResult } from '@prototype/shared';
-import { CONFIG_PRESETS, MemoryConfig } from '@prototype/shared';
+import { TelemetryRetrievalResult } from '@prototype/shared';
+import { CONFIG_PRESETS, BaseMemoryConfig } from '@prototype/shared';
 
 // ============================================================================
 // Types
@@ -13,9 +13,9 @@ import { CONFIG_PRESETS, MemoryConfig } from '@prototype/shared';
 
 interface PromptInput {
   userMessage: string;
-  memoryBundle?: RetrievalResult[];
+  memoryBundle?: TelemetryRetrievalResult[];
   systemPrompt?: string;
-  config?: Partial<MemoryConfig>;
+  config?: Partial<BaseMemoryConfig>;
 }
 
 interface PromptPlan {
@@ -164,8 +164,8 @@ export class PromptAssembler {
    * Build memory context with budget enforcement
    */
   private buildMemoryContext(
-    memoryBundle: RetrievalResult[],
-    config: Partial<MemoryConfig>,
+    memoryBundle: TelemetryRetrievalResult[],
+    config: Partial<BaseMemoryConfig>,
     tokenBudget: number
   ): {
     content: string;
@@ -184,7 +184,7 @@ export class PromptAssembler {
 
     // Sort by relevance score (descending)
     const sorted = [...memoryBundle].sort((a, b) =>
-      (b.relevance_score || 0) - (a.relevance_score || 0)
+      (b.score || 0) - (a.score || 0)
     );
 
     // Apply top_k limit

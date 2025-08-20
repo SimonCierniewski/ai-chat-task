@@ -11,7 +11,7 @@ import { logger } from '../../utils/logger';
 import {
   CreateGraphEdge,
   createGraphEdgeSchema,
-  RetrievalResult,
+  TelemetryRetrievalResult,
   MemorySearchQuery,
   memorySearchQuerySchema,
   estimateTokens,
@@ -50,7 +50,7 @@ interface MemoryUpsertResponse {
  * Memory search response
  */
 interface MemorySearchResponse {
-  results: RetrievalResult[];
+  results: TelemetryRetrievalResult[];
   total_tokens: number;
   timing: {
     zep_ms: number;
@@ -138,7 +138,7 @@ class ZepAdapter {
       tokenBudget?: number;
       clipSentences?: number;
     } = {}
-  ): Promise<RetrievalResult[]> {
+  ): Promise<TelemetryRetrievalResult[]> {
     // Simulate Zep API call latency
     const delay = Math.random() * 100 + 100; // 100-200ms
     await new Promise(resolve => setTimeout(resolve, delay));
@@ -155,7 +155,7 @@ class ZepAdapter {
     });
 
     // Generate mock retrieval results
-    const mockResults: RetrievalResult[] = [
+    const mockResults: TelemetryRetrievalResult[] = [
       {
         id: `result-1-${Date.now()}`,
         session_id: options.sessionId || null,
@@ -594,3 +594,6 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
     }
   }, searchMemoryHandler);
 };
+
+// Export ZepAdapter and instance for use in chat.ts
+export { ZepAdapter, zepAdapter };

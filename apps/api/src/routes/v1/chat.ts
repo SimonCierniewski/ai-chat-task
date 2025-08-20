@@ -18,7 +18,7 @@ import {
   formatSSEEvent
 } from '@prototype/shared';
 import {
-  RetrievalResult,
+  TelemetryRetrievalResult,
   calculateTotalTokens
 } from '@prototype/shared';
 import { CONFIG_PRESETS } from '@prototype/shared';
@@ -68,7 +68,7 @@ interface StreamingProvider {
  * Memory context retrieved for the request
  */
 interface MemoryContext {
-  results: RetrievalResult[];
+  results: TelemetryRetrievalResult[];
   total_tokens: number;
   context_text: string;
 }
@@ -98,9 +98,8 @@ async function retrieveMemoryContext(
   sessionId?: string
 ): Promise<MemoryContext | null> {
   try {
-    // Import the ZepAdapter class from memory.ts (would be better as shared service)
-    const { ZepAdapter } = await import('./memory');
-    const zepAdapter = new (ZepAdapter as any)();
+    // Import the zepAdapter instance from memory.ts (would be better as shared service)
+    const { zepAdapter } = await import('./memory');
 
     const memoryConfig = CONFIG_PRESETS.DEFAULT;
     const results = await zepAdapter.searchMemory(userId, message, {
@@ -129,7 +128,7 @@ async function retrieveMemoryContext(
   } catch (error) {
     logger.warn('Memory retrieval failed', {
       userId,
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     });
     return null;
   }
@@ -551,7 +550,7 @@ async function chatHandler(
         logger.error('Chat handler error', {
           req_id: req.id,
           user_id: userId,
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         });
 
         stream.sendEvent(ChatEventType.ERROR, {
@@ -568,7 +567,7 @@ async function chatHandler(
     // Handle validation errors and other early errors
     logger.error('Chat request error', {
       req_id: req.id,
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     });
 
     // If we haven't started streaming yet, send normal HTTP error

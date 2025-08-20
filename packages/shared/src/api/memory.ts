@@ -70,9 +70,9 @@ export const memorySearchQuerySchema = {
 };
 
 /**
- * Retrieval result from memory search
+ * Retrieval result from memory search (API version with content field)
  */
-export interface RetrievalResult {
+export interface MemoryRetrievalResult {
   content: string;
   score: number;
   metadata?: {
@@ -89,7 +89,7 @@ export interface RetrievalResult {
  * GET /api/v1/memory/search response
  */
 export interface MemorySearchResponse {
-  results: RetrievalResult[];
+  results: MemoryRetrievalResult[];
   query: string;
   count: number;
   total_available?: number;
@@ -165,7 +165,7 @@ export const memorySearchResponseSchema = {
  */
 export interface MemoryContext {
   facts: string[];
-  messages: RetrievalResult[];
+  messages: MemoryRetrievalResult[];
   total_tokens: number;
   truncated: boolean;
 }
@@ -197,9 +197,9 @@ export function formatMemoryContext(context: MemoryContext): string {
 /**
  * Helper to deduplicate retrieval results
  */
-export function deduplicateResults(results: RetrievalResult[]): RetrievalResult[] {
+export function deduplicateResults(results: MemoryRetrievalResult[]): MemoryRetrievalResult[] {
   const seen = new Set<string>();
-  const deduplicated: RetrievalResult[] = [];
+  const deduplicated: MemoryRetrievalResult[] = [];
   
   for (const result of results) {
     const hash = result.content.toLowerCase().trim();
@@ -215,7 +215,7 @@ export function deduplicateResults(results: RetrievalResult[]): RetrievalResult[
 /**
  * Helper to sort results by score
  */
-export function sortByScore(results: RetrievalResult[]): RetrievalResult[] {
+export function sortByScore(results: MemoryRetrievalResult[]): MemoryRetrievalResult[] {
   return [...results].sort((a, b) => b.score - a.score);
 }
 

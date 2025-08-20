@@ -44,9 +44,9 @@ export interface MessageMetadata {
 }
 
 /**
- * Result from memory retrieval/search
+ * Result from memory retrieval/search (telemetry version with text field)
  */
-export interface RetrievalResult {
+export interface TelemetryRetrievalResult {
   id: string;                       // Unique result identifier
   session_id?: string | null;       // Session if from message history
   text: string;                     // Retrieved content
@@ -156,7 +156,7 @@ export const messageSchema: any = {
 };
 
 /**
- * JSON Schema for RetrievalResult validation
+ * JSON Schema for TelemetryRetrievalResult validation
  */
 export const retrievalResultSchema: any = {
   type: 'object',
@@ -321,7 +321,7 @@ export function truncateToTokens(text: string, maxTokens: number): string {
 /**
  * Sort retrieval results by relevance
  */
-export function sortByRelevance(results: RetrievalResult[]): RetrievalResult[] {
+export function sortByRelevance(results: TelemetryRetrievalResult[]): TelemetryRetrievalResult[] {
   return results.sort((a, b) => b.score - a.score);
 }
 
@@ -329,16 +329,16 @@ export function sortByRelevance(results: RetrievalResult[]): RetrievalResult[] {
  * Filter results by minimum score
  */
 export function filterByScore(
-  results: RetrievalResult[], 
+  results: TelemetryRetrievalResult[], 
   minScore: number
-): RetrievalResult[] {
+): TelemetryRetrievalResult[] {
   return results.filter(r => r.score >= minScore);
 }
 
 /**
  * Calculate total tokens for results
  */
-export function calculateTotalTokens(results: RetrievalResult[]): number {
+export function calculateTotalTokens(results: TelemetryRetrievalResult[]): number {
   return results.reduce((sum, r) => sum + r.tokens_estimate, 0);
 }
 
@@ -346,10 +346,10 @@ export function calculateTotalTokens(results: RetrievalResult[]): number {
  * Trim results to fit token budget
  */
 export function trimToTokenBudget(
-  results: RetrievalResult[],
+  results: TelemetryRetrievalResult[],
   maxTokens: number
-): RetrievalResult[] {
-  const trimmed: RetrievalResult[] = [];
+): TelemetryRetrievalResult[] {
+  const trimmed: TelemetryRetrievalResult[] = [];
   let totalTokens = 0;
   
   for (const result of results) {
