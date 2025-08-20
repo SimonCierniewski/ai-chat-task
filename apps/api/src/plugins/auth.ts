@@ -155,8 +155,12 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
 
     // Log if profile was auto-created
     const profile = await profilesClient.getProfile(userId);
-    if (profile && Math.abs(profile.created_at.getTime() - profile.updated_at.getTime()) < 1000) {
-      request.log.info({ userId, req_id: request.id }, 'Auto-created profile for new user');
+    if (profile) {
+      const createdAt = new Date(profile.created_at);
+      const updatedAt = new Date(profile.updated_at);
+      if (Math.abs(createdAt.getTime() - updatedAt.getTime()) < 1000) {
+        request.log.info({ userId, req_id: request.id }, 'Auto-created profile for new user');
+      }
     }
 
     return userContext;
@@ -164,14 +168,14 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
 
   // Add hook to initialize user cache
   fastify.decorateRequest('userCache', null);
-  
+
   // Add auth verification hook
   fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     // Skip auth for excluded paths
-    const isExcluded = options.excludePaths?.some(path => 
+    const isExcluded = options.excludePaths?.some(path =>
       request.url === path || request.url.startsWith(path + '?')
     );
-    
+
     if (isExcluded) {
       return;
     }
@@ -220,7 +224,7 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (
 
       let message = 'Invalid or expired token';
       let code = 'UNAUTHENTICATED';
-      
+
       if (error instanceof Error) {
         if (error.name === 'TokenExpiredError') {
           message = 'Token has expired';
