@@ -209,11 +209,20 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
       total_ms: totalMs
     });
 
+    // Build simple/estimated pagination info
+    const rawCount = listResult?.users?.length || 0;
+    const hasNextPage = rawCount === limit && !search;
+    const estimatedTotal = (page - 1) * limit + adminUsers.length + (hasNextPage ? 1 : 0);
+    const totalPages = hasNextPage ? page + 1 : page;
+
     return reply.status(200).send({
       users: adminUsers,
-      total: adminUsers.length,
-      page,
-      limit,
+      pagination: {
+        page,
+        limit,
+        total: estimatedTotal,
+        totalPages,
+      },
       fetched_at: new Date().toISOString(),
     });
 
