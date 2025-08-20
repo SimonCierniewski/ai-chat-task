@@ -1,40 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 import { createServerClient } from '@supabase/ssr'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { validateAdminEnvironment } from '@/lib/validate-env'
-
-// Validate environment on first load
-let envValidated = false;
 
 export async function middleware(request: NextRequest) {
-  // Validate environment once
-  if (!envValidated) {
-    try {
-      validateAdminEnvironment();
-      envValidated = true;
-    } catch (error) {
-      console.error('Environment validation failed:', error);
-      // Return error page for all requests
-      return new NextResponse(
-        `<!DOCTYPE html>
-        <html>
-          <head><title>Configuration Error</title></head>
-          <body style="font-family: system-ui; padding: 2rem;">
-            <h1>⚠️ Configuration Error</h1>
-            <p>The admin panel is not properly configured.</p>
-            <pre style="background: #f4f4f4; padding: 1rem; border-radius: 4px;">${error instanceof Error ? error.message : 'Unknown error'}</pre>
-            <p>Please check your .env.local file and restart the server.</p>
-          </body>
-        </html>`,
-        {
-          status: 500,
-          headers: { 'content-type': 'text/html' },
-        }
-      );
-    }
-  }
-  
   // Update session first
   const response = await updateSession(request)
   
@@ -46,7 +14,7 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Create supabase client for auth check
+  // For admin routes, verify authentication and admin role
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -61,30 +29,27 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Check if user is authenticated
+  // Check authentication
   const { data: { user }, error: userError } = await supabase.auth.getUser()
   
   if (userError || !user) {
-    // Redirect to login if not authenticated
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Verify admin role using regular Supabase session RLS
-  try {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('user_id', user.id)
-      .single()
+  // Check admin role (single query)
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('user_id', user.id)
+    .single()
 
-    if (profile?.role !== 'admin') {
-      // Redirect to unauthorized if not admin
-      return NextResponse.redirect(new URL('/unauthorized', request.url))
-    }
-  } catch (error) {
-    console.error('Error checking admin role:', error)
+  if (profileError || profile?.role !== 'admin') {
+    console.error('Admin check failed:', profileError || 'Not admin role')
     return NextResponse.redirect(new URL('/unauthorized', request.url))
   }
+  
+  // Set a header to indicate role was verified (optional, for debugging)
+  response.headers.set('X-Admin-Verified', 'true')
 
   return response
 }

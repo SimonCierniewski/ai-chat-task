@@ -6,22 +6,19 @@ import { useAuth } from '@/providers/auth-provider'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
+  // kept for API compatibility but not used for authorization here
   requireAdmin?: boolean
 }
 
-export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
-  const { user, profile, loading } = useAuth()
+export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { user, loading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        router.push('/login')
-      } else if (requireAdmin && profile?.role !== 'admin') {
-        router.push('/unauthorized')
-      }
+    if (!loading && !user) {
+      router.push('/login')
     }
-  }, [user, profile, loading, requireAdmin, router])
+  }, [user, loading, router])
 
   if (loading) {
     return (
@@ -32,10 +29,6 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
   }
 
   if (!user) {
-    return null
-  }
-
-  if (requireAdmin && profile?.role !== 'admin') {
     return null
   }
 

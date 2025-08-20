@@ -32,6 +32,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
 
   const fetchProfile = async (userId: string) => {
+    // Skip fetching profile for admin pages - middleware already verified
+    // This is only needed for non-admin authenticated pages
+    const isAdminPath = window.location.pathname.startsWith('/admin')
+    
+    if (isAdminPath) {
+      // For admin paths, we know the user is admin (middleware verified)
+      setProfile({
+        id: userId,
+        email: session?.user?.email || '',
+        role: 'admin',
+      })
+      return
+    }
+    
+    // For non-admin paths, fetch the actual role
     try {
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
       if (!apiBaseUrl || !session?.access_token) {
