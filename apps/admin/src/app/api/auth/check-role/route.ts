@@ -18,14 +18,18 @@ export async function GET() {
   try {
     // Use service role key for admin operations (SERVER ONLY)
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    
+    console.log('Service role key configured:', !!serviceRoleKey)
+    console.log('User ID:', user.id)
 
     if (!serviceRoleKey) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY not configured')
+      console.error('SUPABASE_SERVICE_ROLE_KEY not configured - please set it in .env.local')
       return NextResponse.json({
         authenticated: true,
         userId: user.id,
         email: user.email,
-        role: user.role
+        role: 'user', // Default to user if service key missing
+        warning: 'Service role key not configured - cannot fetch actual role from profiles table'
       })
     }
 
@@ -42,11 +46,14 @@ export async function GET() {
     )
 
     // Fetch profile directly from database
+    console.log('Fetching profile for user:', user.id)
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('role')
       .eq('user_id', user.id)
       .single()
+
+    console.log('Profile fetch result:', { profile, error: profileError })
 
     if (profileError) {
       console.error('Error fetching profile:', profileError)
@@ -82,6 +89,8 @@ export async function GET() {
       }
     }
 
+    console.log('Returning role:', profile?.role || 'user')
+    
     return NextResponse.json({
       authenticated: true,
       userId: user.id,
