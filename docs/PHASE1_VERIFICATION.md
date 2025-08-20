@@ -187,7 +187,7 @@ curl -v http://localhost:3000/health
 
 ```bash
 # Without token - should return 401
-curl -v http://localhost:3000/api/me
+curl -v http://localhost:3000/api/v1/auth/ping
 
 # Expected response:
 HTTP/1.1 401 Unauthorized
@@ -197,7 +197,7 @@ HTTP/1.1 401 Unauthorized
 }
 
 # With invalid token - should return 401
-curl -v http://localhost:3000/api/me \
+curl -v http://localhost:3000/api/v1/auth/ping \
   -H "Authorization: Bearer invalid-token"
 
 # Expected response:
@@ -222,7 +222,7 @@ Or use the Admin app to get a token (see Admin testing section).
 # With valid token - should return 200
 export TOKEN="your-valid-jwt-token"
 
-curl -v http://localhost:3000/api/me \
+curl -v http://localhost:3000/api/v1/auth/ping \
   -H "Authorization: Bearer $TOKEN"
 
 # Expected response:
@@ -266,7 +266,7 @@ HTTP/1.1 200 OK
 
 ```bash
 # From allowed origin - should succeed
-curl -v http://localhost:3000/api/me \
+curl -v http://localhost:3000/api/v1/auth/ping \
   -H "Origin: http://localhost:3001" \
   -H "Authorization: Bearer $TOKEN"
 
@@ -275,7 +275,7 @@ curl -v http://localhost:3000/api/me \
 # < Access-Control-Allow-Credentials: true
 
 # From disallowed origin - should fail preflight
-curl -v -X OPTIONS http://localhost:3000/api/me \
+curl -v -X OPTIONS http://localhost:3000/api/v1/auth/ping \
   -H "Origin: http://evil.com" \
   -H "Access-Control-Request-Method: GET" \
   -H "Access-Control-Request-Headers: Authorization" \
@@ -509,7 +509,7 @@ After authentication:
   - [ ] `/` - no auth required
 
 - [ ] **Protected**
-  - [ ] `/api/me` - requires auth
+  - [ ] `/api/v1/auth/ping` - requires auth
   - [ ] `/api/auth/status` - shows auth state
 
 - [ ] **Admin**

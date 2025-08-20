@@ -180,7 +180,7 @@ val authViewModel: AuthViewModel = viewModel()
 val token = authViewModel.getAccessToken()
 
 // Use token for API calls
-val response = apiClient.get("/api/me") {
+val response = apiClient.get("/api/v1/auth/status") {
     header("Authorization", "Bearer $token")
 }
 ```

@@ -135,7 +135,8 @@ All API endpoints are versioned under `/api/v1`:
 
 ### Protected Endpoints (requires auth)
 
-- `GET /api/v1/me` - Get current user info
+- `GET /api/v1/auth/ping` - Test authentication
+- `GET /api/v1/auth/status` - Get auth status
 - `POST /api/v1/chat` - SSE chat stream
 - `GET /api/v1/memory/search` - Search memory
 - `POST /api/v1/memory/upsert` - Update memory

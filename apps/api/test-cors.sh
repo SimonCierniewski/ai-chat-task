@@ -17,7 +17,7 @@ curl -s "$API_URL/health" | jq '.'
 
 # Test preflight from allowed admin origin
 echo -e "\n✅ Testing preflight from Admin origin ($ADMIN_ORIGIN):"
-curl -s -X OPTIONS "$API_URL/api/me" \
+curl -s -X OPTIONS "$API_URL/api/v1/auth/ping" \
   -H "Origin: $ADMIN_ORIGIN" \
   -H "Access-Control-Request-Method: GET" \
   -H "Access-Control-Request-Headers: Authorization" \
@@ -25,7 +25,7 @@ curl -s -X OPTIONS "$API_URL/api/me" \
 
 # Test preflight from allowed Android origin
 echo -e "\n✅ Testing preflight from Android origin ($ANDROID_ORIGIN):"
-curl -s -X OPTIONS "$API_URL/api/me" \
+curl -s -X OPTIONS "$API_URL/api/v1/auth/ping" \
   -H "Origin: $ANDROID_ORIGIN" \
   -H "Access-Control-Request-Method: GET" \
   -H "Access-Control-Request-Headers: Authorization" \
@@ -33,7 +33,7 @@ curl -s -X OPTIONS "$API_URL/api/me" \
 
 # Test preflight from invalid origin (should fail)
 echo -e "\n❌ Testing preflight from invalid origin ($INVALID_ORIGIN):"
-curl -s -X OPTIONS "$API_URL/api/me" \
+curl -s -X OPTIONS "$API_URL/api/v1/auth/ping" \
   -H "Origin: $INVALID_ORIGIN" \
   -H "Access-Control-Request-Method: GET" \
   -H "Access-Control-Request-Headers: Authorization" \
@@ -41,7 +41,7 @@ curl -s -X OPTIONS "$API_URL/api/me" \
 
 # Test actual request with valid origin
 echo -e "\n✅ Testing actual request with Admin origin:"
-curl -s "$API_URL/api/auth/status" \
+curl -s "$API_URL/api/v1/auth/status" \
   -H "Origin: $ADMIN_ORIGIN" \
   -v 2>&1 | grep -E "(< HTTP|< Access-Control-Allow-Origin)"
 

@@ -155,50 +155,6 @@ export async function buildServer(): Promise<FastifyInstance> {
   await server.register(healthRoutes);
 
   await server.register(v1Routes, { prefix: '/api/v1' });
-  
-  // Add non-versioned /api/me endpoint for backward compatibility
-  server.get('/api/me', {
-    schema: {
-      description: 'Get current user profile (non-versioned route)',
-      tags: ['Auth'],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            user: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                email: { type: 'string' },
-                role: { type: 'string' },
-                created_at: { type: 'string' },
-                updated_at: { type: 'string' },
-              },
-            },
-          },
-        },
-        401: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' },
-            message: { type: 'string' },
-            code: { type: 'string' },
-            req_id: { type: 'string' },
-          },
-        },
-      },
-    },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    // Forward to versioned endpoint
-    return server.inject({
-      method: 'GET',
-      url: '/api/v1/auth/me',
-      headers: request.headers,
-    }).then(response => {
-      reply.code(response.statusCode);
-      return response.json();
-    });
-  });
 
   server.get('/', async (request, reply) => {
     return {
