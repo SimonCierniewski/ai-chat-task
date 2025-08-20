@@ -55,7 +55,7 @@ export default function PlaygroundPage() {
   const [timing, setTiming] = useState<TimingData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
-  
+
   const eventSourceRef = useRef<EventSource | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const firstTokenTimeRef = useRef<number | null>(null);
@@ -63,7 +63,7 @@ export default function PlaygroundPage() {
   // Fetch available models on mount
   useEffect(() => {
     fetchModels();
-    
+
     // Cleanup on unmount
     return () => {
       if (eventSourceRef.current) {
@@ -76,7 +76,7 @@ export default function PlaygroundPage() {
     try {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session?.access_token) {
         console.warn('No session token available for fetching models');
         // Fallback to default models
@@ -137,7 +137,7 @@ export default function PlaygroundPage() {
     try {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session?.access_token) {
         throw new Error('Please sign in to use the playground');
       }
@@ -178,7 +178,7 @@ export default function PlaygroundPage() {
       // Process SSE stream
       while (true) {
         const { done, value } = await reader.read();
-        
+
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -188,7 +188,7 @@ export default function PlaygroundPage() {
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
-            
+
             if (data === '[DONE]') {
               // Stream complete
               if (startTimeRef.current) {
@@ -202,7 +202,7 @@ export default function PlaygroundPage() {
 
             try {
               const parsed = JSON.parse(data);
-              
+
               // Handle different event types based on the event field in SSE
               if (parsed.text !== undefined) {
                 // Token event
@@ -256,8 +256,8 @@ export default function PlaygroundPage() {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 4,
-      maximumFractionDigits: 4
+      minimumFractionDigits: 10,
+      maximumFractionDigits: 10
     }).format(cost);
   };
 
@@ -270,11 +270,11 @@ export default function PlaygroundPage() {
 
   return (
     <>
-      <AdminHeader 
-        title="Playground" 
+      <AdminHeader
+        title="Playground"
         subtitle="Test the AI chat system with different configurations"
       />
-      
+
       <div className="p-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Configuration Panel */}
@@ -399,7 +399,7 @@ export default function PlaygroundPage() {
                   </div>
                 )}
               </div>
-              
+
               {/* Usage Stats */}
               {usage && (
                 <div className="mt-4 grid grid-cols-3 gap-4">
