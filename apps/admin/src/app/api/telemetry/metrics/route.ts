@@ -76,86 +76,128 @@ export async function GET(request: NextRequest) {
       model: searchParams.get('model') || undefined,
     };
 
-    // Fetch metrics from the backend API
-    const metricsUrl = new URL('/api/v1/admin/metrics', publicConfig.apiBaseUrl);
-    if (query.from) metricsUrl.searchParams.append('from', query.from);
-    if (query.to) metricsUrl.searchParams.append('to', query.to);
-    if (query.userId) metricsUrl.searchParams.append('userId', query.userId);
-    if (query.model) metricsUrl.searchParams.append('model', query.model);
+    // Try to fetch metrics from the backend API first
+    try {
+      const metricsUrl = new URL('/api/v1/admin/metrics', publicConfig.apiBaseUrl);
+      if (query.from) metricsUrl.searchParams.append('from', query.from);
+      if (query.to) metricsUrl.searchParams.append('to', query.to);
+      if (query.userId) metricsUrl.searchParams.append('userId', query.userId);
+      if (query.model) metricsUrl.searchParams.append('model', query.model);
 
-    const metricsResponse = await fetch(metricsUrl.toString(), {
-      headers: {
-        'Authorization': `Bearer ${user.access_token}`,
-        'Content-Type': 'application/json',
-      },
-    });
+      const metricsResponse = await fetch(metricsUrl.toString(), {
+        headers: {
+          'Authorization': `Bearer ${user.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-    if (!metricsResponse.ok) {
-      // If the backend API isn't available, return mock data for development
-      if (metricsResponse.status === 404 || metricsResponse.status === 502) {
-        return NextResponse.json(getMockMetrics(query));
+      if (metricsResponse.ok) {
+        const metrics = await metricsResponse.json();
+        return NextResponse.json(metrics);
       }
-      throw new Error(`Metrics API error: ${metricsResponse.status}`);
+    } catch (error) {
+      console.log('Backend API not available, fetching directly from Supabase');
     }
 
-    const metrics = await metricsResponse.json();
-    return NextResponse.json(metrics);
+    // Fallback to direct Supabase query
+    // Build the query for daily_usage_view
+    let dailyQuery = supabase
+      .from('daily_usage_view')
+      .select('*')
+      .gte('day', query.from!)
+      .lte('day', query.to!);
+
+    if (query.userId) {
+      dailyQuery = dailyQuery.eq('user_id', query.userId);
+    }
+    if (query.model) {
+      dailyQuery = dailyQuery.eq('model', query.model);
+    }
+
+    const { data: dailyData, error: dailyError } = await dailyQuery;
+
+    if (dailyError) {
+      console.error('Error fetching daily metrics:', dailyError);
+      return NextResponse.json(
+        { error: 'Failed to fetch metrics from database' },
+        { status: 500 }
+      );
+    }
+
+    // Aggregate the data
+    const daily: DailyMetric[] = [];
+    const dayMap = new Map<string, DailyMetric>();
+    const modelMap = new Map<string, { count: number; total_cost: number }>();
+
+    for (const row of dailyData || []) {
+      const dayKey = row.day;
+      if (!dayMap.has(dayKey)) {
+        dayMap.set(dayKey, {
+          day: dayKey,
+          messages: 0,
+          total_cost: 0,
+          avg_ttft_ms: 0,
+          avg_response_ms: 0,
+          tokens_in: 0,
+          tokens_out: 0,
+        });
+      }
+
+      const dayMetric = dayMap.get(dayKey)!;
+      dayMetric.messages += row.calls || 0;
+      dayMetric.total_cost += row.cost_usd || 0;
+      dayMetric.avg_ttft_ms = row.avg_ttft_ms || 0;
+      dayMetric.avg_response_ms = row.avg_duration_ms || 0;
+      dayMetric.tokens_in += row.tokens_in || 0;
+      dayMetric.tokens_out += row.tokens_out || 0;
+
+      // Aggregate by model
+      const modelKey = row.model || 'unknown';
+      if (!modelMap.has(modelKey)) {
+        modelMap.set(modelKey, { count: 0, total_cost: 0 });
+      }
+      const modelMetric = modelMap.get(modelKey)!;
+      modelMetric.count += row.calls || 0;
+      modelMetric.total_cost += row.cost_usd || 0;
+    }
+
+    // Convert maps to arrays
+    daily.push(...Array.from(dayMap.values()).sort((a, b) => a.day.localeCompare(b.day)));
+
+    const models = Array.from(modelMap.entries()).map(([model, data]) => ({
+      model,
+      count: data.count,
+      total_cost: data.total_cost,
+    }));
+
+    // Calculate KPIs
+    const totalMessages = daily.reduce((sum, d) => sum + d.messages, 0);
+    const totalCost = daily.reduce((sum, d) => sum + d.total_cost, 0);
+    const avgTtft = daily.length > 0 
+      ? daily.reduce((sum, d) => sum + d.avg_ttft_ms, 0) / daily.length 
+      : 0;
+    const avgResponse = daily.length > 0
+      ? daily.reduce((sum, d) => sum + d.avg_response_ms, 0) / daily.length
+      : 0;
+
+    const response: MetricsResponse = {
+      kpis: {
+        total_messages: totalMessages,
+        total_cost: totalCost,
+        avg_ttft_ms: Math.round(avgTtft),
+        avg_response_ms: Math.round(avgResponse),
+      },
+      daily,
+      models,
+    };
+
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Error fetching metrics:', error);
-    // Return mock data in development
-    if (process.env.NODE_ENV === 'development') {
-      return NextResponse.json(getMockMetrics({}));
-    }
     return NextResponse.json(
       { error: 'Failed to fetch metrics' },
       { status: 500 }
     );
   }
-}
-
-// Mock data for development/testing
-function getMockMetrics(query: MetricsQuery): MetricsResponse {
-  const days = 7;
-  const baseDate = new Date(query.to || new Date());
-  
-  const daily: DailyMetric[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(baseDate);
-    date.setDate(date.getDate() - i);
-    daily.push({
-      day: date.toISOString().split('T')[0],
-      messages: Math.floor(Math.random() * 500) + 100,
-      total_cost: Math.random() * 50 + 10,
-      avg_ttft_ms: Math.floor(Math.random() * 200) + 150,
-      avg_response_ms: Math.floor(Math.random() * 1000) + 500,
-      tokens_in: Math.floor(Math.random() * 50000) + 10000,
-      tokens_out: Math.floor(Math.random() * 100000) + 20000,
-    });
-  }
-
-  const totalMessages = daily.reduce((sum, d) => sum + d.messages, 0);
-  const totalCost = daily.reduce((sum, d) => sum + d.total_cost, 0);
-  const avgTtft = daily.reduce((sum, d) => sum + d.avg_ttft_ms, 0) / daily.length;
-  const avgResponse = daily.reduce((sum, d) => sum + d.avg_response_ms, 0) / daily.length;
-
-  return {
-    kpis: {
-      total_messages: totalMessages,
-      total_cost: totalCost,
-      avg_ttft_ms: Math.round(avgTtft),
-      avg_response_ms: Math.round(avgResponse),
-    },
-    daily,
-    models: [
-      { model: 'gpt-4o-mini', count: Math.floor(totalMessages * 0.6), total_cost: totalCost * 0.3 },
-      { model: 'gpt-4o', count: Math.floor(totalMessages * 0.3), total_cost: totalCost * 0.6 },
-      { model: 'gpt-3.5-turbo', count: Math.floor(totalMessages * 0.1), total_cost: totalCost * 0.1 },
-    ],
-    users: [
-      { user_id: 'user-1', email: 'alice@example.com', message_count: Math.floor(totalMessages * 0.4), total_cost: totalCost * 0.4 },
-      { user_id: 'user-2', email: 'bob@example.com', message_count: Math.floor(totalMessages * 0.35), total_cost: totalCost * 0.35 },
-      { user_id: 'user-3', email: 'charlie@example.com', message_count: Math.floor(totalMessages * 0.25), total_cost: totalCost * 0.25 },
-    ],
-  };
 }

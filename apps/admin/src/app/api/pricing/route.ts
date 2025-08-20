@@ -56,26 +56,24 @@ export async function GET(request: NextRequest) {
       console.log('Backend API not available, using fallback data');
     }
 
-    // Fallback to direct Supabase query or mock data
+    // Fallback to direct Supabase query
     const { data: pricing, error: pricingError } = await supabase
       .from('models_pricing')
       .select('*')
       .order('model', { ascending: true });
 
-    if (pricingError || !pricing) {
-      // Return mock data if database is not set up
-      return NextResponse.json({ models: getMockPricing() });
+    if (pricingError) {
+      console.error('Error fetching pricing from Supabase:', pricingError);
+      return NextResponse.json(
+        { error: 'Failed to fetch pricing from database' },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ models: pricing });
+    return NextResponse.json({ models: pricing || [] });
 
   } catch (error) {
     console.error('Error fetching pricing:', error);
-    
-    // Return mock data in development
-    if (process.env.NODE_ENV === 'development') {
-      return NextResponse.json({ models: getMockPricing() });
-    }
     
     return NextResponse.json(
       { error: 'Failed to fetch pricing' },
@@ -219,50 +217,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-// Mock data for development
-function getMockPricing(): ModelPricing[] {
-  return [
-    {
-      model: 'gpt-4o-mini',
-      display_name: 'GPT-4 Mini',
-      input_per_mtok: 0.15,
-      output_per_mtok: 0.6,
-      cached_input_per_mtok: 0.075,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      model: 'gpt-4o',
-      display_name: 'GPT-4',
-      input_per_mtok: 5,
-      output_per_mtok: 15,
-      cached_input_per_mtok: 2.5,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      model: 'gpt-3.5-turbo',
-      display_name: 'GPT-3.5 Turbo',
-      input_per_mtok: 0.5,
-      output_per_mtok: 1.5,
-      cached_input_per_mtok: 0.25,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      model: 'claude-3-opus-20240229',
-      display_name: 'Claude 3 Opus',
-      input_per_mtok: 15,
-      output_per_mtok: 75,
-      cached_input_per_mtok: 7.5,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      model: 'claude-3-sonnet-20240229',
-      display_name: 'Claude 3 Sonnet',
-      input_per_mtok: 3,
-      output_per_mtok: 15,
-      cached_input_per_mtok: 1.5,
-      updated_at: new Date().toISOString(),
-    },
-  ];
 }

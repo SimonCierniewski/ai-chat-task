@@ -135,58 +135,9 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching users:', error);
     
-    // Return mock data in development
-    if (process.env.NODE_ENV === 'development') {
-      return NextResponse.json(getMockUsers(
-        parseInt(request.nextUrl.searchParams.get('page') || '1'),
-        parseInt(request.nextUrl.searchParams.get('limit') || '10'),
-        request.nextUrl.searchParams.get('search') || ''
-      ));
-    }
-    
     return NextResponse.json(
       { error: 'Failed to fetch users' },
       { status: 500 }
     );
   }
-}
-
-// Mock data for development
-function getMockUsers(page: number, limit: number, search: string) {
-  const allUsers: User[] = [
-    { id: 'user-1', email: 'alice@example.com', created_at: '2024-01-01T00:00:00Z', role: 'admin', message_count: 234 },
-    { id: 'user-2', email: 'bob@example.com', created_at: '2024-01-02T00:00:00Z', role: 'user', message_count: 156 },
-    { id: 'user-3', email: 'charlie@example.com', created_at: '2024-01-03T00:00:00Z', role: 'user', message_count: 89 },
-    { id: 'user-4', email: 'diana@example.com', created_at: '2024-01-04T00:00:00Z', role: 'user', message_count: 45 },
-    { id: 'user-5', email: 'eve@example.com', created_at: '2024-01-05T00:00:00Z', role: 'admin', message_count: 312 },
-    { id: 'user-6', email: 'frank@example.com', created_at: '2024-01-06T00:00:00Z', role: 'user', message_count: 67 },
-    { id: 'user-7', email: 'grace@example.com', created_at: '2024-01-07T00:00:00Z', role: 'user', message_count: 123 },
-    { id: 'user-8', email: 'henry@example.com', created_at: '2024-01-08T00:00:00Z', role: 'user', message_count: 234 },
-    { id: 'user-9', email: 'iris@example.com', created_at: '2024-01-09T00:00:00Z', role: 'user', message_count: 456 },
-    { id: 'user-10', email: 'jack@example.com', created_at: '2024-01-10T00:00:00Z', role: 'user', message_count: 78 },
-    { id: 'user-11', email: 'karen@example.com', created_at: '2024-01-11T00:00:00Z', role: 'user', message_count: 90 },
-    { id: 'user-12', email: 'liam@example.com', created_at: '2024-01-12T00:00:00Z', role: 'user', message_count: 234 },
-  ];
-
-  let filteredUsers = allUsers;
-  if (search) {
-    const searchLower = search.toLowerCase();
-    filteredUsers = allUsers.filter(u => 
-      u.email.toLowerCase().includes(searchLower) ||
-      u.id.toLowerCase().includes(searchLower)
-    );
-  }
-
-  const offset = (page - 1) * limit;
-  const paginatedUsers = filteredUsers.slice(offset, offset + limit);
-
-  return {
-    users: paginatedUsers,
-    pagination: {
-      page,
-      limit,
-      total: filteredUsers.length,
-      totalPages: Math.ceil(filteredUsers.length / limit),
-    },
-  };
 }
