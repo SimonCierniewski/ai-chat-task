@@ -33,7 +33,22 @@ export default function PlaygroundPage() {
   const [message, setMessage] = useState('');
   const [useMemory, setUseMemory] = useState(true);
   const [model, setModel] = useState('gpt-4o-mini');
-  const [sessionId] = useState(`session-${Date.now()}`);
+  const [sessionId] = useState(() => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const now = new Date();
+    const y = now.getFullYear().toString();
+    const m = pad(now.getMonth() + 1);
+    const d = pad(now.getDate());
+    const hh = pad(now.getHours());
+    const mm = pad(now.getMinutes());
+    const ss = pad(now.getSeconds());
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let suffix = '';
+    for (let i = 0; i < 4; i++) {
+      suffix += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return `session-${y}${m}${d}-${hh}${mm}${ss}-${suffix}`;
+  });
   const [response, setResponse] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [usage, setUsage] = useState<UsageData | null>(null);
