@@ -10,7 +10,7 @@ interface ModelPricing {
   display_name?: string;
   input_per_mtok: number;
   output_per_mtok: number;
-  cached_input_per_mtok?: number;
+  cached_input_per_mtok: number | null;
   updated_at?: string;
 }
 
@@ -24,7 +24,7 @@ export default function PricingPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [editingModel, setEditingModel] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  
+
   // Calculator state
   const [calcModel, setCalcModel] = useState<string>('');
   const [calcInputTokens, setCalcInputTokens] = useState<number>(1000);
@@ -51,7 +51,7 @@ export default function PricingPage() {
       setError(null);
 
       const response = await fetch('/api/pricing');
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch pricing');
       }
@@ -59,7 +59,7 @@ export default function PricingPage() {
       const data = await response.json();
       setModels(data.models || []);
       setOriginalModels(data.models || []);
-      
+
       if (data.models && data.models.length > 0) {
         setCalcModel(data.models[0].model);
       }
@@ -94,7 +94,7 @@ export default function PricingPage() {
       setOriginalModels(models);
       setSuccessMessage('Pricing updated successfully! Changes will be reflected in the playground.');
       setEditingModel(null);
-      
+
       // Refresh the page after a delay to show success message
       setTimeout(() => {
         router.refresh();
@@ -109,7 +109,7 @@ export default function PricingPage() {
 
   const handlePriceChange = (model: string, field: keyof ModelPricing, value: string) => {
     const numValue = parseFloat(value) || 0;
-    setModels(prev => prev.map(m => 
+    setModels(prev => prev.map(m =>
       m.model === model ? { ...m, [field]: numValue } : m
     ));
   };
@@ -148,8 +148,8 @@ export default function PricingPage() {
   if (loading) {
     return (
       <>
-        <AdminHeader 
-          title="Pricing Configuration" 
+        <AdminHeader
+          title="Pricing Configuration"
           subtitle="Manage model pricing for cost calculations"
         />
         <div className="p-8">
@@ -163,11 +163,11 @@ export default function PricingPage() {
 
   return (
     <>
-      <AdminHeader 
-        title="Pricing Configuration" 
+      <AdminHeader
+        title="Pricing Configuration"
         subtitle="Manage model pricing for cost calculations"
       />
-      
+
       <div className="p-8">
         {/* Notifications */}
         {error && (
@@ -175,7 +175,7 @@ export default function PricingPage() {
             <p className="text-red-700">{error}</p>
           </div>
         )}
-        
+
         {successMessage && (
           <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
             <p className="text-green-700">{successMessage}</p>
@@ -327,7 +327,7 @@ export default function PricingPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Model
               </label>
-              <select 
+              <select
                 value={calcModel}
                 onChange={(e) => setCalcModel(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"

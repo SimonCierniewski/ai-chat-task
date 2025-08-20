@@ -69,8 +69,9 @@ interface ModelPricingRequest {
   model: string;
   input_per_mtok: number;
   output_per_mtok: number;
-  cached_input_per_mtok?: number;
+  cached_input_per_mtok: number | null;
 }
+interface ModelPricingBatchRequest { models: ModelPricingRequest[] }
 
 interface UpdateUserRoleParams {
   userId: string;
@@ -442,79 +443,73 @@ async function listModelsHandler(
  * Upsert model pricing configuration
  */
 async function updateModelPricingHandler(
-  req: FastifyRequest<{ Body: ModelPricingRequest }>,
+  req: FastifyRequest<{ Body: ModelPricingRequest | ModelPricingBatchRequest }>,
   reply: FastifyReply
 ) {
   const startTime = Date.now();
 
   try {
-    // Validate request body
-    const validation = validatePricingRequest(req.body);
-    if (!validation.valid) {
+    // Normalize to array
+    const body = req.body as ModelPricingRequest | ModelPricingBatchRequest;
+    const items: ModelPricingRequest[] = Array.isArray((body as any).models)
+      ? (body as ModelPricingBatchRequest).models
+      : [body as ModelPricingRequest];
+
+    // Validate each item
+    const errors: any[] = [];
+    const validItems: ModelPricingRequest[] = [];
+    for (const item of items) {
+      const v = validatePricingRequest(item);
+      if (!v.valid) {
+        errors.push(...(v.errors || []));
+      } else {
+        validItems.push(item);
+      }
+    }
+    if (errors.length > 0) {
       return reply.status(400).send({
         error: 'VALIDATION_ERROR',
         message: 'Invalid request body',
-        details: validation.errors
+        details: errors,
       });
     }
-
-    const { model, input_per_mtok, output_per_mtok, cached_input_per_mtok } = req.body;
 
     logger.info('Admin pricing update requested', {
       req_id: req.id,
       admin_id: (req as any).user.id,
-      model,
-      input_per_mtok,
-      output_per_mtok,
-      cached_input_per_mtok
+      count: items.length,
     });
 
-    // Upsert into models_pricing table
-    const pricingData = {
-      model,
-      input_per_mtok,
-      output_per_mtok,
-      cached_input_per_mtok: cached_input_per_mtok || null,
-      updated_at: new Date().toISOString()
-    };
+    const updatedAt = new Date().toISOString();
 
-    const { error } = await supabaseAdmin
-      .from('models_pricing')
-      .upsert(pricingData, {
-        onConflict: 'model'
-      })
-      .select();
-
-    if (error) {
-      logger.error('Failed to upsert model pricing', {
-        req_id: req.id,
+    for (const { model, input_per_mtok, output_per_mtok, cached_input_per_mtok } of validItems) {
+      const pricingData = {
         model,
-        error: error.message
-      });
-      throw error;
+        input_per_mtok,
+        output_per_mtok,
+        cached_input_per_mtok: cached_input_per_mtok > 0 ? cached_input_per_mtok : null,
+        updated_at: updatedAt,
+      };
+
+      const { error } = await supabaseAdmin
+        .from('models_pricing')
+        .upsert(pricingData, { onConflict: 'model' })
+        .select();
+
+      if (error) {
+        logger.error('Failed to upsert model pricing', { req_id: req.id, model, error: error.message });
+        throw error;
+      }
     }
 
-    // Invalidate model registry cache to reflect changes immediately
     await modelRegistry.invalidateCache();
-
-    const totalMs = Date.now() - startTime;
 
     logger.info('Admin pricing update completed', {
       req_id: req.id,
-      model,
-      total_ms: totalMs
+      total_ms: Date.now() - startTime,
     });
 
-    return reply.status(200).send({
-      success: true,
-      model,
-      pricing: {
-        input_per_mtok,
-        output_per_mtok,
-        cached_input_per_mtok: cached_input_per_mtok || null
-      },
-      updated_at: pricingData.updated_at
-    });
+    return reply.status(200).send({ success: true, updated_at: updatedAt, models: validItems });
 
   } catch (error) {
     logger.error('Admin pricing handler error', {
