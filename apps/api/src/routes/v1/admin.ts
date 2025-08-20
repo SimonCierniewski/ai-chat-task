@@ -4,7 +4,6 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginAsync } from 'fastify';
-import { Type } from '@sinclair/typebox';
 import { requireAuth, requireAdmin } from '../../utils/guards';
 import { createValidator } from '../../utils/validator';
 import { logger } from '../../utils/logger';
@@ -74,19 +73,28 @@ interface ModelPricingRequest {
 }
 
 // Validation schemas
-const metricsQuerySchema = Type.Object({
-  from: Type.Optional(Type.String({ format: 'date' })),
-  to: Type.Optional(Type.String({ format: 'date' })),
-  userId: Type.Optional(Type.String({ format: 'uuid' })),
-  model: Type.Optional(Type.String({ minLength: 1, maxLength: 100 }))
-});
+const metricsQuerySchema = {
+  type: 'object',
+  properties: {
+    from: { type: 'string', format: 'date' },
+    to: { type: 'string', format: 'date' },
+    userId: { type: 'string', format: 'uuid' },
+    model: { type: 'string', minLength: 1, maxLength: 100 },
+  },
+  additionalProperties: true,
+} as const;
 
-const pricingRequestSchema = Type.Object({
-  model: Type.String({ minLength: 1, maxLength: 100 }),
-  input_per_mtok: Type.Number({ minimum: 0, maximum: 1000 }),
-  output_per_mtok: Type.Number({ minimum: 0, maximum: 1000 }),
-  cached_input_per_mtok: Type.Optional(Type.Number({ minimum: 0, maximum: 1000 }))
-});
+const pricingRequestSchema = {
+  type: 'object',
+  required: ['model', 'input_per_mtok', 'output_per_mtok'],
+  properties: {
+    model: { type: 'string', minLength: 1, maxLength: 100 },
+    input_per_mtok: { type: 'number', minimum: 0, maximum: 1000 },
+    output_per_mtok: { type: 'number', minimum: 0, maximum: 1000 },
+    cached_input_per_mtok: { type: 'number', minimum: 0, maximum: 1000 },
+  },
+  additionalProperties: false,
+} as const;
 
 const validateMetricsQuery = createValidator(metricsQuerySchema);
 const validatePricingRequest = createValidator(pricingRequestSchema);
@@ -124,45 +132,54 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
   const startTime = Date.now();
   
   try {
+    // Parse pagination and search
+    const query: any = (req as any).query || {};
+    const page = Math.max(1, parseInt(query.page || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(query.limit || '20', 10)));
+    const search = (query.search || '').toString().trim().toLowerCase();
+
     logger.info('Admin users list requested', {
       req_id: req.id,
       admin_id: (req as any).user.id
     });
 
-    // Query users from auth.users and profiles tables
-    const { data: users, error } = await supabaseAdmin
-      .from('profiles')
-      .select(`
-        user_id,
-        role,
-        created_at,
-        updated_at
-      `)
-      .order('created_at', { ascending: false });
+    // List users from auth (service role required)
+    const { data: listResult, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+      page,
+      perPage: limit,
+    });
 
-    if (error) {
-      logger.error('Failed to fetch users from profiles', {
+    if (listError) {
+      logger.error('Failed to list auth users', {
         req_id: req.id,
-        error: error.message
+        error: listError.message,
       });
-      throw error;
+      throw listError;
     }
 
-    // Get additional auth data (email, last_sign_in) from auth.users
-    // Note: This requires service role and careful handling
-    const userIds = users?.map(u => u.user_id) || [];
-    const authUsers: any[] = [];
-    
-    // In Phase 4, we'll use stub data for auth.users since it requires special permissions
-    // In production, you'd query: SELECT id, email, last_sign_in_at, created_at FROM auth.users
-    for (const userId of userIds) {
-      authUsers.push({
-        id: userId,
-        email: userId.includes('admin') ? 'admin@example.com' : 'user@example.com',
-        last_sign_in_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-        created_at: users?.find(u => u.user_id === userId)?.created_at
-      });
+    let authUsers = listResult?.users || [];
+
+    // Optional search by email (client-side filter as API lacks search param)
+    if (search) {
+      authUsers = authUsers.filter(u => (u.email || '').toLowerCase().includes(search));
     }
+
+    // Fetch profiles to get roles
+    const userIds = authUsers.map(u => u.id);
+    const { data: profiles, error: profilesError } = await supabaseAdmin
+      .from('profiles')
+      .select('user_id, role, created_at')
+      .in('user_id', userIds);
+
+    if (profilesError) {
+      logger.error('Failed to fetch profiles for users', {
+        req_id: req.id,
+        error: profilesError.message,
+      });
+      throw profilesError;
+    }
+
+    const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
 
     // TODO: Get usage stats from daily_usage table
     // const { data: usageStats } = await supabaseAdmin
@@ -171,20 +188,18 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
     //   .in('user_id', userIds);
 
     // Combine data and redact sensitive fields
-    const adminUsers: AdminUser[] = users?.map(profile => {
-      const authUser = authUsers.find(u => u.id === profile.user_id);
-      // const usage = usageStats?.find(u => u.user_id === profile.user_id);
-      
+    const adminUsers: AdminUser[] = authUsers.map(u => {
+      const p = profileMap.get(u.id);
       return {
-        id: profile.user_id,
-        email: authUser?.email || '',
-        role: profile.role,
-        created_at: profile.created_at,
-        last_sign_in_at: authUser?.last_sign_in_at,
-        message_count: 0, // usage?.message_count || 0,
-        total_cost_usd: 0  // usage?.total_cost_usd || 0
+        id: u.id,
+        email: u.email || '',
+        role: (p?.role as 'user' | 'admin') || 'user',
+        created_at: (u.created_at as string) || new Date().toISOString(),
+        last_sign_in_at: (u.last_sign_in_at as string) || undefined,
+        message_count: 0,
+        total_cost_usd: 0,
       };
-    }) || [];
+    });
 
     const totalMs = Date.now() - startTime;
     
@@ -197,13 +212,15 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
     return reply.status(200).send({
       users: adminUsers,
       total: adminUsers.length,
-      fetched_at: new Date().toISOString()
+      page,
+      limit,
+      fetched_at: new Date().toISOString(),
     });
 
   } catch (error) {
     logger.error('Admin users handler error', {
       req_id: req.id,
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     });
 
     return reply.status(500).send({
@@ -335,7 +352,7 @@ async function getMetricsHandler(
   } catch (error) {
     logger.error('Admin metrics handler error', {
       req_id: req.id,
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     });
 
     return reply.status(500).send({
@@ -366,7 +383,7 @@ async function listModelsHandler(
   } catch (error) {
     logger.error('Failed to list models', {
       req_id: req.id,
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     });
     
     return reply.status(500).send({
@@ -417,12 +434,12 @@ async function updateModelPricingHandler(
       updated_at: new Date().toISOString()
     };
 
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('models_pricing')
       .upsert(pricingData, {
-        onConflict: 'model',
-        returning: 'minimal'
-      });
+        onConflict: 'model'
+      })
+      .select();
 
     if (error) {
       logger.error('Failed to upsert model pricing', {
@@ -458,7 +475,7 @@ async function updateModelPricingHandler(
   } catch (error) {
     logger.error('Admin pricing handler error', {
       req_id: req.id,
-      error: error.message
+      error: error instanceof Error ? error.message : String(error)
     });
 
     return reply.status(500).send({
@@ -481,107 +498,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
   fastify.addHook('preHandler', requireAdmin);
 
   // GET /api/v1/admin/users - List users
-  fastify.get('/users', {
-    schema: {
-      summary: 'List all users (admin only)',
-      description: 'Get list of all users with usage statistics and redacted sensitive info',
-      tags: ['Admin'],
-      response: {
-        200: Type.Object({
-          users: Type.Array(Type.Object({
-            id: Type.String(),
-            email: Type.String(),
-            role: Type.String(),
-            created_at: Type.String(),
-            last_sign_in_at: Type.Optional(Type.String()),
-            message_count: Type.Optional(Type.Number()),
-            total_cost_usd: Type.Optional(Type.Number())
-          })),
-          total: Type.Number(),
-          fetched_at: Type.String()
-        }),
-        403: Type.Object({
-          error: Type.String(),
-          message: Type.String()
-        }),
-        500: Type.Object({
-          error: Type.String(),
-          message: Type.String()
-        })
-      }
-    }
-  }, getUsersHandler);
+  fastify.get('/users', getUsersHandler);
 
   // GET /api/v1/admin/metrics - Get metrics
-  fastify.get('/metrics', {
-    schema: {
-      summary: 'Get usage metrics and analytics (admin only)',
-      description: 'Retrieve aggregated metrics, KPIs, and time series data',
-      tags: ['Admin'],
-      querystring: metricsQuerySchema,
-      response: {
-        200: Type.Object({
-          period: Type.Object({
-            from: Type.String(),
-            to: Type.String()
-          }),
-          kpis: Type.Object({
-            total_messages: Type.Number(),
-            unique_users: Type.Number(), 
-            total_cost_usd: Type.Number(),
-            avg_ttft_ms: Type.Number(),
-            avg_duration_ms: Type.Number()
-          }),
-          time_series: Type.Array(Type.Object({
-            day: Type.String(),
-            messages: Type.Number(),
-            users: Type.Number(),
-            cost_usd: Type.Number(),
-            avg_ttft_ms: Type.Number()
-          }))
-        })
-      }
-    }
-  }, getMetricsHandler);
+  fastify.get('/metrics', getMetricsHandler);
 
   // GET /api/v1/admin/models - List available models
-  fastify.get('/models', {
-    schema: {
-      summary: 'List available models (admin only)',
-      description: 'Get list of available AI models with pricing information',
-      tags: ['Admin'],
-      response: {
-        200: Type.Array(Type.Object({
-          model: Type.String(),
-          input_per_mtok: Type.Number(),
-          output_per_mtok: Type.Number(),
-          cached_input_per_mtok: Type.Optional(Type.Number()),
-          available: Type.Boolean(),
-          is_default: Type.Boolean()
-        }))
-      }
-    }
-  }, listModelsHandler);
+  fastify.get('/models', listModelsHandler);
 
   // POST /api/v1/admin/models/pricing - Update model pricing  
-  fastify.post('/models/pricing', {
-    schema: {
-      summary: 'Update model pricing configuration (admin only)',
-      description: 'Upsert pricing information for AI models used in cost calculations',
-      tags: ['Admin'],
-      body: pricingRequestSchema,
-      response: {
-        200: Type.Object({
-          success: Type.Boolean(),
-          model: Type.String(),
-          pricing: Type.Object({
-            input_per_mtok: Type.Number(),
-            output_per_mtok: Type.Number(),
-            cached_input_per_mtok: Type.Union([Type.Number(), Type.Null()])
-          }),
-          updated_at: Type.String()
-        })
-      }
-    }
-  }, updateModelPricingHandler);
+  fastify.post('/models/pricing', updateModelPricingHandler);
 };
