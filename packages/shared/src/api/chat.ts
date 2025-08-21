@@ -52,7 +52,6 @@ export const chatRequestSchema = {
     contextMode: {
       type: 'string',
       enum: ['basic', 'summarized'],
-      default: 'basic',
       description: 'Context retrieval mode (basic = raw, summarized = processed)'
     }
   },
