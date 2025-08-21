@@ -40,12 +40,6 @@ export const v1Routes: FastifyPluginAsync = async (server) => {
     await protectedRoutes.register(chatFastRoute, { prefix: '/chat' });
     await protectedRoutes.register(chatInitRoute, { prefix: '/chat' });
     await protectedRoutes.register(memoryRoutes, { prefix: '/memory' });
-    
-    protectedRoutes.get('/me', async (request, reply) => {
-      return {
-        user: request.user,
-      };
-    });
   });
   
   await server.register(async (adminOnlyRoutes) => {
