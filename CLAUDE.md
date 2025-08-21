@@ -481,14 +481,15 @@ When continuing this project:
    ```
 
 4. **Key technical decisions**:
-   - **Zep v3 API** for memory management (not v2)
+   - **Zep v3 SDK** (not manual API calls) - Using `@getzep/zep-cloud` package
    - **Type naming**: `TelemetryRetrievalResult` vs `MemoryRetrievalResult`
    - **JWKS for JWT verification** (not Supabase client round-trips)
    - **Versioned API routes** under `/api/v1`
    - **Request IDs** on all logs and errors
-   - **SSE streaming** for chat responses
+   - **SSE streaming** for chat responses with conditional memory events
    - **Shared DTOs** in monorepo package
    - **CORS strict validation** returns 403 for blocked origins
+   - **Memory events** only sent when `returnMemory: true` (Playground only)
 
 5. **Current blockers**:
    - Supabase project needs to be created for full auth testing
@@ -590,11 +591,48 @@ pnpm check:all        # Run all checks
 
 ---
 
-**Last Updated**: 2025-12-20 - Phase 7 Android App is 90% complete with full architecture, auth, networking, UI, and data management implemented.
+**Last Updated**: 2025-12-21 - Zep SDK integration complete, Playground memory display enhanced
 
 **GitHub Repo**: SimonCierniewski/ai-chat-task
 
-## 🔧 Recent Session Work (2025-12-20 - Android App Development)
+## 🔧 Recent Session Work (2025-12-21 - Zep SDK & Playground Enhancements)
+
+### Zep SDK Integration (COMPLETE)
+
+#### Issues Fixed:
+1. **Migrated to Official SDK**: Replaced manual API calls with `@getzep/zep-cloud` SDK
+2. **Fixed Message Format**: Corrected field names (`role` not `roleType`, proper request structure)
+3. **Thread Management**: Added proper thread creation for sessions
+4. **Enhanced Logging**: Added comprehensive request/response logging for debugging
+
+#### Implementation Details:
+- **SDK Client**: Using `ZepClient` from `@getzep/zep-cloud` package
+- **Thread Creation**: Each session gets its own thread via `client.thread.create()`
+- **Message Storage**: Fixed format with `client.thread.addMessages(sessionId, { messages: [...] })`
+- **User Management**: Auto-creation on first reference with `client.user.add()`
+
+### Playground Memory Display (ENHANCED)
+
+#### New Features:
+1. **Memory Context Card**: Always visible, shows retrieved memories with relevance scores
+2. **Conditional Memory Events**: Added `returnMemory` parameter to chat API
+3. **Improved SSE Parsing**: Fixed event handling for proper memory display
+4. **Layout Optimization**: Memory card moved above Response for better visibility
+
+#### Technical Changes:
+- **API**: Only sends memory events when `returnMemory: true` (Playground only)
+- **Shared Types**: Added `MemoryEventData` and `MEMORY` event type
+- **Playground**: Always shows memory card with appropriate empty states
+- **Android/Clients**: Don't receive memory events (bandwidth optimization)
+
+### Key Files Modified:
+- `/apps/api/src/routes/v1/memory.ts` - Complete Zep SDK implementation
+- `/apps/api/src/services/zep.ts` - Updated to use SDK
+- `/apps/api/src/routes/v1/chat.ts` - Conditional memory event sending
+- `/packages/shared/src/api/chat.ts` - Added memory event types
+- `/apps/admin/src/app/admin/playground/page.tsx` - Enhanced memory display
+
+## 🔧 Previous Session Work (2025-12-20 - Android App Development)
 
 ### Phase 7: Android App Implementation (90% Complete)
 
@@ -757,3 +795,23 @@ pnpm check:all        # Run all checks
 - Physical devices need machine IP
 - Deep links work with `adb shell am start`
 - Room Inspector available in Android Studio
+
+---
+
+## 🔧 Known Issues & Recent Fixes
+
+### Zep Integration Issues (FIXED 2025-12-21)
+1. **Message Storage Error**: 
+   - **Issue**: "Error storing message in Zep via SDK"
+   - **Cause**: Incorrect message format and missing thread creation
+   - **Fix**: Use proper SDK methods with correct field names
+
+2. **Memory Display in Playground**:
+   - **Issue**: Memory context not showing in UI
+   - **Cause**: SSE event parsing issues
+   - **Fix**: Proper event handling and state management
+
+### Current Configuration Requirements:
+- **Zep API Key**: Required in `ZEP_API_KEY` environment variable
+- **OpenAI API Key**: Needs valid key with credits (insufficient_quota errors without)
+- **Supabase**: Project creation still pending for full auth testing
