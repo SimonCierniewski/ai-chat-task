@@ -37,6 +37,7 @@ interface ModelInfo {
 export default function PlaygroundPage() {
   const [message, setMessage] = useState('');
   const [useMemory, setUseMemory] = useState(true);
+  const [contextMode, setContextMode] = useState<'basic' | 'summarized'>('basic');
   const [model, setModel] = useState('gpt-4o-mini');
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.');
   const [sessionId] = useState(() => {
@@ -191,6 +192,7 @@ export default function PlaygroundPage() {
       const requestBody = {
         message: message.trim(),
         useMemory,
+        contextMode,
         sessionId,
         model,
         returnMemory: true, // Always request memory context in playground for debugging
@@ -354,19 +356,58 @@ export default function PlaygroundPage() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={useMemory}
-                      onChange={(e) => setUseMemory(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      disabled={isStreaming}
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      Use Memory Context
-                    </span>
-                  </label>
+                <div className="space-y-3">
+                  <div>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={useMemory}
+                        onChange={(e) => setUseMemory(e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        disabled={isStreaming}
+                      />
+                      <span className="text-sm font-medium text-gray-700">
+                        Use Memory Context
+                      </span>
+                    </label>
+                  </div>
+
+                  {useMemory && (
+                    <div className="ml-6 space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Context Mode
+                      </label>
+                      <div className="flex space-x-4">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="contextMode"
+                            value="basic"
+                            checked={contextMode === 'basic'}
+                            onChange={(e) => setContextMode(e.target.value as 'basic' | 'summarized')}
+                            className="text-blue-600 focus:ring-blue-500"
+                            disabled={isStreaming}
+                          />
+                          <span className="text-sm text-gray-700">Basic</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="contextMode"
+                            value="summarized"
+                            checked={contextMode === 'summarized'}
+                            onChange={(e) => setContextMode(e.target.value as 'basic' | 'summarized')}
+                            className="text-blue-600 focus:ring-blue-500"
+                            disabled={isStreaming}
+                          />
+                          <span className="text-sm text-gray-700">Summarized</span>
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Basic: Raw context as stored. Summarized: AI-processed summary.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div>

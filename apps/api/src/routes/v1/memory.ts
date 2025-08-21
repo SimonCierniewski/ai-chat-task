@@ -296,17 +296,20 @@ class ZepAdapter {
 
   /**
    * Get context block from Zep (for fast chat endpoint)
-   * This retrieves the basic context without processing messages
+   * This retrieves the context in either basic or summarized mode
    */
-  async getContextBlock(userId: string, sessionId: string): Promise<string | undefined> {
+  async getContextBlock(userId: string, sessionId: string, mode: 'basic' | 'summarized' = 'basic'): Promise<string | undefined> {
     try {
       // Get thread context which includes facts and summaries
-      const context = await this.client.thread.getUserContext(sessionId, {mode: "basic"});
+      const context = mode === 'basic' 
+        ? await this.client.thread.getUserContext(sessionId, {mode: "basic"})
+        : await this.client.thread.getUserContext(sessionId); // Default mode is summarized
       return context.context;
     } catch (error: any) {
       logger.warn('Failed to get context block', {
         userId,
         sessionId,
+        mode,
         error: error.message
       });
       return undefined;

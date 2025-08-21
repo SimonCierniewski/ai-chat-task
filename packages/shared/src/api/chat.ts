@@ -8,6 +8,7 @@ export interface ChatRequest {
   model?: string;
   returnMemory?: boolean; // If true, return memory context in SSE events (for debugging/playground)
   systemPrompt?: string; // Optional custom system prompt (for playground)
+  contextMode?: 'basic' | 'summarized'; // Context retrieval mode (basic = raw, summarized = processed)
 }
 
 /**
@@ -47,6 +48,12 @@ export const chatRequestSchema = {
       type: 'string',
       maxLength: 1000,
       description: 'Custom system prompt (for playground)'
+    },
+    contextMode: {
+      type: 'string',
+      enum: ['basic', 'summarized'],
+      default: 'basic',
+      description: 'Context retrieval mode (basic = raw, summarized = processed)'
     }
   },
   additionalProperties: false

@@ -175,7 +175,8 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         sessionId,
         model: requestedModel,
         systemPrompt,
-        returnMemory = false
+        returnMemory = false,
+        contextMode = 'basic'
       } = req.body;
       const userId = req.user!.id;
       const reqId = req.id;
@@ -190,7 +191,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         // Step 2: Get context block if memory is enabled (simple, no processing)
         let contextBlock: string | undefined = undefined;
         if (useMemory) {
-          contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!);
+          contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode);
         }
 
         const memoryMs = Date.now() - startTime;
@@ -352,13 +353,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                     userId,
                     sessionId,
                     message,
-                    outputText,
-                    {
-                      model,
-                      tokensIn: hasProviderUsage ? undefined : usageCalc?.tokens_in,
-                      tokensOut: hasProviderUsage ? undefined : usageCalc?.tokens_out,
-                      costUsd: hasProviderUsage ? undefined : usageCalc?.cost_usd
-                    }
+                    outputText
                   );
 
                   if (stored) {
