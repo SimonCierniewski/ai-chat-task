@@ -134,22 +134,42 @@ class ZepAdapter {
     try {
       // Try to get the user first
       try {
-        await this.client.user.get(userId);
-        logger.debug('Zep user exists', { userId });
+        logger.debug('Checking if Zep user exists', { userId });
+        const user = await this.client.user.get(userId);
+        logger.debug('Zep user exists', { userId, user: JSON.stringify(user) });
       } catch (error: any) {
         // If user doesn't exist, create it
+        logger.debug('User get error', { 
+          userId, 
+          errorMessage: error.message,
+          errorStatus: error.statusCode,
+          errorDetails: JSON.stringify(error)
+        });
+        
         if (error.statusCode === 404 || error.message?.includes('not found')) {
-          await this.client.user.add({
+          logger.info('Creating new Zep user', { userId, metadata });
+          const newUser = await this.client.user.add({
             userId: userId,
             metadata: metadata || {}
           });
-          logger.info('Created new Zep user', { userId });
+          logger.info('Created new Zep user', { userId, newUser: JSON.stringify(newUser) });
         } else {
+          logger.error('Unexpected error checking Zep user', {
+            userId,
+            error: error.message,
+            statusCode: error.statusCode,
+            fullError: JSON.stringify(error)
+          });
           throw error;
         }
       }
-    } catch (error) {
-      logger.error('Error ensuring Zep user', { error, userId });
+    } catch (error: any) {
+      logger.error('Error ensuring Zep user', { 
+        error: error.message,
+        statusCode: error.statusCode,
+        stack: error.stack,
+        userId 
+      });
       throw error;
     }
   }
@@ -215,6 +235,13 @@ class ZepAdapter {
     } = {}
   ): Promise<TelemetryRetrievalResult[]> {
     try {
+      logger.info('Starting memory search', {
+        userId,
+        queryLength: query.length,
+        queryPreview: query.substring(0, 100),
+        options
+      });
+
       await this.ensureUser(userId);
       const limit = options.limit || CONFIG_PRESETS.DEFAULT.top_k;
       const minScore = options.minScore || 0.7;
@@ -226,37 +253,68 @@ class ZepAdapter {
       if (options.sessionId) {
         // Get context for specific thread
         try {
+          logger.debug('Getting context for specific thread', { sessionId: options.sessionId });
           await this.ensureThread(options.sessionId, userId);
-          contextData = await this.client.thread.getUserContext(options.sessionId, {
+          
+          const contextRequest = {
             mode: 'messages',
             limit
+          };
+          logger.debug('Calling thread.getUserContext', { 
+            sessionId: options.sessionId,
+            request: JSON.stringify(contextRequest)
           });
-        } catch (error) {
+          
+          contextData = await this.client.thread.getUserContext(options.sessionId, contextRequest);
+          logger.debug('Thread context retrieved', {
+            sessionId: options.sessionId,
+            messageCount: contextData?.messages?.length || 0,
+            contextData: JSON.stringify(contextData)
+          });
+        } catch (error: any) {
           logger.warn('Failed to get thread context, falling back to user threads', {
             sessionId: options.sessionId,
-            error
+            error: error.message,
+            statusCode: error.statusCode,
+            fullError: JSON.stringify(error)
           });
           contextData = { messages: [] };
         }
       } else {
         // Get user's threads and extract recent messages
+        logger.debug('Getting user threads for general search', { userId });
         const threads = await this.client.user.getThreads(userId, {
           limit: 10 // Get recent threads
+        });
+        logger.debug('User threads retrieved', {
+          userId,
+          threadCount: threads?.threads?.length || 0
         });
 
         // Collect messages from threads
         const allMessages: any[] = [];
         for (const thread of (threads.threads || [])) {
           try {
+            logger.debug('Getting messages from thread', { threadId: thread.threadId });
             const threadData = await this.client.thread.get(thread.threadId);
             if (threadData.messages) {
               allMessages.push(...threadData.messages);
+              logger.debug('Added messages from thread', {
+                threadId: thread.threadId,
+                messageCount: threadData.messages.length
+              });
             }
-          } catch (error) {
-            logger.debug('Failed to get thread messages', { threadId: thread.threadId });
+          } catch (error: any) {
+            logger.debug('Failed to get thread messages', { 
+              threadId: thread.threadId,
+              error: error.message
+            });
           }
         }
         contextData = { messages: allMessages };
+        logger.debug('Collected messages from all threads', {
+          totalMessages: allMessages.length
+        });
       }
 
       // Convert messages to TelemetryRetrievalResult format
@@ -300,12 +358,22 @@ class ZepAdapter {
         userId,
         query: query.substring(0, 50),
         resultsCount: limited.length,
-        sessionId: options.sessionId
+        sessionId: options.sessionId,
+        rawMessageCount: contextData?.messages?.length || 0,
+        filteredCount: filtered.length,
+        finalCount: limited.length
       });
 
       return limited;
-    } catch (error) {
-      logger.error('Error retrieving Zep memory via SDK', { error, userId, query });
+    } catch (error: any) {
+      logger.error('Error retrieving Zep memory via SDK', { 
+        error: error.message,
+        statusCode: error.statusCode,
+        stack: error.stack,
+        fullError: JSON.stringify(error),
+        userId, 
+        query: query.substring(0, 100)
+      });
       return [];
     }
   }
@@ -316,20 +384,48 @@ class ZepAdapter {
   private async ensureThread(sessionId: string, userId: string): Promise<void> {
     try {
       // Try to get the thread
-      await this.client.thread.get(sessionId);
-      logger.debug('Thread exists', { sessionId });
+      logger.debug('Checking if thread exists', { sessionId, userId });
+      const thread = await this.client.thread.get(sessionId);
+      logger.debug('Thread exists', { 
+        sessionId, 
+        thread: JSON.stringify(thread)
+      });
     } catch (error: any) {
+      logger.debug('Thread get error', { 
+        sessionId,
+        userId,
+        errorMessage: error.message,
+        errorStatus: error.statusCode,
+        errorDetails: JSON.stringify(error)
+      });
+      
       // If thread doesn't exist, create it
       if (error.statusCode === 404 || error.message?.includes('not found')) {
-        await this.client.thread.create({
+        logger.info('Creating new Zep thread', { sessionId, userId });
+        
+        const threadData = {
           threadId: sessionId,
           userId: userId,
           metadata: {
             created_at: new Date().toISOString()
           }
+        };
+        logger.debug('Thread creation request', { threadData: JSON.stringify(threadData) });
+        
+        const newThread = await this.client.thread.create(threadData);
+        logger.info('Created new Zep thread', { 
+          sessionId, 
+          userId,
+          newThread: JSON.stringify(newThread)
         });
-        logger.info('Created new Zep thread', { sessionId, userId });
       } else {
+        logger.error('Unexpected error checking thread', {
+          sessionId,
+          userId,
+          error: error.message,
+          statusCode: error.statusCode,
+          fullError: JSON.stringify(error)
+        });
         throw error;
       }
     }
@@ -346,32 +442,59 @@ class ZepAdapter {
     metadata?: Record<string, any>
   ): Promise<boolean> {
     try {
+      logger.info('Starting to store message in Zep', {
+        userId,
+        sessionId,
+        role,
+        contentLength: content.length,
+        hasMetadata: !!metadata
+      });
+
       // Ensure user and thread exist
       await this.ensureUser(userId);
       await this.ensureThread(sessionId, userId);
 
-      // Store message in thread
-      await this.client.thread.addMessages(sessionId, [
-        {
-          roleType: role === 'user' ? 'user' : 'assistant',
-          content,
-          metadata: {
-            ...metadata,
-            timestamp: new Date().toISOString()
-          }
-        }
-      ]);
+      // Prepare message data
+      const messageData = {
+        role: role === 'user' ? 'user' : 'assistant',
+        content,
+        name: role,
+        createdAt: new Date().toISOString()
+      };
+      
+      const requestBody = {
+        messages: [messageData]
+      };
+      
+      logger.debug('Calling thread.addMessages', {
+        sessionId,
+        requestBody: JSON.stringify(requestBody)
+      });
 
-      logger.info('Message stored in Zep via SDK', {
+      // Store message in thread - addMessages takes threadId and request object
+      const result = await this.client.thread.addMessages(sessionId, requestBody);
+
+      logger.info('Message stored successfully in Zep', {
         userId,
         sessionId,
         role,
-        contentLength: content.length
+        contentLength: content.length,
+        result: JSON.stringify(result)
       });
 
       return true;
-    } catch (error) {
-      logger.error('Error storing message in Zep via SDK', { error, userId, sessionId });
+    } catch (error: any) {
+      logger.error('Error storing message in Zep via SDK', { 
+        error: error.message,
+        errorCode: error.code,
+        statusCode: error.statusCode,
+        stack: error.stack,
+        fullError: JSON.stringify(error),
+        userId, 
+        sessionId,
+        role,
+        contentPreview: content.substring(0, 100)
+      });
       return false;
     }
   }
@@ -392,6 +515,14 @@ class ZepAdapter {
     }
   ): Promise<boolean> {
     try {
+      logger.info('Starting to store conversation turn', {
+        userId,
+        sessionId,
+        userMessageLength: userMessage.length,
+        assistantMessageLength: assistantMessage.length,
+        metadata
+      });
+
       // Store user message
       const userStored = await this.storeMessage(
         userId,
@@ -402,8 +533,11 @@ class ZepAdapter {
       );
 
       if (!userStored) {
+        logger.error('Failed to store user message', { userId, sessionId });
         return false;
       }
+
+      logger.info('User message stored, storing assistant response', { userId, sessionId });
 
       // Store assistant response
       const assistantStored = await this.storeMessage(
@@ -417,9 +551,21 @@ class ZepAdapter {
         }
       );
 
+      if (!assistantStored) {
+        logger.error('Failed to store assistant message', { userId, sessionId });
+      } else {
+        logger.info('Conversation turn stored successfully', { userId, sessionId });
+      }
+
       return assistantStored;
-    } catch (error) {
-      logger.error('Error storing conversation turn', { error, userId, sessionId });
+    } catch (error: any) {
+      logger.error('Error storing conversation turn', { 
+        error: error.message,
+        stack: error.stack,
+        fullError: JSON.stringify(error),
+        userId, 
+        sessionId 
+      });
       return false;
     }
   }
