@@ -374,8 +374,43 @@ export default function PlaygroundPage() {
               </form>
             </Card>
 
-            {/* Memory Context - Always visible */}
-            <Card title="Memory Context" icon="🧠" className="mt-4">
+            {/* Timing Info */}
+            {timing && (
+              <Card title="Performance" icon="⚡" className="mt-4">
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  {timing.ttft_ms !== undefined && (
+                    <div className="p-3 bg-purple-50 rounded-md">
+                      <p className="text-xs text-purple-600 font-medium">Time to First Token</p>
+                      <p className="text-lg font-bold text-purple-900">{formatTiming(timing.ttft_ms)}</p>
+                    </div>
+                  )}
+                  {timing.total_ms !== undefined && (
+                    <div className="p-3 bg-indigo-50 rounded-md">
+                      <p className="text-xs text-indigo-600 font-medium">Total Duration</p>
+                      <p className="text-lg font-bold text-indigo-900">{formatTiming(timing.total_ms)}</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {/* API Endpoint Info */}
+            <Card title="API Endpoint" icon="🔗" className="mt-4">
+              <div className="mt-4 p-3 bg-gray-50 rounded-md">
+                <code className="text-sm text-gray-700">
+                  POST {publicConfig.apiBaseUrl}/api/v1/chat
+                </code>
+              </div>
+              <div className="mt-2 text-xs text-gray-500">
+                SSE Content-Type: text/event-stream
+              </div>
+            </Card>
+          </div>
+
+          {/* Response Panel */}
+          <div>
+            {/* Memory Context - Moved to top of right column */}
+            <Card title="Memory Context" icon="🧠">
               <div className="mt-4 space-y-3">
                 {memoryContext && memoryContext.results_count > 0 ? (
                   <>
@@ -417,42 +452,8 @@ export default function PlaygroundPage() {
               </div>
             </Card>
 
-            {/* Timing Info */}
-            {timing && (
-              <Card title="Performance" icon="⚡" className="mt-4">
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  {timing.ttft_ms !== undefined && (
-                    <div className="p-3 bg-purple-50 rounded-md">
-                      <p className="text-xs text-purple-600 font-medium">Time to First Token</p>
-                      <p className="text-lg font-bold text-purple-900">{formatTiming(timing.ttft_ms)}</p>
-                    </div>
-                  )}
-                  {timing.total_ms !== undefined && (
-                    <div className="p-3 bg-indigo-50 rounded-md">
-                      <p className="text-xs text-indigo-600 font-medium">Total Duration</p>
-                      <p className="text-lg font-bold text-indigo-900">{formatTiming(timing.total_ms)}</p>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            )}
-
-            {/* API Endpoint Info */}
-            <Card title="API Endpoint" icon="🔗" className="mt-4">
-              <div className="mt-4 p-3 bg-gray-50 rounded-md">
-                <code className="text-sm text-gray-700">
-                  POST {publicConfig.apiBaseUrl}/api/v1/chat
-                </code>
-              </div>
-              <div className="mt-2 text-xs text-gray-500">
-                SSE Content-Type: text/event-stream
-              </div>
-            </Card>
-          </div>
-
-          {/* Response Panel */}
-          <div>
-            <Card title="Response" icon="💬">
+            {/* Response Card */}
+            <Card title="Response" icon="💬" className="mt-4">
               <div className="mt-4 min-h-[400px] p-4 bg-gray-50 rounded-md">
                 {error ? (
                   <div className="p-4 bg-red-50 border border-red-200 rounded-md">
