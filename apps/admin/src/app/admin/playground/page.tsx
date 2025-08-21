@@ -374,38 +374,48 @@ export default function PlaygroundPage() {
               </form>
             </Card>
 
-            {/* Memory Context */}
-            {memoryContext && memoryContext.results_count > 0 && (
-              <Card title="Memory Context Retrieved" icon="🧠" className="mt-4">
-                <div className="mt-4 space-y-3">
-                  <div className="text-sm text-gray-600">
-                    Retrieved {memoryContext.results_count} memory items ({memoryContext.total_tokens} tokens)
-                  </div>
-                  <div className="max-h-60 overflow-y-auto space-y-2">
-                    {memoryContext.results.map((result, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-md border border-gray-200">
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-xs font-medium text-gray-500">
-                            #{index + 1} • {result.source_type}
-                          </span>
-                          <span className="text-xs text-blue-600">
-                            Score: {(result.score * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                        <div className="text-sm text-gray-700 line-clamp-3">
-                          {result.text}
-                        </div>
-                        {result.session_id && (
-                          <div className="text-xs text-gray-400 mt-1">
-                            Session: {result.session_id}
+            {/* Memory Context - Always visible */}
+            <Card title="Memory Context" icon="🧠" className="mt-4">
+              <div className="mt-4 space-y-3">
+                {memoryContext && memoryContext.results_count > 0 ? (
+                  <>
+                    <div className="text-sm text-gray-600">
+                      Retrieved {memoryContext.results_count} memory items ({memoryContext.total_tokens} tokens)
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {memoryContext.results.map((result, index) => (
+                        <div key={index} className="p-3 bg-gray-50 rounded-md border border-gray-200">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-medium text-gray-500">
+                              #{index + 1} • {result.source_type}
+                            </span>
+                            <span className="text-xs text-blue-600">
+                              Score: {(result.score * 100).toFixed(1)}%
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <div className="text-sm text-gray-700 line-clamp-3">
+                            {result.text}
+                          </div>
+                          {result.session_id && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              Session: {result.session_id}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-gray-400 italic text-center py-8">
+                    {useMemory ? (
+                      isStreaming ? 'Retrieving memory context...' : 'No memory context retrieved'
+                    ) : (
+                      'Memory retrieval is disabled'
+                    )}
                   </div>
-                </div>
-              </Card>
-            )}
+                )}
+              </div>
+            </Card>
 
             {/* Timing Info */}
             {timing && (
