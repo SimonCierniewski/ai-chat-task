@@ -314,7 +314,7 @@
    - Session analytics
    - Export functionality
 
-### 🔮 Current Phase
+### 🔮 Current Status
 
 **Phase 7**: Android App (95% Complete)
 - ✅ Architecture and scaffolding
@@ -327,7 +327,9 @@
 - ⏳ Final integration testing
 - ⏳ APK signing and release build
 
-**Phase 8-12**: Security, Deployment, QA (Not started)
+**Phase 8-12**: Not pursuing at this time
+- Note: Project is functional for development/testing purposes
+- Deployment phases deferred
 
 ## 🔑 Important Configuration
 
@@ -433,25 +435,26 @@
 - `/apps/admin/.env.example` - Admin environment template
 - `/apps/android/local.properties.example` - Android configuration template
 
-## 🎬 Next Actions
+## 🎬 Next Actions (If Resuming)
 
-1. **Create Supabase Project**:
+1. **For New Session**:
+   - Read this CLAUDE.md file first
+   - Check recent session work section for latest changes
+   - Verify environment is running: `pnpm dev:api` and `pnpm dev:admin`
+
+2. **If Setting Up Supabase** (optional for full auth):
    ```bash
    # Go to https://app.supabase.com
    # Create new project in EU region
    # Enable email auth (magic links)
+   # Run migrations 001 through 010 in SQL Editor
    ```
 
-2. **Run Migrations**:
-   ```bash
-   # In Supabase SQL Editor, run in order:
-   # 001_create_profiles_table.sql through 010_create_daily_usage_views.sql
-   ```
-
-3. **Configure Auth**:
-   - Set redirect URLs in Supabase Dashboard
-   - Customize magic link email template
-   - Create first admin user
+3. **Current Working Features** (no Supabase needed):
+   - SSE streaming chat (with test tokens)
+   - Playground with context modes
+   - Telemetry dashboard
+   - Pricing configuration
 
 4. **Test API**:
    ```bash
@@ -555,13 +558,13 @@ pnpm check:all        # Run all checks
 
 **Phase 0**: ✅ Complete  
 **Phase 1**: ✅ Implementation Complete (awaiting Supabase project for testing)  
-**Phase 2**: ✅ Schema & Types Complete  
-**Phase 3**: ✅ Documentation Complete  
+**Phase 2**: ✅ Schema & Types Complete (with daily_usage_view working)  
+**Phase 3**: ✅ Documentation Complete (Zep SDK integrated)  
 **Phase 4**: ✅ API Infrastructure Complete  
 **Phase 5**: ✅ OpenAI Integration & Production Hardening Complete  
 **Phase 6**: ✅ Admin Panel Complete with Full Feature Implementation  
-**Phase 7**: 🔄 Android App (IN PROGRESS - 95% Complete)  
-**Phase 8-12**: ⏳ Security, Deployment, QA (Not started)  
+**Phase 7**: 🔄 Android App (95% Complete - functional, pending final testing)  
+**Phase 8-12**: ⏸️ Not pursuing (project functional for development)  
 
 **Critical Achievements**: 
 - Full OpenAI streaming integration with real-time SSE
@@ -601,11 +604,53 @@ pnpm check:all        # Run all checks
 
 ---
 
-**Last Updated**: 2025-12-21 - Android Diagnostics & QA/Release documentation complete
+**Last Updated**: 2025-01-21 - Telemetry fixes, SSE improvements, Playground enhancements
 
 **GitHub Repo**: SimonCierniewski/ai-chat-task
 
-## 🔧 Recent Session Work (2025-12-21 - Android Diagnostics & QA Infrastructure)
+## 🔧 Recent Session Work (2025-01-21 - Bug Fixes & Enhancements)
+
+### Improvements Completed:
+
+#### 1. SSE Heartbeat for chat-fast endpoint ✅
+- Added heartbeat support to prevent connection timeouts in production
+- Sends `:heartbeat ${timestamp}` comments every 10 seconds
+- Properly cleans up intervals on stream close
+
+#### 2. Playground Enhancements ✅
+- **Fixed double API calls** on page refresh (added initialization guard)
+- **Fixed Memory Context display** to show raw context block correctly
+- **Added Context Mode selection** (Basic/Summarized) with radio buttons
+- **Reordered UI cards** - Performance metrics now below Configuration
+- **Fixed contextMode parameter** - removed schema default that was overriding values
+
+#### 3. Telemetry Dashboard Fixes ✅
+- **Fixed missing `daily_usage_view` error** - created migration and quick fix SQL
+- **Fixed duplicate metrics API calls** - added proper initialization control
+- **Created SUPABASE_NOTES.md** with instructions for handling Supabase limitations
+- Note: pg_cron not available on free tier, using real-time view is sufficient for development
+
+#### 4. API Improvements ✅
+- Removed deprecated `chat.ts` endpoint (using `chat-fast.ts` as main endpoint)
+- Added proper logging for context mode debugging
+- Fixed thread initialization in chat-fast endpoint
+- Enhanced error handling and logging
+
+### Known Working State:
+- ✅ SSE streaming with <350ms TTFT
+- ✅ Memory context retrieval (Basic and Summarized modes)
+- ✅ Telemetry dashboard showing real-time metrics
+- ✅ Playground with all features functional
+- ✅ Proper heartbeat preventing timeouts
+- ✅ No duplicate API calls
+
+### Configuration Notes:
+- The chat endpoint is at `/api/v1/chat` (handled by `chat-fast.ts`)
+- Context modes: "basic" (raw) or "summarized" (AI-processed)
+- Telemetry uses `daily_usage_view` (real-time, no refresh needed for dev)
+- For production, can use `daily_usage_mv` with scheduled refresh
+
+## 🔧 Previous Session Work (2025-12-21 - Android Diagnostics & QA Infrastructure)
 
 ### Android Diagnostics Screen Implementation (COMPLETE)
 
