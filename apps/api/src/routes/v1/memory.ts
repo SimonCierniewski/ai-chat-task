@@ -3,13 +3,13 @@
  * Zep memory system integration with telemetry and validation
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginAsync } from 'fastify';
-import { Type } from '@sinclair/typebox';
-import { requireAuth } from '../../utils/guards';
-import { createValidator } from '../../utils/validator';
-import { logger } from '../../utils/logger';
-import { config } from '../../config';
-import { ZepClient } from '@getzep/zep-cloud';
+import {FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginAsync} from 'fastify';
+import {Type} from '@sinclair/typebox';
+import {requireAuth} from '../../utils/guards';
+import {createValidator} from '../../utils/validator';
+import {logger} from '../../utils/logger';
+import {config} from '../../config';
+import {ZepClient} from '@getzep/zep-cloud';
 import {
   CreateGraphEdge,
   createGraphEdgeSchema,
@@ -21,7 +21,8 @@ import {
   filterByScore,
   trimToTokenBudget
 } from '@prototype/shared';
-import { CONFIG_PRESETS } from '@prototype/shared';
+import {CONFIG_PRESETS} from '@prototype/shared';
+import {Message} from "@getzep/zep-cloud/serialization";
 
 // ============================================================================
 // Types & Schemas
@@ -78,21 +79,21 @@ interface ZepError {
 // Request/Response Schemas for validation
 const upsertRequestSchema = Type.Object({
   facts: Type.Array(Type.Object({
-    subject: Type.String({ minLength: 1, maxLength: 200 }),
+    subject: Type.String({minLength: 1, maxLength: 200}),
     predicate: Type.String(),
-    object: Type.String({ minLength: 1, maxLength: 500 }),
-    confidence: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+    object: Type.String({minLength: 1, maxLength: 500}),
+    confidence: Type.Optional(Type.Number({minimum: 0, maximum: 1})),
     source_message_id: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-    metadata: Type.Optional(Type.Object({}, { additionalProperties: true }))
-  }), { minItems: 1, maxItems: 50 }),
-  sessionId: Type.Optional(Type.String({ pattern: '^session-\\d{8}-\\d{6}-[a-z0-9]{4}$' }))
+    metadata: Type.Optional(Type.Object({}, {additionalProperties: true}))
+  }), {minItems: 1, maxItems: 50}),
+  sessionId: Type.Optional(Type.String({pattern: '^session-\\d{8}-\\d{6}-[a-z0-9]{4}$'}))
 });
 
 const searchQuerySchema = Type.Object({
-  query: Type.String({ minLength: 1, maxLength: 1000 }),
+  query: Type.String({minLength: 1, maxLength: 1000}),
   sessionId: Type.Optional(Type.String()),
-  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
-  min_score: Type.Optional(Type.Number({ minimum: 0, maximum: 1 }))
+  limit: Type.Optional(Type.Integer({minimum: 1, maximum: 100})),
+  min_score: Type.Optional(Type.Number({minimum: 0, maximum: 1}))
 });
 
 // Validators
@@ -146,7 +147,7 @@ class ZepAdapter {
     const startTime = Date.now();
 
     try {
-      logger.info({ userId, email }, 'Initializing Zep user via SDK');
+      logger.info({userId, email}, 'Initializing Zep user via SDK');
 
       // Create or update user using SDK
       const userStartTime = Date.now();
@@ -166,7 +167,7 @@ class ZepAdapter {
           });
         }
 
-        logger.info({ userId }, 'Zep user already exists, updated metadata');
+        logger.info({userId}, 'Zep user already exists, updated metadata');
       } catch (error: any) {
         // User doesn't exist, create new one
         if (error.statusCode === 404 || error.message?.includes('not found')) {
@@ -179,7 +180,7 @@ class ZepAdapter {
             },
           });
 
-          logger.info({ userId }, 'Created new Zep user');
+          logger.info({userId}, 'Created new Zep user');
         } else {
           throw error;
         }
@@ -249,7 +250,7 @@ class ZepAdapter {
               created_at: new Date().toISOString()
             }
           });
-          logger.info('Created new Zep user', { userId });
+          logger.info('Created new Zep user', {userId});
           return true;
         }
         throw error; // Re-throw other errors
@@ -270,21 +271,19 @@ class ZepAdapter {
   async ensureThread(userId: string, threadId: string): Promise<boolean> {
     try {
       // Try to get the thread first
-      try {
-        await this.client.thread.get(threadId);
-        return true; // Thread exists
-      } catch (error: any) {
-        // Thread doesn't exist, create it
-        if (error.statusCode === 404 || error.message?.includes('not found')) {
-          await this.client.thread.create({
-            threadId: threadId,
-            userId: userId
-          });
-          logger.info('Created new Zep thread', { userId, sessionId: threadId });
-          return true;
-        }
-        throw error; // Re-throw other errors
+      let result = await this.client.thread.get(threadId);
+      if (result.totalCount > 0) {
+        return true
       }
+
+      // Thread doesn't exist, create it
+      await this.client.thread.create({
+        threadId: threadId,
+        userId: userId
+      });
+      logger.info('Created new Zep thread', {userId, sessionId: threadId});
+      return true
+      
     } catch (error: any) {
       logger.error('Failed to ensure Zep thread', {
         userId,
@@ -302,7 +301,7 @@ class ZepAdapter {
   async getContextBlock(userId: string, sessionId: string): Promise<string | undefined> {
     try {
       // Get thread context which includes facts and summaries
-      const context = await this.client.thread.getUserContext(sessionId, { mode: "basic" });
+      const context = await this.client.thread.getUserContext(sessionId, {mode: "basic"});
       return context.context;
     } catch (error: any) {
       logger.warn('Failed to get context block', {
@@ -357,8 +356,8 @@ class ZepAdapter {
         upserted: edges.length
       };
     } catch (error) {
-      logger.error('Error upserting facts to Zep', { error, userId });
-      return { success: false, upserted: 0 };
+      logger.error('Error upserting facts to Zep', {error, userId});
+      return {success: false, upserted: 0};
     }
   }
 
@@ -393,7 +392,7 @@ class ZepAdapter {
       if (options.sessionId) {
         // Get context for specific thread
         try {
-          logger.debug('Getting context for specific thread', { sessionId: options.sessionId });
+          logger.debug('Getting context for specific thread', {sessionId: options.sessionId});
           await this.ensureThread(options.sessionId, userId);
 
           const contextRequest = {
@@ -418,11 +417,11 @@ class ZepAdapter {
             statusCode: error.statusCode,
             fullError: JSON.stringify(error)
           });
-          contextData = { messages: [] };
+          contextData = {messages: []};
         }
       } else {
         // Get user's threads and extract recent messages
-        logger.debug({ userId }, 'Getting user threads for general search');
+        logger.debug({userId}, 'Getting user threads for general search');
         const threads = await this.client.user.getThreads(userId, {
           limit: 10 // Get recent threads
         });
@@ -435,7 +434,7 @@ class ZepAdapter {
         const allMessages: any[] = [];
         for (const thread of (threads.threads || [])) {
           try {
-            logger.debug({ threadId: thread.threadId }, 'Getting messages from thread');
+            logger.debug({threadId: thread.threadId}, 'Getting messages from thread');
             const threadData = await this.client.thread.get(thread.threadId);
             if (threadData.messages) {
               allMessages.push(...threadData.messages);
@@ -451,7 +450,7 @@ class ZepAdapter {
             }, 'Failed to get thread messages');
           }
         }
-        contextData = { messages: allMessages };
+        contextData = {messages: allMessages};
         logger.debug({
           totalMessages: allMessages.length
         }, 'Collected messages from all threads');
@@ -519,132 +518,41 @@ class ZepAdapter {
   }
 
   /**
-   * Store a message in Zep memory using SDK
-   */
-  async storeMessage(
-    userId: string,
-    sessionId: string,
-    role: 'user' | 'assistant',
-    content: string,
-    metadata?: Record<string, any>
-  ): Promise<boolean> {
-    try {
-      logger.info({
-        userId,
-        sessionId,
-        role,
-        contentLength: content.length,
-        hasMetadata: !!metadata
-      }, 'Starting to store message in Zep');
-
-      // Ensure user and thread exist
-      await this.ensureUser(userId);
-      await this.ensureThread(userId, sessionId);
-
-      // Prepare message data
-      const messageData = {
-        role: role === 'user' ? 'user' : 'assistant',
-        content,
-        name: role,
-        createdAt: new Date().toISOString()
-      };
-
-      const requestBody = {
-        messages: [messageData]
-      };
-
-      logger.debug({
-        sessionId,
-        requestBody: JSON.stringify(requestBody)
-      }, 'Calling thread.addMessages');
-
-      // Store message in thread - addMessages takes threadId and request object
-      const result = await this.client.thread.addMessages(sessionId, requestBody);
-
-      logger.info({
-        userId,
-        sessionId,
-        role,
-        contentLength: content.length,
-        result: JSON.stringify(result)
-      }, 'Message stored successfully in Zep');
-
-      return true;
-    } catch (error: any) {
-      logger.error({
-        error: error.message,
-        errorCode: error.code,
-        statusCode: error.statusCode,
-        stack: error.stack,
-        fullError: JSON.stringify(error),
-        userId,
-        sessionId,
-        role,
-        contentPreview: content.substring(0, 100)
-      }, 'Error storing message in Zep via SDK');
-      return false;
-    }
-  }
-
-  /**
    * Store a conversation turn (user message + assistant response)
    */
   async storeConversationTurn(
     userId: string,
     sessionId: string,
     userMessage: string,
-    assistantMessage: string,
-    metadata?: {
-      model?: string;
-      tokensIn?: number;
-      tokensOut?: number;
-      costUsd?: number;
-    }
+    assistantMessage: string
   ): Promise<boolean> {
     try {
       logger.info({
         userId,
         sessionId,
         userMessageLength: userMessage.length,
-        assistantMessageLength: assistantMessage.length,
-        metadata
+        assistantMessageLength: assistantMessage.length
       }, 'Starting to store conversation turn');
 
-      // Store user message
-      const userStored = await this.storeMessage(
-        userId,
-        sessionId,
-        'user',
-        userMessage,
-        { type: 'user_input' }
-      );
+      const messages: Message[] = [
+        {
+          content: userMessage,
+          role: "user",
+        },
+        {
+          content: assistantMessage,
+          role: "assistant",
+        }
+      ];
 
-      if (!userStored) {
-        logger.error({ userId, sessionId }, 'Failed to store user message');
+      const result = await this.client.thread.addMessages(sessionId, {messages});
+
+      if (!result) {
+        logger.error({userId, sessionId}, 'Failed to store conversation turn');
         return false;
       }
+      return true;
 
-      logger.info({ userId, sessionId }, 'User message stored, storing assistant response');
-
-      // Store assistant response
-      const assistantStored = await this.storeMessage(
-        userId,
-        sessionId,
-        'assistant',
-        assistantMessage,
-        {
-          type: 'ai_response',
-          ...metadata
-        }
-      );
-
-      if (!assistantStored) {
-        logger.error({ userId, sessionId }, 'Failed to store assistant message');
-      } else {
-        logger.info({ userId, sessionId }, 'Conversation turn stored successfully');
-      }
-
-      return assistantStored;
     } catch (error: any) {
       logger.error({
         error: error.message,
@@ -662,7 +570,7 @@ class ZepAdapter {
 const zepAdapter = new ZepAdapter();
 
 // Export for use in other modules
-export { zepAdapter };
+export {zepAdapter};
 
 // ============================================================================
 // Error Handling Utilities
@@ -693,8 +601,8 @@ function mapZepError(error: any): { status: number; message: string } {
 
   // Network/timeout errors -> 502 Bad Gateway
   if (error.code === 'ECONNREFUSED' ||
-      error.code === 'ETIMEDOUT' ||
-      error.message?.includes('timeout')) {
+    error.code === 'ETIMEDOUT' ||
+    error.message?.includes('timeout')) {
     return {
       status: 502,
       message: 'Memory service temporarily unavailable'
@@ -761,7 +669,7 @@ async function upsertMemoryHandler(
       });
     }
 
-    const { facts, sessionId } = req.body;
+    const {facts, sessionId} = req.body;
     const userId = authReq.user.id;
 
     logger.info('Memory upsert request', {
@@ -873,7 +781,7 @@ async function searchMemoryHandler(
       });
     }
 
-    const { query, sessionId, limit, min_score } = queryParams;
+    const {query, sessionId, limit, min_score} = queryParams;
     const userId = authReq.user.id;
 
     // Apply admin defaults from memory config
@@ -999,7 +907,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       response: {
         200: Type.Object({
           ok: Type.Literal(true),
-          upserted: Type.Integer({ minimum: 0 }),
+          upserted: Type.Integer({minimum: 0}),
           session_id: Type.Optional(Type.String()),
           timing: Type.Object({
             zep_ms: Type.Number(),
@@ -1034,7 +942,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
             score: Type.Number(),
             source_type: Type.String(),
             tokens_estimate: Type.Integer(),
-            metadata: Type.Optional(Type.Object({}, { additionalProperties: true }))
+            metadata: Type.Optional(Type.Object({}, {additionalProperties: true}))
           })),
           total_tokens: Type.Integer(),
           timing: Type.Object({

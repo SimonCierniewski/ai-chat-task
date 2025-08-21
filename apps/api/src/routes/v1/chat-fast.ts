@@ -29,53 +29,122 @@ function formatSSEEvent(event: string, data: any): string {
 }
 
 /**
- * Minimal SSE Stream class for fast chat
+ * SSE Stream handler with heartbeat and error recovery
  */
 class SSEStream {
   private reply: FastifyReply;
+  private heartbeatInterval?: NodeJS.Timeout;
   private closed = false;
   private abortController: AbortController;
 
-  constructor(reply: FastifyReply) {
+  constructor(reply: FastifyReply, requestId: string) {
     this.reply = reply;
     this.abortController = new AbortController();
-  }
 
-  initialize() {
     // Set SSE headers and flush immediately
-    this.reply.raw.writeHead(200, {
+    reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-      'Proxy-Buffering': 'off'
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Credentials': 'true',
+      'X-Request-Id': requestId,
+      // Disable proxy buffering
+      'X-Accel-Buffering': 'no', // Nginx
+      'Proxy-Buffering': 'off'   // Generic
     });
 
-    // Flush headers immediately
-    this.reply.raw.write('');
+    // Flush headers immediately before any upstream calls
+    this.flush();
+
+    // Start heartbeat to keep connection alive
+    this.startHeartbeat();
 
     // Handle client disconnect
-    this.reply.raw.on('close', () => {
+    reply.raw.on('close', () => {
       this.abortController.abort();
-      this.closed = true;
+      this.close();
     });
+
+    reply.raw.on('error', (error) => {
+      logger.warn('SSE stream error', { error: error.message });
+      this.abortController.abort();
+      this.close();
+    });
+
+    // Send initial ping
+    this.sendComment('Connected to chat stream');
+    this.flush();
   }
 
+  /**
+   * Send SSE comment (keeps connection alive)
+   */
+  private sendComment(comment: string) {
+    if (this.closed) return;
+    this.reply.raw.write(`: ${comment}\n\n`);
+  }
+
+  /**
+   * Send SSE event
+   */
   sendEvent(type: ChatEventType, data: any) {
     if (this.closed) return;
     this.reply.raw.write(formatSSEEvent(type, data));
+    this.flush();
   }
 
+  /**
+   * Flush the stream buffer
+   */
+  private flush() {
+    if (this.closed) return;
+    if (this.reply.raw.flushHeaders) {
+      this.reply.raw.flushHeaders();
+    }
+  }
+
+  /**
+   * Start periodic heartbeat
+   */
+  private startHeartbeat() {
+    const heartbeatMs = config.openai.sseHeartbeatMs || 10000; // Default 10s
+    this.heartbeatInterval = setInterval(() => {
+      if (!this.closed) {
+        this.sendComment(`heartbeat ${Date.now()}`);
+        this.flush();
+      }
+    }, heartbeatMs);
+  }
+
+  /**
+   * Close the stream
+   */
   close() {
     if (this.closed) return;
     this.closed = true;
-    this.reply.raw.end();
+
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+
+    try {
+      this.reply.raw.end();
+    } catch (error) {
+      // Ignore errors when closing
+    }
   }
 
+  /**
+   * Check if stream is closed
+   */
   isClosed(): boolean {
     return this.closed;
   }
 
+  /**
+   * Get abort signal for upstream cancellation
+   */
   getAbortSignal(): AbortSignal {
     return this.abortController.signal;
   }
@@ -112,8 +181,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
       const reqId = req.id;
 
       // Initialize SSE stream
-      const stream = new SSEStream(reply);
-      stream.initialize();
+      const stream = new SSEStream(reply, req.id);
 
       try {
         // Step 1: Validate model (fast lookup)
@@ -277,38 +345,37 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
               //   }, 'Chat completion finished (fallback usage)');
               // }
               //
-              // // Store conversation in Zep if successful and session exists
-              // if (reason === 'stop' && sessionId && outputText) {
-              //   try {
-              //     const stored = await zepAdapter.storeConversationTurn(
-              //       userId,
-              //       sessionId,
-              //       message,
-              //       outputText,
-              //       {
-              //         model,
-              //         tokensIn: hasProviderUsage ? undefined : usageCalc?.tokens_in,
-              //         tokensOut: hasProviderUsage ? undefined : usageCalc?.tokens_out,
-              //         costUsd: hasProviderUsage ? undefined : usageCalc?.cost_usd
-              //       }
-              //     );
-              //
-              //     if (stored) {
-              //       logger.info({
-              //         req_id: req.id,
-              //         user_id: userId,
-              //         session_id: sessionId
-              //       }, 'Conversation stored in Zep');
-              //     }
-              //   } catch (error) {
-              //     // Don't fail the request if Zep storage fails
-              //     logger.error({
-              //       req_id: req.id,
-              //       error: error instanceof Error ? error.message : String(error)
-              //     }, 'Failed to store conversation in Zep');
-              //   }
-              // }
+              // Store conversation in Zep if successful and session exists
+              if (reason === 'stop' && sessionId && outputText) {
+                try {
+                  const stored = await zepAdapter.storeConversationTurn(
+                    userId,
+                    sessionId,
+                    message,
+                    outputText,
+                    {
+                      model,
+                      tokensIn: hasProviderUsage ? undefined : usageCalc?.tokens_in,
+                      tokensOut: hasProviderUsage ? undefined : usageCalc?.tokens_out,
+                      costUsd: hasProviderUsage ? undefined : usageCalc?.cost_usd
+                    }
+                  );
 
+                  if (stored) {
+                    logger.info({
+                      req_id: req.id,
+                      user_id: userId,
+                      session_id: sessionId
+                    }, 'Conversation stored in Zep');
+                  }
+                } catch (error) {
+                  // Don't fail the request if Zep storage fails
+                  logger.error({
+                    req_id: req.id,
+                    error: error instanceof Error ? error.message : String(error)
+                  }, 'Failed to store conversation in Zep');
+                }
+              }
 
               stream.sendEvent(ChatEventType.DONE, { finish_reason: reason });
               stream.close();
