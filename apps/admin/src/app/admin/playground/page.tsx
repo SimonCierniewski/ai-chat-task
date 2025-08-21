@@ -22,17 +22,9 @@ interface TimingData {
   total_ms?: number;
 }
 
-interface MemoryResult {
-  text: string;
-  score: number;
-  source_type: string;
-  session_id?: string | null;
-}
-
 interface MemoryData {
-  results: MemoryResult[];
-  total_tokens: number;
-  results_count: number;
+  results: string | undefined;
+  memoryMs: number;
 }
 
 interface ModelInfo {
@@ -413,24 +405,7 @@ export default function PlaygroundPage() {
               </form>
             </Card>
 
-            {/* System Prompt Card */}
-            <Card title="System Prompt" icon="🤖" className="mt-4">
-              <div className="mt-4">
-                <textarea
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                  placeholder="Enter a custom system prompt..."
-                  disabled={isStreaming}
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  This prompt sets the behavior and context for the AI assistant.
-                </p>
-              </div>
-            </Card>
-
-            {/* Timing Info */}
+            {/* Performance Metrics */}
             {timing && (
               <Card title="Performance" icon="⚡" className="mt-4">
                 <div className="mt-4 grid grid-cols-2 gap-4">
@@ -450,6 +425,23 @@ export default function PlaygroundPage() {
               </Card>
             )}
 
+            {/* System Prompt Card */}
+            <Card title="System Prompt" icon="🤖" className="mt-4">
+              <div className="mt-4">
+                <textarea
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Enter a custom system prompt..."
+                  disabled={isStreaming}
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  This prompt sets the behavior and context for the AI assistant.
+                </p>
+              </div>
+            </Card>
+
             {/* API Endpoint Info */}
             <Card title="API Endpoint" icon="🔗" className="mt-4">
               <div className="mt-4 p-3 bg-gray-50 rounded-md">
@@ -468,32 +460,17 @@ export default function PlaygroundPage() {
             {/* Memory Context - Moved to top of right column */}
             <Card title="Memory Context" icon="🧠">
               <div className="mt-4 space-y-3">
-                {memoryContext && memoryContext.results_count > 0 ? (
+                {memoryContext && memoryContext.results ? (
                   <>
                     <div className="text-sm text-gray-600">
-                      Retrieved {memoryContext.results_count} memory items ({memoryContext.total_tokens} tokens)
+                      Retrieved in {memoryContext.memoryMs}ms
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2">
-                      {memoryContext.results.map((result, index) => (
-                        <div key={index} className="p-3 bg-gray-50 rounded-md border border-gray-200">
-                          <div className="flex justify-between items-start mb-1">
-                            <span className="text-xs font-medium text-gray-500">
-                              #{index + 1} • {result.source_type}
-                            </span>
-                            <span className="text-xs text-blue-600">
-                              Score: {(result.score * 100).toFixed(1)}%
-                            </span>
-                          </div>
-                          <div className="text-sm text-gray-700 line-clamp-3">
-                            {result.text}
-                          </div>
-                          {result.session_id && (
-                            <div className="text-xs text-gray-400 mt-1">
-                              Session: {result.session_id}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                    <div className="max-h-60 overflow-y-auto">
+                      <div className="p-3 bg-gray-50 rounded-md border border-gray-200">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                          {memoryContext.results}
+                        </pre>
+                      </div>
                     </div>
                   </>
                 ) : (
@@ -549,6 +526,7 @@ export default function PlaygroundPage() {
                 </div>
               )}
             </Card>
+
           </div>
         </div>
       </div>
