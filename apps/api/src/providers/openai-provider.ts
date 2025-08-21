@@ -162,32 +162,32 @@ export class OpenAIProvider {
               retryCount++;
               const retryAfter = response.headers.get('retry-after');
               const delay = retryAfter ? parseInt(retryAfter) * 1000 : 2000 + Math.random() * 1000;
-              logger.warn('OpenAI rate limit, retrying', {
+              logger.warn({
                 retry_count: retryCount,
                 delay_ms: delay,
                 retry_after: retryAfter,
                 error_details: errorDetails
-              });
+              }, 'OpenAI rate limit, retrying');
               await new Promise(resolve => setTimeout(resolve, delay));
               continue;
             }
-            logger.error('OpenAI rate limit exceeded after retries', {
+            logger.error({
               retry_count: retryCount,
               error_details: errorDetails
-            });
+            }, 'OpenAI rate limit exceeded after retries');
             onError(error, 429);
             return { ttftMs, openAiMs, retryCount };
           }
 
           // Never retry 4xx errors (except 429)
           if (response.status >= 400 && response.status < 500) {
-            logger.error('OpenAI client error', {
+            logger.error({
               status: response.status,
               error_details: errorDetails,
               retry_count: retryCount,
               model,
               api_key_prefix: this.apiKey.substring(0, 10) + '...'
-            });
+            }, 'OpenAI client error');
             onError(error, response.status);
             return { ttftMs, openAiMs, retryCount };
           }
@@ -196,20 +196,20 @@ export class OpenAIProvider {
           if (response.status >= 500 && retryCount < this.retryMax) {
             retryCount++;
             const jitter = Math.random() * 1000;
-            logger.warn('OpenAI server error, retrying', {
+            logger.warn({
               status: response.status,
               error_details: errorDetails,
               retry_count: retryCount
-            });
+            }, 'OpenAI server error, retrying');
             await new Promise(resolve => setTimeout(resolve, 1000 + jitter));
             continue;
           }
 
-          logger.error('OpenAI API error', {
+          logger.error({
             status: response.status,
             error_details: errorDetails,
             retry_count: retryCount
-          });
+          }, 'OpenAI API error');
           onError(error, response.status);
           return { ttftMs, openAiMs, retryCount };
         }
@@ -281,10 +281,10 @@ export class OpenAIProvider {
                     ttftMs = Date.now() - startTime;
                     onFirstToken?.();
 
-                    logger.info('First token received', {
+                    logger.info({
                       ttft_ms: ttftMs,
                       model
-                    });
+                    }, 'First token received');
                   }
 
                   onToken(content);
@@ -296,7 +296,7 @@ export class OpenAIProvider {
                 }
 
               } catch (e) {
-                logger.warn('Failed to parse SSE data', { data, error: e });
+                logger.warn({ data, error: e }, 'Failed to parse SSE data');
               }
             }
           }
@@ -318,14 +318,14 @@ export class OpenAIProvider {
 
         // Handle abort/disconnect
         if (error.name === 'AbortError' || options.signal?.aborted) {
-          logger.info('Request aborted', { retry_count: retryCount });
+          logger.info({ retry_count: retryCount }, 'Request aborted');
           return { ttftMs, openAiMs, retryCount };
         }
 
-        logger.error('OpenAI streaming error', {
+        logger.error({
           error: error.message,
           retry_count: retryCount
-        });
+        }, 'OpenAI streaming error');
         onError(error);
         return { ttftMs, openAiMs, retryCount };
       }

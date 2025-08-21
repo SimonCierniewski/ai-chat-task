@@ -147,10 +147,10 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
     const limit = Math.min(100, Math.max(1, parseInt(query.limit || '20', 10)));
     const search = (query.search || '').toString().trim().toLowerCase();
 
-    logger.info('Admin users list requested', {
+    logger.info({
       req_id: req.id,
       admin_id: (req as any).user.id
-    });
+    }, 'Admin users list requested');
 
     // List users from auth (service role required)
     const { data: listResult, error: listError } = await supabaseAdmin.auth.admin.listUsers({
@@ -159,10 +159,10 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
     });
 
     if (listError) {
-      logger.error('Failed to list auth users', {
+      logger.error({
         req_id: req.id,
         error: listError.message,
-      });
+      }, 'Failed to list auth users');
       throw listError;
     }
 
@@ -181,10 +181,10 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
       .in('user_id', userIds);
 
     if (profilesError) {
-      logger.error('Failed to fetch profiles for users', {
+      logger.error({
         req_id: req.id,
         error: profilesError.message,
-      });
+      }, 'Failed to fetch profiles for users');
       throw profilesError;
     }
 
@@ -199,10 +199,10 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
         .in('user_id', userIds);
 
       if (usageError) {
-        logger.warn('Failed to fetch usage stats for users', {
+        logger.warn({
           req_id: req.id,
           error: usageError.message,
-        });
+        }, 'Failed to fetch usage stats for users');
       } else if (usageRows) {
         for (const row of usageRows as any[]) {
           const uid = row.user_id as string;
@@ -239,11 +239,11 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
 
     const totalMs = Date.now() - startTime;
 
-    logger.info('Admin users list completed', {
+    logger.info({
       req_id: req.id,
       user_count: adminUsers.length,
       total_ms: totalMs
-    });
+    }, 'Admin users list completed');
 
     // Build simple/estimated pagination info
     const rawCount = listResult?.users?.length || 0;
@@ -263,10 +263,10 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
     });
 
   } catch (error) {
-    logger.error('Admin users handler error', {
+    logger.error({
       req_id: req.id,
       error: error instanceof Error ? error.message : String(error)
-    });
+    }, 'Admin users handler error');
 
     return reply.status(500).send({
       error: 'INTERNAL_ERROR',
@@ -302,14 +302,14 @@ async function getMetricsHandler(
     const fromDate = from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const toDate = to || new Date().toISOString().split('T')[0];
 
-    logger.info('Admin metrics requested', {
+    logger.info({
       req_id: req.id,
       admin_id: (req as any).user.id,
       from: fromDate,
       to: toDate,
       user_id: userId,
       model
-    });
+    }, 'Admin metrics requested');
 
     // Query daily_usage_view for time series and aggregations
     let query = supabaseAdmin
@@ -329,10 +329,10 @@ async function getMetricsHandler(
     const { data: dailyUsage, error } = await query.order('day', { ascending: true });
 
     if (error) {
-      logger.error('Failed to fetch daily usage metrics', {
+      logger.error({
         req_id: req.id,
         error: error.message
-      });
+      }, 'Failed to fetch daily usage metrics');
       throw error;
     }
 
@@ -384,21 +384,21 @@ async function getMetricsHandler(
 
     const totalMs = Date.now() - startTime;
 
-    logger.info('Admin metrics completed', {
+    logger.info({
       req_id: req.id,
       total_messages: totalMessages,
       unique_users: uniqueUsers,
       days_queried: dailyUsage?.length || 0,
       total_ms: totalMs
-    });
+    }, 'Admin metrics completed');
 
     return reply.status(200).send(metrics);
 
   } catch (error) {
-    logger.error('Admin metrics handler error', {
+    logger.error({
       req_id: req.id,
       error: error instanceof Error ? error.message : String(error)
-    });
+    }, 'Admin metrics handler error');
 
     return reply.status(500).send({
       error: 'INTERNAL_ERROR',
@@ -418,18 +418,18 @@ async function listModelsHandler(
   try {
     const models = await modelRegistry.getAllModels();
 
-    logger.info('Admin listed models', {
+    logger.info({
       req_id: req.id,
       user_id: (req as any).user.id,
       models_count: models.length
-    });
+    }, 'Admin listed models');
 
     return reply.send({models});
   } catch (error) {
-    logger.error('Failed to list models', {
+    logger.error({
       req_id: req.id,
       error: error instanceof Error ? error.message : String(error)
-    });
+    }, 'Failed to list models');
 
     return reply.status(500).send({
       error: 'INTERNAL_ERROR',
@@ -474,11 +474,11 @@ async function updateModelPricingHandler(
       });
     }
 
-    logger.info('Admin pricing update requested', {
+    logger.info({
       req_id: req.id,
       admin_id: (req as any).user.id,
       count: items.length,
-    });
+    }, 'Admin pricing update requested');
 
     const updatedAt = new Date().toISOString();
 
@@ -497,25 +497,25 @@ async function updateModelPricingHandler(
         .select();
 
       if (error) {
-        logger.error('Failed to upsert model pricing', { req_id: req.id, model, error: error.message });
+        logger.error({ req_id: req.id, model, error: error.message }, 'Failed to upsert model pricing');
         throw error;
       }
     }
 
     await modelRegistry.invalidateCache();
 
-    logger.info('Admin pricing update completed', {
+    logger.info({
       req_id: req.id,
       total_ms: Date.now() - startTime,
-    });
+    }, 'Admin pricing update completed');
 
     return reply.status(200).send({ success: true, updated_at: updatedAt, models: validItems });
 
   } catch (error) {
-    logger.error('Admin pricing handler error', {
+    logger.error({
       req_id: req.id,
       error: error instanceof Error ? error.message : String(error)
-    });
+    }, 'Admin pricing handler error');
 
     return reply.status(500).send({
       error: 'INTERNAL_ERROR',
@@ -544,12 +544,12 @@ async function updateUserRoleHandler(
       return reply.status(400).send({ error: 'Invalid role' });
     }
 
-    logger.info('Admin updating user role', {
+    logger.info({
       req_id: req.id,
       admin_id: (req as any).user.id,
       target_user: userId,
       role,
-    });
+    }, 'Admin updating user role');
 
     // Try update; do not create profile if missing
     const { data: updated, error: updateError } = await supabaseAdmin
@@ -560,10 +560,10 @@ async function updateUserRoleHandler(
       .maybeSingle();
 
     if (updateError) {
-      logger.error('Failed to update user role', {
+      logger.error({
         req_id: req.id,
         error: updateError.message,
-      });
+      }, 'Failed to update user role');
       return reply.status(500).send({ error: 'Failed to update user role' });
     }
 
@@ -576,10 +576,10 @@ async function updateUserRoleHandler(
 
     return reply.send({ success: true, user_id: updated.user_id, role: updated.role });
   } catch (error) {
-    logger.error('Admin update user role handler error', {
+    logger.error({
       req_id: req.id,
       error: error instanceof Error ? error.message : String(error),
-    });
+    }, 'Admin update user role handler error');
     return reply.status(500).send({ error: 'Failed to update user role' });
   }
 }

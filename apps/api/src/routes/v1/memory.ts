@@ -282,39 +282,39 @@ class ZepAdapter {
         }
       } else {
         // Get user's threads and extract recent messages
-        logger.debug('Getting user threads for general search', { userId });
+        logger.debug({ userId }, 'Getting user threads for general search');
         const threads = await this.client.user.getThreads(userId, {
           limit: 10 // Get recent threads
         });
-        logger.debug('User threads retrieved', {
+        logger.debug({
           userId,
           threadCount: threads?.threads?.length || 0
-        });
+        }, 'User threads retrieved');
 
         // Collect messages from threads
         const allMessages: any[] = [];
         for (const thread of (threads.threads || [])) {
           try {
-            logger.debug('Getting messages from thread', { threadId: thread.threadId });
+            logger.debug({ threadId: thread.threadId }, 'Getting messages from thread');
             const threadData = await this.client.thread.get(thread.threadId);
             if (threadData.messages) {
               allMessages.push(...threadData.messages);
-              logger.debug('Added messages from thread', {
+              logger.debug({
                 threadId: thread.threadId,
                 messageCount: threadData.messages.length
-              });
+              }, 'Added messages from thread');
             }
           } catch (error: any) {
-            logger.debug('Failed to get thread messages', {
+            logger.debug({
               threadId: thread.threadId,
               error: error.message
-            });
+            }, 'Failed to get thread messages');
           }
         }
         contextData = { messages: allMessages };
-        logger.debug('Collected messages from all threads', {
+        logger.debug({
           totalMessages: allMessages.length
-        });
+        }, 'Collected messages from all threads');
       }
 
       // Convert messages to TelemetryRetrievalResult format
@@ -354,7 +354,7 @@ class ZepAdapter {
         return trimToTokenBudget(limited, options.tokenBudget);
       }
 
-      logger.info('Zep SDK memory retrieval completed', {
+      logger.info({
         userId,
         query: query.substring(0, 50),
         resultsCount: limited.length,
@@ -362,18 +362,18 @@ class ZepAdapter {
         rawMessageCount: contextData?.messages?.length || 0,
         filteredCount: filtered.length,
         finalCount: limited.length
-      });
+      }, 'Zep SDK memory retrieval completed');
 
       return limited;
     } catch (error: any) {
-      logger.error('Error retrieving Zep memory via SDK', {
+      logger.error({
         error: error.message,
         statusCode: error.statusCode,
         stack: error.stack,
         fullError: JSON.stringify(error),
         userId,
         query: query.substring(0, 100)
-      });
+      }, 'Error retrieving Zep memory via SDK');
       return [];
     }
   }
@@ -384,24 +384,24 @@ class ZepAdapter {
   private async ensureThread(sessionId: string, userId: string): Promise<void> {
     try {
       // Try to get the thread
-      logger.debug('Checking if thread exists', { sessionId, userId });
+      logger.debug({ sessionId, userId }, 'Checking if thread exists');
       const thread = await this.client.thread.get(sessionId);
-      logger.debug('Thread exists', {
+      logger.debug({
         sessionId,
         thread: JSON.stringify(thread)
-      });
+      }, 'Thread exists');
     } catch (error: any) {
-      logger.debug('Thread get error', {
+      logger.debug({
         sessionId,
         userId,
         errorMessage: error.message,
         errorStatus: error.statusCode,
         errorDetails: JSON.stringify(error)
-      });
+      }, 'Thread get error');
 
       // If thread doesn't exist, create it
       if (error.statusCode === 404 || error.message?.includes('not found')) {
-        logger.info('Creating new Zep thread', { sessionId, userId });
+        logger.info({ sessionId, userId }, 'Creating new Zep thread');
 
         const threadData = {
           threadId: sessionId,
@@ -410,22 +410,22 @@ class ZepAdapter {
             created_at: new Date().toISOString()
           }
         };
-        logger.debug('Thread creation request', { threadData: JSON.stringify(threadData) });
+        logger.debug({ threadData: JSON.stringify(threadData) }, 'Thread creation request');
 
         const newThread = await this.client.thread.create(threadData);
-        logger.info('Created new Zep thread', {
+        logger.info({
           sessionId,
           userId,
           newThread: JSON.stringify(newThread)
-        });
+        }, 'Created new Zep thread');
       } else {
-        logger.error('Unexpected error checking thread', {
+        logger.error({
           sessionId,
           userId,
           error: error.message,
           statusCode: error.statusCode,
           fullError: JSON.stringify(error)
-        });
+        }, 'Unexpected error checking thread');
         throw error;
       }
     }
@@ -442,13 +442,13 @@ class ZepAdapter {
     metadata?: Record<string, any>
   ): Promise<boolean> {
     try {
-      logger.info('Starting to store message in Zep', {
+      logger.info({
         userId,
         sessionId,
         role,
         contentLength: content.length,
         hasMetadata: !!metadata
-      });
+      }, 'Starting to store message in Zep');
 
       // Ensure user and thread exist
       await this.ensureUser(userId);
@@ -466,25 +466,25 @@ class ZepAdapter {
         messages: [messageData]
       };
 
-      logger.debug('Calling thread.addMessages', {
+      logger.debug({
         sessionId,
         requestBody: JSON.stringify(requestBody)
-      });
+      }, 'Calling thread.addMessages');
 
       // Store message in thread - addMessages takes threadId and request object
       const result = await this.client.thread.addMessages(sessionId, requestBody);
 
-      logger.info('Message stored successfully in Zep', {
+      logger.info({
         userId,
         sessionId,
         role,
         contentLength: content.length,
         result: JSON.stringify(result)
-      });
+      }, 'Message stored successfully in Zep');
 
       return true;
     } catch (error: any) {
-      logger.error('Error storing message in Zep via SDK', {
+      logger.error({
         error: error.message,
         errorCode: error.code,
         statusCode: error.statusCode,
@@ -494,7 +494,7 @@ class ZepAdapter {
         sessionId,
         role,
         contentPreview: content.substring(0, 100)
-      });
+      }, 'Error storing message in Zep via SDK');
       return false;
     }
   }
@@ -515,13 +515,13 @@ class ZepAdapter {
     }
   ): Promise<boolean> {
     try {
-      logger.info('Starting to store conversation turn', {
+      logger.info({
         userId,
         sessionId,
         userMessageLength: userMessage.length,
         assistantMessageLength: assistantMessage.length,
         metadata
-      });
+      }, 'Starting to store conversation turn');
 
       // Store user message
       const userStored = await this.storeMessage(
@@ -533,11 +533,11 @@ class ZepAdapter {
       );
 
       if (!userStored) {
-        logger.error('Failed to store user message', { userId, sessionId });
+        logger.error({ userId, sessionId }, 'Failed to store user message');
         return false;
       }
 
-      logger.info('User message stored, storing assistant response', { userId, sessionId });
+      logger.info({ userId, sessionId }, 'User message stored, storing assistant response');
 
       // Store assistant response
       const assistantStored = await this.storeMessage(
@@ -552,20 +552,20 @@ class ZepAdapter {
       );
 
       if (!assistantStored) {
-        logger.error('Failed to store assistant message', { userId, sessionId });
+        logger.error({ userId, sessionId }, 'Failed to store assistant message');
       } else {
-        logger.info('Conversation turn stored successfully', { userId, sessionId });
+        logger.info({ userId, sessionId }, 'Conversation turn stored successfully');
       }
 
       return assistantStored;
     } catch (error: any) {
-      logger.error('Error storing conversation turn', {
+      logger.error({
         error: error.message,
         stack: error.stack,
         fullError: JSON.stringify(error),
         userId,
         sessionId
-      });
+      }, 'Error storing conversation turn');
       return false;
     }
   }

@@ -53,7 +53,7 @@ export class UsageService {
     const pricing = await this.getModelPricing(model);
 
     if (!pricing) {
-      logger.warn('Model pricing not found, using fallback', { model });
+      logger.warn({ model }, 'Model pricing not found, using fallback');
       return {
         tokens_in: usage.tokens_in,
         tokens_out: usage.tokens_out,
@@ -100,12 +100,12 @@ export class UsageService {
       // Use default pricing if model not found
       const defaultCost = this.calculateDefaultCost(tokensIn, tokensOut, model);
 
-      logger.warn('Using default pricing for unknown model', {
+      logger.warn({
         model,
         tokens_in: tokensIn,
         tokens_out: tokensOut,
         cost_usd: defaultCost
-      });
+      }, 'Using default pricing for unknown model');
 
       return {
         tokens_in: tokensIn,
@@ -154,7 +154,7 @@ export class UsageService {
         .single();
 
       if (error || !data) {
-        logger.warn('Model pricing not found in database', { model, error });
+        logger.warn({ model, error }, 'Model pricing not found in database');
         return null;
       }
 
@@ -164,7 +164,7 @@ export class UsageService {
 
       return data;
     } catch (error) {
-      logger.error('Failed to fetch model pricing', { model, error });
+      logger.error({ model, error }, 'Failed to fetch model pricing');
       return null;
     }
   }
@@ -241,10 +241,10 @@ export class UsageService {
         .insert(telemetryPayload);
 
       if (error) {
-        logger.error('Failed to track usage telemetry', { error });
+        logger.error({ error }, 'Failed to track usage telemetry');
       }
     } catch (error) {
-      logger.error('Usage tracking error', { error });
+      logger.error({ error }, 'Usage tracking error');
     }
   }
 
@@ -265,7 +265,7 @@ export class UsageService {
         this.cacheExpiry = Date.now() + this.CACHE_TTL;
       }
     } catch (error) {
-      logger.warn('Failed to prefetch pricing', { error });
+      logger.warn({ error }, 'Failed to prefetch pricing');
     }
   }
 }

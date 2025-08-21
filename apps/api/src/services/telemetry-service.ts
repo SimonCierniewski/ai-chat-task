@@ -45,16 +45,16 @@ export class TelemetryService {
         .insert(event);
 
       if (error) {
-        logger.error('Failed to log telemetry event', {
+        logger.error({
           type,
           error: error.message
-        });
+        }, 'Failed to log telemetry event');
       }
     } catch (error) {
-      logger.error('Telemetry logging error', {
+      logger.error({
         type,
         error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      }, 'Telemetry logging error');
     }
   }
 

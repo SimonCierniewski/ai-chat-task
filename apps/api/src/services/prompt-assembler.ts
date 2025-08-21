@@ -147,7 +147,7 @@ export class PromptAssembler {
     }
 
     // Log the prompt plan for debugging
-    logger.info('Prompt assembled', {
+    logger.info({
       total_tokens: plan.totalTokens,
       memory_tokens: plan.memoryTokens,
       system_tokens: plan.systemTokens,
@@ -155,7 +155,7 @@ export class PromptAssembler {
       items_included: plan.itemsIncluded,
       items_excluded: plan.itemsExcluded,
       reasons: plan.excludedReasons
-    });
+    }, 'Prompt assembled');
 
     return plan;
   }

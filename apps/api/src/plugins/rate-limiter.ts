@@ -56,7 +56,7 @@ class RateLimiter {
   } {
     const now = Date.now();
     const resetTime = now + windowMs;
-    
+
     // Get or create entry
     let entry = this.bucket[key];
     if (!entry || now >= entry.resetTime) {
@@ -71,7 +71,7 @@ class RateLimiter {
 
     // Increment counter
     entry.count++;
-    
+
     const allowed = entry.count <= maxRequests;
     const remaining = Math.max(0, maxRequests - entry.count);
 
@@ -89,19 +89,19 @@ class RateLimiter {
   private cleanup() {
     const now = Date.now();
     let cleaned = 0;
-    
+
     for (const [key, entry] of Object.entries(this.bucket)) {
       if (now >= entry.resetTime) {
         delete this.bucket[key];
         cleaned++;
       }
     }
-    
+
     if (cleaned > 0) {
-      logger.debug('Rate limiter cleanup', { 
+      logger.debug({
         cleaned_entries: cleaned,
-        total_entries: Object.keys(this.bucket).length 
-      });
+        total_entries: Object.keys(this.bucket).length
+      }, 'Rate limiter cleanup');
     }
   }
 
@@ -111,7 +111,7 @@ class RateLimiter {
   getStats() {
     const now = Date.now();
     const active = Object.values(this.bucket).filter(entry => now < entry.resetTime);
-    
+
     return {
       total_keys: Object.keys(this.bucket).length,
       active_keys: active.length,
@@ -145,13 +145,13 @@ function generateUserOrIPKey(req: FastifyRequest): string {
   if (user?.id) {
     return `user:${user.id}`;
   }
-  
+
   // Fall back to IP address
-  const ip = req.ip || 
+  const ip = req.ip ||
     req.headers['x-forwarded-for'] as string ||
     req.headers['x-real-ip'] as string ||
     'unknown';
-  
+
   return `ip:${Array.isArray(ip) ? ip[0] : ip}`;
 }
 
@@ -178,8 +178,8 @@ function emitRateLimitTelemetry(
   allowed: boolean
 ) {
   const user = (req as any).user;
-  
-  logger.info('Telemetry: rate_limit', {
+
+  logger.info({
     event_type: 'rate_limit',
     user_id: user?.id || null,
     req_id: req.id,
@@ -190,7 +190,7 @@ function emitRateLimitTelemetry(
     endpoint: req.url,
     method: req.method,
     user_agent: req.headers['user-agent']
-  });
+  }, 'Telemetry: rate_limit');
 
   // TODO: Phase 4 - Store in telemetry_events table
   // await telemetryService.logEvent(user?.id || null, 'rate_limit', {
@@ -228,14 +228,14 @@ function createRateLimitHandler(config: RateLimitConfig) {
     reply.header('X-RateLimit-Window', Math.ceil(config.windowMs / 1000));
 
     // Log rate limit check
-    logger.debug('Rate limit check', {
+    logger.debug({
       req_id: req.id,
       key,
       current: result.current,
       limit: config.maxRequests,
       remaining: result.remaining,
       allowed: result.allowed
-    });
+    }, 'Rate limit check');
 
     // Emit telemetry
     emitRateLimitTelemetry(req, key, result.current, config.maxRequests, result.allowed);
@@ -246,13 +246,13 @@ function createRateLimitHandler(config: RateLimitConfig) {
         config.onLimit(req, key, result.current, config.maxRequests);
       }
 
-      logger.warn('Rate limit exceeded', {
+      logger.warn({
         req_id: req.id,
         key,
         current: result.current,
         limit: config.maxRequests,
         endpoint: req.url
-      });
+      }, 'Rate limit exceeded');
 
       return reply.status(429).send({
         error: 'Too many requests',
@@ -286,13 +286,13 @@ async function rateLimiterPlugin(fastify: FastifyInstance) {
       return req.url.startsWith('/api/v1/chat');
     },
     onLimit: (req, key, current, limit) => {
-      logger.warn('Global rate limit hit', {
+      logger.warn({
         req_id: req.id,
         key,
         current,
         limit,
         endpoint: req.url
-      });
+      }, 'Global rate limit hit');
     }
   });
 
@@ -306,13 +306,13 @@ async function rateLimiterPlugin(fastify: FastifyInstance) {
       return !req.url.startsWith('/api/v1/chat');
     },
     onLimit: (req, key, current, limit) => {
-      logger.warn('Chat rate limit hit', {
+      logger.warn({
         req_id: req.id,
         key,
         current,
         limit,
         endpoint: req.url
-      });
+      }, 'Chat rate limit hit');
     }
   });
 
@@ -360,7 +360,7 @@ async function rateLimiterPlugin(fastify: FastifyInstance) {
     }
 
     const stats = rateLimiter.getStats();
-    
+
     return {
       stats,
       config: {
@@ -376,11 +376,11 @@ async function rateLimiterPlugin(fastify: FastifyInstance) {
     rateLimiter.shutdown();
   });
 
-  logger.info('Rate limiter plugin registered', {
+  logger.info({
     window_ms: config.rateLimit.windowMs,
     max_requests: config.rateLimit.maxRequests,
     max_requests_chat: config.rateLimit.maxRequestsChat
-  });
+  }, 'Rate limiter plugin registered');
 }
 
 export default fp(rateLimiterPlugin, {

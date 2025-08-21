@@ -54,11 +54,11 @@ export const chatInitRoute: FastifyPluginAsync = async (server) => {
       const userId = req.user!.id;
       const reqId = req.id;
 
-      logger.info('Chat initialization request', {
+      logger.info({
         req_id: reqId,
         userId,
         sessionId
-      });
+      }, 'Chat initialization request');
 
       try {
         // Check/create user in Zep
@@ -67,13 +67,13 @@ export const chatInitRoute: FastifyPluginAsync = async (server) => {
         // Check/create thread in Zep
         const threadExists = await zepAdapter.ensureThread(userId, sessionId);
 
-        logger.info('Chat initialization completed', {
+        logger.info({
           req_id: reqId,
           userId,
           sessionId,
           userExists,
           threadExists
-        });
+        }, 'Chat initialization completed');
 
         return reply.send({
           success: true,
@@ -83,13 +83,13 @@ export const chatInitRoute: FastifyPluginAsync = async (server) => {
           userExists
         });
       } catch (error: any) {
-        logger.error('Chat initialization failed', {
+        logger.error({
           req_id: reqId,
           userId,
           sessionId,
           error: error.message,
           stack: error.stack
-        });
+        }, 'Chat initialization failed');
 
         // Don't fail the request, just return the state
         return reply.send({

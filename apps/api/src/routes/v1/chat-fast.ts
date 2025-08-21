@@ -148,13 +148,13 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         const openAIStartTime = Date.now();
 
         // Log that we're starting
-        logger.info('Fast chat: Starting OpenAI stream', {
+        logger.info({
           req_id: reqId,
           userId,
           model,
           hasContext: !!contextBlock,
           prepTime: openAIStartTime - startTime
-        });
+        }, 'Fast chat: Starting OpenAI stream');
 
         // Start streaming with minimal setup
         const metrics = await openAIProvider.streamCompletion({
@@ -164,10 +164,10 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
           signal: stream.getAbortSignal(),
           onFirstToken: () => {
             ttftMs = Date.now() - openAIStartTime;
-            logger.info('Fast chat: First token', {
+            logger.info({
               req_id: reqId,
               ttft_ms: ttftMs
-            });
+            }, 'Fast chat: First token');
           },
           onToken: (text: string) => {
             if (!stream.isClosed()) {
@@ -228,28 +228,28 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
               );
             }
 
-            logger.info('Fast chat: Background tasks completed', {
+            logger.info({
               req_id: reqId,
               userId,
               sessionId,
               total_ms: totalMs,
               ttft_ms: ttftMs
-            });
+            }, 'Fast chat: Background tasks completed');
           } catch (error: any) {
-            logger.error('Fast chat: Background task error', {
+            logger.error({
               req_id: reqId,
               error: error.message,
               stack: error.stack
-            });
+            }, 'Fast chat: Background task error');
           }
         });
 
       } catch (error: any) {
-        logger.error('Fast chat error', {
+        logger.error({
           req_id: reqId,
           error: error.message,
           stack: error.stack
-        });
+        }, 'Fast chat error');
 
         if (!stream.isClosed()) {
           stream.sendEvent(ChatEventType.ERROR, {

@@ -68,10 +68,10 @@ export class ModelRegistry {
 
     // Fallback to default model if requested model is invalid
     if (requestedModel && requestedModel !== this.defaultModel) {
-      logger.warn('Model not found in registry, using default', {
+      logger.warn({
         requested: requestedModel,
         default: this.defaultModel
-      });
+      }, 'Model not found in registry, using default');
 
       const defaultInfo = this.modelCache.get(this.defaultModel);
       if (defaultInfo) {
@@ -86,9 +86,9 @@ export class ModelRegistry {
 
     // If even default model is not found, return validation failure
     // but still allow request to proceed (pricing will be estimated)
-    logger.error('Default model not found in registry', {
+    logger.error({
       model: this.defaultModel
-    });
+    }, 'Default model not found in registry');
 
     return {
       valid: false,
@@ -127,7 +127,7 @@ export class ModelRegistry {
         .order('model');
 
       if (error) {
-        logger.error('Failed to fetch models from database', { error });
+        logger.error({ error }, 'Failed to fetch models from database');
         return;
       }
 
@@ -143,17 +143,17 @@ export class ModelRegistry {
           });
         }
 
-        logger.info('Model registry cache refreshed', {
+        logger.info({
           models: data.length,
           default: this.defaultModel
-        });
+        }, 'Model registry cache refreshed');
       }
 
       // Update cache expiry
       this.cacheExpiry = Date.now() + this.CACHE_TTL;
 
     } catch (error) {
-      logger.error('Model registry refresh error', { error });
+      logger.error({ error }, 'Model registry refresh error');
     }
   }
 

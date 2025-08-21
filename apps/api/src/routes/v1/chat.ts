@@ -297,7 +297,7 @@ async function chatHandler(
     const modelValidation = await modelRegistry.validateModel(requestedModel);
     const model: string = modelValidation.model; // Use validated/default model
 
-    logger.info('Chat request received', {
+    logger.info({
       req_id: req.id,
       user_id: userId,
       session_id: sessionId,
@@ -306,7 +306,7 @@ async function chatHandler(
       model_valid: modelValidation.valid,
       used_default: modelValidation.is_default,
       message_length: message.length
-    });
+    }, 'Chat request received');
 
     // Initialize SSE stream
     const stream = new SSEStream(reply, req.id);
@@ -317,23 +317,23 @@ async function chatHandler(
 
       // Retrieve memory context if requested
       if (useMemory) {
-        logger.info('Retrieving memory context', {
+        logger.info({
           req_id: req.id,
           user_id: userId,
           session_id: sessionId
-        });
+        }, 'Retrieving memory context');
 
         const memoryStartTime = Date.now();
         memoryContext = await retrieveMemoryContext(userId, message, sessionId);
         memoryMs = Date.now() - memoryStartTime;
 
-        logger.info('Memory retrieval completed', {
+        logger.info({
           req_id: req.id,
           user_id: userId,
           memory_ms: memoryMs,
           results_count: memoryContext?.results.length || 0,
           total_tokens: memoryContext?.total_tokens || 0
-        });
+        }, 'Memory retrieval completed');
 
         // Log zep_search telemetry event and send memory context to client
         if (memoryContext) {
@@ -434,7 +434,7 @@ async function chatHandler(
               }
             );
 
-            logger.info('Chat completion finished', {
+            logger.info({
               req_id: req.id,
               user_id: userId,
               total_ms: totalMs,
@@ -444,7 +444,7 @@ async function chatHandler(
               tokens_out: usageCalc.tokens_out,
               cost_usd: usageCalc.cost_usd,
               has_provider_usage: true
-            });
+            }, 'Chat completion finished');
           }
         },
         onDone: async (reason: 'stop' | 'length' | 'content_filter' | 'error') => {
@@ -496,7 +496,7 @@ async function chatHandler(
                 }
               );
 
-              logger.info('Chat completion finished (fallback usage)', {
+              logger.info({
                 req_id: req.id,
                 user_id: userId,
                 total_ms: totalMs,
@@ -506,7 +506,7 @@ async function chatHandler(
                 tokens_out: usageCalc.tokens_out,
                 cost_usd: usageCalc.cost_usd,
                 has_provider_usage: false
-              });
+              }, 'Chat completion finished (fallback usage)');
             }
 
             // Store conversation in Zep if successful and session exists
@@ -526,18 +526,18 @@ async function chatHandler(
                 );
 
                 if (stored) {
-                  logger.info('Conversation stored in Zep', {
+                  logger.info({
                     req_id: req.id,
                     user_id: userId,
                     session_id: sessionId
-                  });
+                  }, 'Conversation stored in Zep');
                 }
               } catch (error) {
                 // Don't fail the request if Zep storage fails
-                logger.error('Failed to store conversation in Zep', {
+                logger.error({
                   req_id: req.id,
                   error: error instanceof Error ? error.message : String(error)
-                });
+                }, 'Failed to store conversation in Zep');
               }
             }
 
@@ -547,11 +547,11 @@ async function chatHandler(
         },
         onError: async (error: Error, statusCode?: number) => {
           if (!stream.isClosed()) {
-            logger.error('Streaming provider error', {
+            logger.error({
               req_id: req.id,
               user_id: userId,
               error: error.message
-            });
+            }, 'Streaming provider error');
 
             // Log error telemetry
             await telemetryService.logError(
@@ -598,11 +598,11 @@ async function chatHandler(
     } catch (error) {
       // Handle errors during request processing
       if (!stream.isClosed()) {
-        logger.error('Chat handler error', {
+        logger.error({
           req_id: req.id,
           user_id: userId,
           error: error instanceof Error ? error.message : String(error)
-        });
+        }, 'Chat handler error');
 
         stream.sendEvent(ChatEventType.ERROR, {
           error: 'Internal server error',
@@ -616,10 +616,10 @@ async function chatHandler(
 
   } catch (error) {
     // Handle validation errors and other early errors
-    logger.error('Chat request error', {
+    logger.error({
       req_id: req.id,
       error: error instanceof Error ? error.message : String(error)
-    });
+    }, 'Chat request error');
 
     // If we haven't started streaming yet, send normal HTTP error
     if (!reply.sent) {
