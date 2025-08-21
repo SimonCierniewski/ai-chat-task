@@ -244,7 +244,9 @@ COMMENT ON FUNCTION public.refresh_daily_usage_mv_incremental IS
 -- Since telemetry_events is restricted to service_role, the views will also be restricted
 
 -- For the materialized view, we need to set up RLS if we want to enforce it
-ALTER MATERIALIZED VIEW public.daily_usage_mv OWNER TO service_role;
+-- NOTE: In Supabase, we can't change ownership to service_role, but we can grant permissions
+-- ALTER MATERIALIZED VIEW public.daily_usage_mv OWNER TO service_role;
+GRANT SELECT ON public.daily_usage_mv TO service_role;
 
 -- ============================================================================
 -- SAMPLE DATA FOR TESTING (Optional, remove in production)
@@ -278,6 +280,7 @@ ORDER BY day DESC, user_id, model;
 -- ============================================================================
 
 -- Example cron job setup (using pg_cron extension if available):
+-- NOTE: pg_cron is only available on paid Supabase plans
 /*
 -- Schedule refresh every hour
 SELECT cron.schedule(
@@ -285,14 +288,15 @@ SELECT cron.schedule(
     '0 * * * *',
     'SELECT public.refresh_daily_usage_mv();'
 );
-
--- Or schedule incremental refresh every 15 minutes for last 2 days
-SELECT cron.schedule(
-    'refresh-daily-usage-incremental',
-    '*/15 * * * *',
-    'SELECT public.refresh_daily_usage_mv_incremental(2);'
-);
 */
+-- Or schedule incremental refresh every 15 minutes for last 2 days
+
+-- SELECT cron.schedule(
+--     'refresh-daily-usage-incremental',
+--     '0 * * * *',        -- '*/15 * * * *',
+--     'SELECT public.refresh_daily_usage_mv_incremental(2);'
+-- );
+
 
 -- Example using Supabase Edge Functions or external scheduler:
 -- POST to: https://your-project.supabase.co/rest/v1/rpc/refresh_daily_usage_mv
