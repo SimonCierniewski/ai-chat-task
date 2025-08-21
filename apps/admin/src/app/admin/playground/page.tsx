@@ -75,9 +75,10 @@ export default function PlaygroundPage() {
   const startTimeRef = useRef<number | null>(null);
   const firstTokenTimeRef = useRef<number | null>(null);
 
-  // Fetch available models on mount
+  // Fetch available models and initialize chat on mount
   useEffect(() => {
     fetchModels();
+    initializeChat();
 
     // Cleanup on unmount
     return () => {
@@ -85,7 +86,38 @@ export default function PlaygroundPage() {
         eventSourceRef.current.close();
       }
     };
-  }, []);
+  }, [sessionId]);
+
+  const initializeChat = async () => {
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        console.warn('No session token for chat initialization');
+        return;
+      }
+
+      // Call the init endpoint to ensure user and thread exist
+      const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/chat/init`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ sessionId })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Chat initialized:', data);
+      } else {
+        console.warn('Chat initialization failed:', response.status);
+      }
+    } catch (error) {
+      console.error('Error initializing chat:', error);
+    }
+  };
 
   const fetchModels = async () => {
     try {

@@ -139,13 +139,13 @@ class ZepAdapter {
         logger.debug('Zep user exists', { userId, user: JSON.stringify(user) });
       } catch (error: any) {
         // If user doesn't exist, create it
-        logger.debug('User get error', { 
-          userId, 
+        logger.debug('User get error', {
+          userId,
           errorMessage: error.message,
           errorStatus: error.statusCode,
           errorDetails: JSON.stringify(error)
         });
-        
+
         if (error.statusCode === 404 || error.message?.includes('not found')) {
           logger.info('Creating new Zep user', { userId, metadata });
           const newUser = await this.client.user.add({
@@ -164,11 +164,11 @@ class ZepAdapter {
         }
       }
     } catch (error: any) {
-      logger.error('Error ensuring Zep user', { 
+      logger.error('Error ensuring Zep user', {
         error: error.message,
         statusCode: error.statusCode,
         stack: error.stack,
-        userId 
+        userId
       });
       throw error;
     }
@@ -255,16 +255,16 @@ class ZepAdapter {
         try {
           logger.debug('Getting context for specific thread', { sessionId: options.sessionId });
           await this.ensureThread(options.sessionId, userId);
-          
+
           const contextRequest = {
             mode: 'messages',
             limit
           };
-          logger.debug('Calling thread.getUserContext', { 
+          logger.debug('Calling thread.getUserContext', {
             sessionId: options.sessionId,
             request: JSON.stringify(contextRequest)
           });
-          
+
           contextData = await this.client.thread.getUserContext(options.sessionId, contextRequest);
           logger.debug('Thread context retrieved', {
             sessionId: options.sessionId,
@@ -305,7 +305,7 @@ class ZepAdapter {
               });
             }
           } catch (error: any) {
-            logger.debug('Failed to get thread messages', { 
+            logger.debug('Failed to get thread messages', {
               threadId: thread.threadId,
               error: error.message
             });
@@ -366,12 +366,12 @@ class ZepAdapter {
 
       return limited;
     } catch (error: any) {
-      logger.error('Error retrieving Zep memory via SDK', { 
+      logger.error('Error retrieving Zep memory via SDK', {
         error: error.message,
         statusCode: error.statusCode,
         stack: error.stack,
         fullError: JSON.stringify(error),
-        userId, 
+        userId,
         query: query.substring(0, 100)
       });
       return [];
@@ -386,23 +386,23 @@ class ZepAdapter {
       // Try to get the thread
       logger.debug('Checking if thread exists', { sessionId, userId });
       const thread = await this.client.thread.get(sessionId);
-      logger.debug('Thread exists', { 
-        sessionId, 
+      logger.debug('Thread exists', {
+        sessionId,
         thread: JSON.stringify(thread)
       });
     } catch (error: any) {
-      logger.debug('Thread get error', { 
+      logger.debug('Thread get error', {
         sessionId,
         userId,
         errorMessage: error.message,
         errorStatus: error.statusCode,
         errorDetails: JSON.stringify(error)
       });
-      
+
       // If thread doesn't exist, create it
       if (error.statusCode === 404 || error.message?.includes('not found')) {
         logger.info('Creating new Zep thread', { sessionId, userId });
-        
+
         const threadData = {
           threadId: sessionId,
           userId: userId,
@@ -411,10 +411,10 @@ class ZepAdapter {
           }
         };
         logger.debug('Thread creation request', { threadData: JSON.stringify(threadData) });
-        
+
         const newThread = await this.client.thread.create(threadData);
-        logger.info('Created new Zep thread', { 
-          sessionId, 
+        logger.info('Created new Zep thread', {
+          sessionId,
           userId,
           newThread: JSON.stringify(newThread)
         });
@@ -461,11 +461,11 @@ class ZepAdapter {
         name: role,
         createdAt: new Date().toISOString()
       };
-      
+
       const requestBody = {
         messages: [messageData]
       };
-      
+
       logger.debug('Calling thread.addMessages', {
         sessionId,
         requestBody: JSON.stringify(requestBody)
@@ -484,13 +484,13 @@ class ZepAdapter {
 
       return true;
     } catch (error: any) {
-      logger.error('Error storing message in Zep via SDK', { 
+      logger.error('Error storing message in Zep via SDK', {
         error: error.message,
         errorCode: error.code,
         statusCode: error.statusCode,
         stack: error.stack,
         fullError: JSON.stringify(error),
-        userId, 
+        userId,
         sessionId,
         role,
         contentPreview: content.substring(0, 100)
@@ -559,12 +559,12 @@ class ZepAdapter {
 
       return assistantStored;
     } catch (error: any) {
-      logger.error('Error storing conversation turn', { 
+      logger.error('Error storing conversation turn', {
         error: error.message,
         stack: error.stack,
         fullError: JSON.stringify(error),
-        userId, 
-        sessionId 
+        userId,
+        sessionId
       });
       return false;
     }
@@ -573,6 +573,9 @@ class ZepAdapter {
 
 // Global adapter instance
 const zepAdapter = new ZepAdapter();
+
+// Export for use in other modules
+export { zepAdapter };
 
 // ============================================================================
 // Error Handling Utilities
@@ -971,4 +974,3 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
 };
 
 // Export ZepAdapter and instance for use in chat.ts
-export { ZepAdapter, zepAdapter };

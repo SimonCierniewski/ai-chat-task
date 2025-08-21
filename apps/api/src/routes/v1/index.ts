@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { authRoutes } from './auth';
-import { chatRoutes } from './chat';
+import { chatFastRoute } from './chat-fast';
+import { chatInitRoute } from './chat-init';
 import { memoryRoutes } from './memory';
 import { adminRoutes } from './admin';
 import { requireAuth, requireAdmin } from '../../utils/guards';
@@ -16,6 +17,7 @@ export const v1Routes: FastifyPluginAsync = async (server) => {
         },
         chat: {
           stream: '/chat (POST)',
+          init: '/chat/init (POST)',
         },
         memory: {
           search: '/memory/search',
@@ -35,7 +37,8 @@ export const v1Routes: FastifyPluginAsync = async (server) => {
   await server.register(async (protectedRoutes) => {
     protectedRoutes.addHook('preHandler', requireAuth);
     
-    await protectedRoutes.register(chatRoutes, { prefix: '/chat' });
+    await protectedRoutes.register(chatFastRoute, { prefix: '/chat' });
+    await protectedRoutes.register(chatInitRoute, { prefix: '/chat' });
     await protectedRoutes.register(memoryRoutes, { prefix: '/memory' });
     
     protectedRoutes.get('/me', async (request, reply) => {
