@@ -74,9 +74,14 @@ export default function PlaygroundPage() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const firstTokenTimeRef = useRef<number | null>(null);
+  const initializeRef = useRef<boolean>(false);
 
   // Fetch available models and initialize chat on mount
   useEffect(() => {
+    // Prevent double initialization in development mode
+    if (initializeRef.current) return;
+    initializeRef.current = true;
+
     fetchModels();
     initializeChat();
 
@@ -86,7 +91,7 @@ export default function PlaygroundPage() {
         eventSourceRef.current.close();
       }
     };
-  }, [sessionId]);
+  }, []); // Remove sessionId dependency - it's stable from useState initializer
 
   const initializeChat = async () => {
     try {
