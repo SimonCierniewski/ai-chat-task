@@ -5,6 +5,7 @@ import androidx.navigation.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.prototype.aichat.BuildConfig
 import com.prototype.aichat.ui.screens.*
 
 /**
@@ -63,6 +64,12 @@ fun AppNavigation(
                 onNavigateToSession = {
                     navController.navigate(Screen.Session.route)
                 },
+                onNavigateToDiagnostics = {
+                    // Only available in debug builds
+                    if (BuildConfig.DEBUG) {
+                        navController.navigate(Screen.Diagnostics.route)
+                    }
+                },
                 onLogout = {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -116,6 +123,17 @@ fun AppNavigation(
                 }
             )
         }
+        
+        // Diagnostics screen - only available in debug builds
+        if (BuildConfig.DEBUG) {
+            composable(Screen.Diagnostics.route) {
+                DiagnosticsScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -151,4 +169,7 @@ sealed class Screen(val route: String) {
     }
     
     object Session : Screen("session")
+    
+    // Dev-only screen
+    object Diagnostics : Screen("diagnostics")
 }

@@ -59,6 +59,7 @@ android {
             versionNameSuffix = "-dev"
             
             // Dev environment config
+            buildConfigField("String", "FLAVOR", "\"dev\"")
             buildConfigField("String", "SUPABASE_URL", 
                 "\"${localProperties.getProperty("dev.supabase.url", "https://placeholder.supabase.co")}\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", 
@@ -82,6 +83,7 @@ android {
             dimension = "environment"
             
             // Production environment config
+            buildConfigField("String", "FLAVOR", "\"prod\"")
             buildConfigField("String", "SUPABASE_URL", 
                 "\"${localProperties.getProperty("prod.supabase.url", "https://placeholder.supabase.co")}\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", 

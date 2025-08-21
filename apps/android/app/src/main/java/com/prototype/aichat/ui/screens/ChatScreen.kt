@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.prototype.aichat.BuildConfig
 import com.prototype.aichat.domain.models.ChatMessage
 import com.prototype.aichat.domain.models.MessageRole
 import com.prototype.aichat.domain.models.StreamingState
@@ -36,7 +37,10 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
+    sessionId: String? = null,
+    onNavigateToSessions: () -> Unit,
     onNavigateToSession: () -> Unit,
+    onNavigateToDiagnostics: () -> Unit,
     onLogout: () -> Unit,
     chatViewModel: ChatViewModel = viewModel()
 ) {
@@ -81,6 +85,7 @@ fun ChatScreen(
                 onToggleMemory = { chatViewModel.toggleMemory() },
                 onSelectModel = { chatViewModel.selectModel(it) },
                 onNavigateToSession = onNavigateToSession,
+                onNavigateToDiagnostics = onNavigateToDiagnostics,
                 onLogout = onLogout
             )
         },
@@ -151,6 +156,7 @@ fun ChatTopBar(
     onToggleMemory: () -> Unit,
     onSelectModel: (String) -> Unit,
     onNavigateToSession: () -> Unit,
+    onNavigateToDiagnostics: () -> Unit,
     onLogout: () -> Unit
 ) {
     var showModelMenu by remember { mutableStateOf(false) }
@@ -217,14 +223,65 @@ fun ChatTopBar(
                 Icon(Icons.Default.History, contentDescription = null)
             }
             
-            // Logout
-            IconButton(
-                onClick = onLogout,
-                modifier = Modifier.semantics {
-                    contentDescription = "Sign out"
+            // More options menu
+            var showOptionsMenu by remember { mutableStateOf(false) }
+            
+            Box {
+                IconButton(
+                    onClick = { showOptionsMenu = true },
+                    modifier = Modifier.semantics {
+                        contentDescription = "More options"
+                    }
+                ) {
+                    Icon(Icons.Default.MoreVert, contentDescription = null)
                 }
-            ) {
-                Icon(Icons.Default.Logout, contentDescription = null)
+                
+                DropdownMenu(
+                    expanded = showOptionsMenu,
+                    onDismissRequest = { showOptionsMenu = false }
+                ) {
+                    // Diagnostics (Dev only)
+                    if (BuildConfig.DEBUG) {
+                        DropdownMenuItem(
+                            text = { 
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.BugReport,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Text("Diagnostics (Dev)")
+                                }
+                            },
+                            onClick = {
+                                showOptionsMenu = false
+                                onNavigateToDiagnostics()
+                            }
+                        )
+                        
+                        HorizontalDivider()
+                    }
+                    
+                    // Logout
+                    DropdownMenuItem(
+                        text = { 
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Logout, contentDescription = null)
+                                Text("Sign Out")
+                            }
+                        },
+                        onClick = {
+                            showOptionsMenu = false
+                            onLogout()
+                        }
+                    )
+                }
             }
         }
     )
