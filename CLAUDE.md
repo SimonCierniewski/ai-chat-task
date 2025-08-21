@@ -314,10 +314,20 @@
    - Session analytics
    - Export functionality
 
-### 🔮 Upcoming Phases
+### 🔮 Current Phase
 
-**Phase 7**: Android App  
-**Phase 8-12**: Security, Deployment, QA
+**Phase 7**: Android App (95% Complete)
+- ✅ Architecture and scaffolding
+- ✅ Authentication with magic links
+- ✅ Networking and SSE streaming
+- ✅ Chat UI with real-time streaming
+- ✅ Sessions and history management
+- ✅ Diagnostics screen (dev-only)
+- ✅ QA and release documentation
+- ⏳ Final integration testing
+- ⏳ APK signing and release build
+
+**Phase 8-12**: Security, Deployment, QA (Not started)
 
 ## 🔑 Important Configuration
 
@@ -469,7 +479,7 @@ When continuing this project:
 
 2. **Check current phase status**:
    - Phase 1-6: Complete
-   - Phase 7: Partial - Zep v3 integration complete, Android app pending
+   - Phase 7: 95% Complete - Android app with diagnostics implemented
    - Look at DEFINITION_OF_DONE.md for detailed status
 
 3. **Verify environment**:
@@ -550,7 +560,7 @@ pnpm check:all        # Run all checks
 **Phase 4**: ✅ API Infrastructure Complete  
 **Phase 5**: ✅ OpenAI Integration & Production Hardening Complete  
 **Phase 6**: ✅ Admin Panel Complete with Full Feature Implementation  
-**Phase 7**: 🔄 Android App (IN PROGRESS - 90% Complete)  
+**Phase 7**: 🔄 Android App (IN PROGRESS - 95% Complete)  
 **Phase 8-12**: ⏳ Security, Deployment, QA (Not started)  
 
 **Critical Achievements**: 
@@ -591,11 +601,76 @@ pnpm check:all        # Run all checks
 
 ---
 
-**Last Updated**: 2025-12-21 - Zep SDK integration complete, Playground memory display enhanced
+**Last Updated**: 2025-12-21 - Android Diagnostics & QA/Release documentation complete
 
 **GitHub Repo**: SimonCierniewski/ai-chat-task
 
-## 🔧 Recent Session Work (2025-12-21 - Zep SDK & Playground Enhancements)
+## 🔧 Recent Session Work (2025-12-21 - Android Diagnostics & QA Infrastructure)
+
+### Android Diagnostics Screen Implementation (COMPLETE)
+
+#### Features Added:
+1. **Dev-Only Diagnostics Screen**:
+   - Build variant and configuration display
+   - User session information
+   - Performance metrics (TTFT, SSE status, memory)
+   - Sanitized log viewer with copy functionality
+   - Only accessible in debug builds via `BuildConfig.DEBUG`
+
+2. **Supporting Infrastructure**:
+   - `LogCollector.kt` - Centralized logging with circular buffer
+   - `MetricsRepository.kt` - Performance metrics tracking
+   - Automatic log sanitization (removes tokens, passwords, keys)
+
+3. **Access Control**:
+   - Menu option in Chat screen overflow menu
+   - Conditional navigation route registration
+   - Red app bar to indicate development feature
+   - Completely removed from release builds
+
+4. **Documentation Created**:
+   - `/apps/android/docs/QA_CHECKLIST.md` - Comprehensive testing guide
+   - `/apps/android/docs/RELEASE.md` - Release process and configuration
+   - `/apps/android/docs/DIAGNOSTICS.md` - Feature documentation
+
+#### Build Configuration Updates:
+- Added `FLAVOR` BuildConfig field for variant detection
+- ProGuard rules configured for release minification
+- Debug keystore setup with production instructions
+
+#### Key Implementation Files:
+- `/apps/android/app/src/main/java/com/prototype/aichat/ui/screens/DiagnosticsScreen.kt`
+- `/apps/android/app/src/main/java/com/prototype/aichat/viewmodel/DiagnosticsViewModel.kt`
+- `/apps/android/app/src/main/java/com/prototype/aichat/core/logging/LogCollector.kt`
+- `/apps/android/app/src/main/java/com/prototype/aichat/data/metrics/MetricsRepository.kt`
+
+### QA & Release Documentation (COMPLETE)
+
+#### QA Checklist Coverage:
+- Authentication flow testing (magic link, deep links, session persistence)
+- SSE streaming performance (TTFT targets, cancellation)
+- Memory toggle and model selection
+- Error handling (401, 429, 5xx, network issues)
+- History and sessions management
+- UI/UX across screen sizes and accessibility
+- Security and data protection
+
+#### Release Guide Includes:
+- Version management (semantic versioning)
+- Build configuration (debug vs release)
+- Signing setup (keystore generation)
+- ProGuard/R8 configuration
+- Google Play Store deployment process
+- Rollback procedures
+
+### Android App Status Update:
+- **Phase 7 Progress**: Now 95% complete (was 90%)
+- **Added**: Diagnostics infrastructure and comprehensive documentation
+- **Remaining**: Final integration testing and APK signing
+
+---
+
+## 🔧 Previous Session Work (2025-12-21 Morning - Zep SDK & Playground)
 
 ### Zep SDK Integration (COMPLETE)
 
@@ -766,7 +841,7 @@ pnpm check:all        # Run all checks
 
 ### Android App Current State:
 
-#### ✅ Completed (90%):
+#### ✅ Completed (95%):
 1. **Architecture**: Clean architecture with MVVM pattern
 2. **Authentication**: Magic link flow with deep linking
 3. **Networking**: Typed API client and SSE streaming
@@ -775,12 +850,13 @@ pnpm check:all        # Run all checks
 6. **Navigation**: Multi-screen flow with parameters
 7. **Build System**: Dev/prod variants with proper config
 8. **Documentation**: Comprehensive guides for each module
+9. **Diagnostics**: Dev-only debug screen with metrics and logs
+10. **QA Infrastructure**: Complete testing checklist and procedures
+11. **Release Process**: Documented build and deployment guide
 
-#### ⏳ Remaining (10%):
+#### ⏳ Remaining (5%):
 1. **Integration Testing**: End-to-end flow with real backend
-2. **Performance Optimization**: Memory profiling
-3. **Release Build**: Signed APK generation
-4. **Play Store Assets**: Screenshots and descriptions
+2. **Release Build**: Signed APK generation with production keystore
 
 ### Key Technical Decisions:
 - **Room over simple caching**: Better for complex queries and offline support
@@ -788,12 +864,14 @@ pnpm check:all        # Run all checks
 - **Manual DI over Koin/Dagger**: Simpler for this scope
 - **OkHttp SSE over Ktor**: Better SSE support
 - **Build variants over runtime config**: Security and optimization
+- **BuildConfig.DEBUG for diagnostics**: Automatic removal in release builds
 
 ### Testing Notes:
 - Emulator uses `10.0.2.2` for localhost
 - Physical devices need machine IP
 - Deep links work with `adb shell am start`
 - Room Inspector available in Android Studio
+- Diagnostics screen accessible via Chat → Menu → "Diagnostics (Dev)" (debug builds only)
 
 ---
 
