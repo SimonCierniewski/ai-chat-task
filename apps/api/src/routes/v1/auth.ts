@@ -49,13 +49,13 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
         req_id: request.id,
       });
     }
-    
+
     request.log.info({
       req_id: request.id,
       userId: request.user.id,
       role: request.user.role,
     }, 'Auth ping successful');
-    
+
     return {
       id: request.user.id,
       email: request.user.email || 'N/A',
@@ -63,7 +63,7 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
       timestamp: new Date().toISOString(),
     };
   });
-  
+
   server.get('/status', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) {
       return {
@@ -71,9 +71,9 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
         message: 'No valid token provided',
       };
     }
-    
+
     const dbProfile = await profilesClient.getProfile(request.user.id);
-    
+
     return {
       authenticated: true,
       userId: request.user.id,
@@ -86,7 +86,7 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
       },
     };
   });
-  
+
   server.post<{ Body: OnSignupBody }>('/on-signup', {
     schema: {
       body: {
@@ -117,42 +117,41 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const { user_id, email, record } = request.body;
-    
+
     const userId = user_id || record?.id;
     const userEmail = email || record?.email;
-    
+
     if (!userId) {
       throw createError('Missing user_id in webhook payload', 400);
     }
-    
+
     request.log.info({
       req_id: request.id,
       userId,
       email: userEmail,
     }, 'Processing on-signup webhook');
-    
+
     let profileCreated = false;
     let zepInitialized = false;
-    
+
     try {
       const existingProfile = await profilesClient.getProfile(userId);
-      
+
       if (!existingProfile) {
         await profilesClient.createProfile(userId, userEmail || '');
         profileCreated = true;
-        
+
         request.log.info({
           req_id: request.id,
           userId,
         }, 'Created profile for new user');
       }
-      
+
       try {
-        const { getZepClient } = await import('../../services/zep');
         const zepClient = getZepClient(request.log);
         await zepClient.initializeUser(userId);
         zepInitialized = true;
-        
+
         request.log.info({
           req_id: request.id,
           userId,
@@ -170,10 +169,10 @@ export const authRoutes: FastifyPluginAsync = async (server) => {
         userId,
         error,
       }, 'Error in on-signup webhook');
-      
+
       throw createError('Failed to process signup', 500);
     }
-    
+
     return {
       success: true,
       profile_created: profileCreated,

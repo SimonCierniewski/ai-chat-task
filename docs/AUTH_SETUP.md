@@ -458,28 +458,6 @@ The on-signup hook:
 3. **Logs telemetry** - Records `zep_upsert` event with timing
 4. **Graceful degradation** - Works even if Zep is disabled
 
-### Phase 1 Behavior (Current)
-
-```typescript
-// Stub implementation in /apps/api/src/services/zep.ts
-async initializeUser(userId: string, email?: string) {
-  if (!this.enabled) {
-    // No Zep API key - skip initialization
-    return { success: true };
-  }
-  
-  // Simulate API calls (50-150ms delay)
-  // Phase 3 will implement actual Zep API calls:
-  // - POST /users to create user namespace
-  // - POST /collections to create default collection
-  
-  return {
-    success: true,
-    timings: { createUser: 75, createCollection: 85, total: 160 }
-  };
-}
-```
-
 ### Phase 3 Implementation (Future)
 
 ```typescript
@@ -563,16 +541,6 @@ curl -X POST http://localhost:3000/auth/on-signup \
   "success": true,
   "message": "User signup processed",
   "zep_initialized": false
-}
-
-# Check Zep initialization status
-curl http://localhost:3000/auth/zep-status/test-user-123 \
-  -H "Authorization: Bearer $JWT_TOKEN"
-
-# Response
-{
-  "initialized": true,
-  "enabled": false  # true if ZEP_API_KEY is set
 }
 ```
 

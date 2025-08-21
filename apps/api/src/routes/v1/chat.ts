@@ -47,25 +47,6 @@ const chatRequestSchema = Type.Object({
 const validateChatRequest = createValidator(chatRequestSchema);
 
 /**
- * Streaming provider interface for pluggable LLM backends
- */
-interface StreamingProvider {
-  /**
-   * Stream completion from LLM provider
-   */
-  streamCompletion(options: {
-    message: string;
-    model?: string;
-    context?: string; // Memory context if useMemory=true
-    sessionId?: string;
-    onToken: (text: string) => void;
-    onUsage: (usage: UsageEventData) => void;
-    onDone: (reason: 'stop' | 'length' | 'content_filter' | 'error') => void;
-    onError: (error: Error) => void;
-  }): Promise<void>;
-}
-
-/**
  * Memory context retrieved for the request
  */
 interface MemoryContext {

@@ -107,7 +107,7 @@ const validateSearchQuery = createValidator(searchQuerySchema);
  * Zep v3 adapter for memory storage and retrieval using official SDK
  */
 class ZepAdapter {
-  private client: ZepClient;
+  client: ZepClient;
 
   constructor() {
     const apiKey = config.zep.apiKey;
@@ -128,49 +128,189 @@ class ZepAdapter {
   }
 
   /**
-   * Get or create user in Zep v3 using SDK
+   * Initialize a new user in Zep memory system using SDK
+   * This creates a user in Zep for storing chat history and memory
+   *
+   * @param userId - The user's ID from Supabase auth
+   * @param email - The user's email address
+   * @returns Success status and timing metrics
    */
-  private async ensureUser(userId: string, metadata?: Record<string, any>): Promise<void> {
-    try {
-      // Try to get the user first
-      try {
-        logger.debug('Checking if Zep user exists', { userId });
-        const user = await this.client.user.get(userId);
-        logger.debug('Zep user exists', { userId, user: JSON.stringify(user) });
-      } catch (error: any) {
-        // If user doesn't exist, create it
-        logger.debug('User get error', {
-          userId,
-          errorMessage: error.message,
-          errorStatus: error.statusCode,
-          errorDetails: JSON.stringify(error)
-        });
+  async initializeUser(userId: string, email?: string): Promise<{
+    success: boolean;
+    error?: string;
+    timings?: {
+      createUser?: number;
+      total: number;
+    };
+  }> {
+    const startTime = Date.now();
 
+    try {
+      logger.info({ userId, email }, 'Initializing Zep user via SDK');
+
+      // Create or update user using SDK
+      const userStartTime = Date.now();
+
+      try {
+        // Check if user exists
+        await this.client.user.get(userId);
+
+        // User exists, update metadata if email provided
+        if (email) {
+          await this.client.user.update(userId, {
+            email,
+            metadata: {
+              updated_at: new Date().toISOString(),
+              source: 'signup_hook',
+            },
+          });
+        }
+
+        logger.info({ userId }, 'Zep user already exists, updated metadata');
+      } catch (error: any) {
+        // User doesn't exist, create new one
         if (error.statusCode === 404 || error.message?.includes('not found')) {
-          logger.info('Creating new Zep user', { userId, metadata });
-          const newUser = await this.client.user.add({
-            userId: userId,
-            metadata: metadata || {}
-          });
-          logger.info('Created new Zep user', { userId, newUser: JSON.stringify(newUser) });
-        } else {
-          logger.error('Unexpected error checking Zep user', {
+          await this.client.user.add({
             userId,
-            error: error.message,
-            statusCode: error.statusCode,
-            fullError: JSON.stringify(error)
+            email,
+            metadata: {
+              created_at: new Date().toISOString(),
+              source: 'signup_hook',
+            },
           });
+
+          logger.info({ userId }, 'Created new Zep user');
+        } else {
           throw error;
         }
       }
+
+      const userTime = Date.now() - userStartTime;
+      const totalTime = Date.now() - startTime;
+
+      logger.info(
+        {
+          userId,
+          timings: {
+            createUser: userTime,
+            total: totalTime,
+          },
+        },
+        'Zep user initialized successfully via SDK'
+      );
+
+      return {
+        success: true,
+        timings: {
+          createUser: userTime,
+          total: totalTime,
+        },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const totalTime = Date.now() - startTime;
+
+      logger.error(
+        {
+          userId,
+          error: errorMessage,
+          duration: totalTime,
+        },
+        'Failed to initialize Zep user via SDK'
+      );
+
+      return {
+        success: false,
+        error: errorMessage,
+        timings: {
+          total: totalTime,
+        },
+      };
+    }
+  }
+
+  /**
+   * Ensure user exists in Zep (create if not exists)
+   * @returns true if user exists or was created
+   */
+  async ensureUser(userId: string, email?: string): Promise<boolean> {
+    try {
+      // Try to get the user first
+      try {
+        await this.client.user.get(userId);
+        return true; // User exists
+      } catch (error: any) {
+        // User doesn't exist, create it
+        if (error.statusCode === 404 || error.message?.includes('not found')) {
+          await this.client.user.add({
+            userId,
+            email,
+            metadata: {
+              created_at: new Date().toISOString()
+            }
+          });
+          logger.info('Created new Zep user', { userId });
+          return true;
+        }
+        throw error; // Re-throw other errors
+      }
     } catch (error: any) {
-      logger.error('Error ensuring Zep user', {
-        error: error.message,
-        statusCode: error.statusCode,
-        stack: error.stack,
-        userId
+      logger.error('Failed to ensure Zep user', {
+        userId,
+        error: error.message
       });
-      throw error;
+      return false;
+    }
+  }
+
+  /**
+   * Ensure thread exists in Zep (create if not exists)
+   * @returns true if thread exists or was created
+   */
+  async ensureThread(userId: string, threadId: string): Promise<boolean> {
+    try {
+      // Try to get the thread first
+      try {
+        await this.client.thread.get(threadId);
+        return true; // Thread exists
+      } catch (error: any) {
+        // Thread doesn't exist, create it
+        if (error.statusCode === 404 || error.message?.includes('not found')) {
+          await this.client.thread.create({
+            threadId: threadId,
+            userId: userId
+          });
+          logger.info('Created new Zep thread', { userId, sessionId: threadId });
+          return true;
+        }
+        throw error; // Re-throw other errors
+      }
+    } catch (error: any) {
+      logger.error('Failed to ensure Zep thread', {
+        userId,
+        sessionId: threadId,
+        error: error.message
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Get context block from Zep (for fast chat endpoint)
+   * This retrieves the basic context without processing messages
+   */
+  async getContextBlock(userId: string, sessionId: string): Promise<string | undefined> {
+    try {
+      // Get thread context which includes facts and summaries
+      const context = await this.client.thread.getUserContext(sessionId, { mode: "basic" });
+      return context.context;
+    } catch (error: any) {
+      logger.warn('Failed to get context block', {
+        userId,
+        sessionId,
+        error: error.message
+      });
+      return undefined;
     }
   }
 
@@ -379,59 +519,6 @@ class ZepAdapter {
   }
 
   /**
-   * Ensure thread exists for session
-   */
-  private async ensureThread(sessionId: string, userId: string): Promise<void> {
-    try {
-      // Try to get the thread
-      logger.debug({ sessionId, userId }, 'Checking if thread exists');
-      const thread = await this.client.thread.get(sessionId);
-      logger.debug({
-        sessionId,
-        thread: JSON.stringify(thread)
-      }, 'Thread exists');
-    } catch (error: any) {
-      logger.debug({
-        sessionId,
-        userId,
-        errorMessage: error.message,
-        errorStatus: error.statusCode,
-        errorDetails: JSON.stringify(error)
-      }, 'Thread get error');
-
-      // If thread doesn't exist, create it
-      if (error.statusCode === 404 || error.message?.includes('not found')) {
-        logger.info({ sessionId, userId }, 'Creating new Zep thread');
-
-        const threadData = {
-          threadId: sessionId,
-          userId: userId,
-          metadata: {
-            created_at: new Date().toISOString()
-          }
-        };
-        logger.debug({ threadData: JSON.stringify(threadData) }, 'Thread creation request');
-
-        const newThread = await this.client.thread.create(threadData);
-        logger.info({
-          sessionId,
-          userId,
-          newThread: JSON.stringify(newThread)
-        }, 'Created new Zep thread');
-      } else {
-        logger.error({
-          sessionId,
-          userId,
-          error: error.message,
-          statusCode: error.statusCode,
-          fullError: JSON.stringify(error)
-        }, 'Unexpected error checking thread');
-        throw error;
-      }
-    }
-  }
-
-  /**
    * Store a message in Zep memory using SDK
    */
   async storeMessage(
@@ -452,7 +539,7 @@ class ZepAdapter {
 
       // Ensure user and thread exist
       await this.ensureUser(userId);
-      await this.ensureThread(sessionId, userId);
+      await this.ensureThread(userId, sessionId);
 
       // Prepare message data
       const messageData = {

@@ -627,7 +627,6 @@ pnpm check:all        # Run all checks
 
 ### Key Files Modified:
 - `/apps/api/src/routes/v1/memory.ts` - Complete Zep SDK implementation
-- `/apps/api/src/services/zep.ts` - Updated to use SDK
 - `/apps/api/src/routes/v1/chat.ts` - Conditional memory event sending
 - `/packages/shared/src/api/chat.ts` - Added memory event types
 - `/apps/admin/src/app/admin/playground/page.tsx` - Enhanced memory display

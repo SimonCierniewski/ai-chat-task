@@ -1,18 +1,11 @@
 /**
- * Chat API DTOs and types
- */
-
-export const SUPPORTED_MODELS = ['gpt-4-mini', 'gpt-4', 'gpt-3.5-turbo'] as const;
-export type SupportedModel = typeof SUPPORTED_MODELS[number];
-
-/**
  * POST /api/v1/chat request body
  */
 export interface ChatRequest {
   message: string;
   useMemory?: boolean;
   sessionId?: string;
-  model?: SupportedModel;
+  model?: string;
   returnMemory?: boolean; // If true, return memory context in SSE events (for debugging/playground)
   systemPrompt?: string; // Optional custom system prompt (for playground)
 }
@@ -42,7 +35,6 @@ export const chatRequestSchema = {
     },
     model: {
       type: 'string',
-      enum: SUPPORTED_MODELS,
       default: 'gpt-4-mini',
       description: 'AI model to use'
     },
@@ -107,20 +99,14 @@ export interface ErrorEventData {
  * Memory context event data (sent when memory is retrieved)
  */
 export interface MemoryEventData {
-  results: Array<{
-    text: string;
-    score: number;
-    source_type: string;
-    session_id?: string | null;
-  }>;
-  total_tokens: number;
-  results_count: number;
+  results: string | undefined;
+  memoryMs: number;
 }
 
 /**
  * Union type for all possible SSE event data
  */
-export type ChatEventData = 
+export type ChatEventData =
   | { type: ChatEventType.TOKEN; data: TokenEventData }
   | { type: ChatEventType.USAGE; data: UsageEventData }
   | { type: ChatEventType.DONE; data: DoneEventData }

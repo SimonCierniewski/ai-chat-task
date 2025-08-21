@@ -305,16 +305,6 @@ curl -X POST http://localhost:3000/auth/on-signup \
   "message": "User signup processed",
   "zep_initialized": false  # false if no ZEP_API_KEY
 }
-
-# Check initialization status (requires auth)
-curl http://localhost:3000/auth/zep-status/test-user-123 \
-  -H "Authorization: Bearer $TOKEN"
-
-# Expected response:
-{
-  "initialized": true,
-  "enabled": false  # false if no ZEP_API_KEY
-}
 ```
 
 ## 🖥️ Admin App Testing
@@ -518,7 +508,6 @@ After authentication:
 
 - [ ] **Hooks**
   - [ ] `/auth/on-signup` - processes without blocking
-  - [ ] `/auth/zep-status/:id` - returns status
 
 ### Client Applications
 
