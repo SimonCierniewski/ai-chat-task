@@ -46,6 +46,7 @@ export default function PlaygroundPage() {
   const [message, setMessage] = useState('');
   const [useMemory, setUseMemory] = useState(true);
   const [model, setModel] = useState('gpt-4o-mini');
+  const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.');
   const [sessionId] = useState(() => {
     const pad = (n: number) => n.toString().padStart(2, '0');
     const now = new Date();
@@ -163,7 +164,8 @@ export default function PlaygroundPage() {
         useMemory,
         sessionId,
         model,
-        returnMemory: true // Always request memory context in playground for debugging
+        returnMemory: true, // Always request memory context in playground for debugging
+        systemPrompt: systemPrompt.trim() || undefined
       };
 
       // Make POST request to initiate SSE stream
@@ -372,6 +374,23 @@ export default function PlaygroundPage() {
                   {isStreaming ? 'Streaming...' : 'Send Message'}
                 </button>
               </form>
+            </Card>
+
+            {/* System Prompt Card */}
+            <Card title="System Prompt" icon="🤖" className="mt-4">
+              <div className="mt-4">
+                <textarea
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Enter a custom system prompt..."
+                  disabled={isStreaming}
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  This prompt sets the behavior and context for the AI assistant.
+                </p>
+              </div>
             </Card>
 
             {/* Timing Info */}

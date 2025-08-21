@@ -361,10 +361,11 @@ async function chatHandler(
       }
 
       // Assemble prompt with memory context
+      const defaultSystemPrompt = 'You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.';
       const promptPlan = promptAssembler.assemblePrompt({
         userMessage: message,
         memoryBundle: memoryContext?.results,
-        systemPrompt: 'You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.'
+        systemPrompt: req.body.systemPrompt || defaultSystemPrompt
       });
 
       // Track streaming metrics

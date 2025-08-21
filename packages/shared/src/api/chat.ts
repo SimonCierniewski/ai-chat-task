@@ -14,6 +14,7 @@ export interface ChatRequest {
   sessionId?: string;
   model?: SupportedModel;
   returnMemory?: boolean; // If true, return memory context in SSE events (for debugging/playground)
+  systemPrompt?: string; // Optional custom system prompt (for playground)
 }
 
 /**
@@ -49,6 +50,11 @@ export const chatRequestSchema = {
       type: 'boolean',
       default: false,
       description: 'Return memory context in SSE events (for debugging)'
+    },
+    systemPrompt: {
+      type: 'string',
+      maxLength: 1000,
+      description: 'Custom system prompt (for playground)'
     }
   },
   additionalProperties: false
