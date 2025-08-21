@@ -55,7 +55,8 @@ export enum ChatEventType {
   TOKEN = 'token',
   USAGE = 'usage',
   DONE = 'done',
-  ERROR = 'error'
+  ERROR = 'error',
+  MEMORY = 'memory'
 }
 
 /**
@@ -91,13 +92,28 @@ export interface ErrorEventData {
 }
 
 /**
+ * Memory context event data (sent when memory is retrieved)
+ */
+export interface MemoryEventData {
+  results: Array<{
+    text: string;
+    score: number;
+    source_type: string;
+    session_id?: string | null;
+  }>;
+  total_tokens: number;
+  results_count: number;
+}
+
+/**
  * Union type for all possible SSE event data
  */
 export type ChatEventData = 
   | { type: ChatEventType.TOKEN; data: TokenEventData }
   | { type: ChatEventType.USAGE; data: UsageEventData }
   | { type: ChatEventType.DONE; data: DoneEventData }
-  | { type: ChatEventType.ERROR; data: ErrorEventData };
+  | { type: ChatEventType.ERROR; data: ErrorEventData }
+  | { type: ChatEventType.MEMORY; data: MemoryEventData };
 
 /**
  * Helper to format SSE event

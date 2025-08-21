@@ -22,6 +22,19 @@ interface TimingData {
   total_ms?: number;
 }
 
+interface MemoryResult {
+  text: string;
+  score: number;
+  source_type: string;
+  session_id?: string | null;
+}
+
+interface MemoryData {
+  results: MemoryResult[];
+  total_tokens: number;
+  results_count: number;
+}
+
 interface ModelInfo {
   model: string;
   display_name: string;
@@ -55,6 +68,7 @@ export default function PlaygroundPage() {
   const [timing, setTiming] = useState<TimingData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [memoryContext, setMemoryContext] = useState<MemoryData | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -131,6 +145,7 @@ export default function PlaygroundPage() {
     setUsage(null);
     setTiming(null);
     setError(null);
+    setMemoryContext(null);
     startTimeRef.current = Date.now();
     firstTokenTimeRef.current = null;
 
@@ -219,6 +234,9 @@ export default function PlaygroundPage() {
               } else if (parsed.tokens_in !== undefined) {
                 // Usage event
                 setUsage(parsed as UsageData);
+              } else if (parsed.results !== undefined && parsed.results_count !== undefined) {
+                // Memory context event
+                setMemoryContext(parsed as MemoryData);
               } else if (parsed.finish_reason) {
                 // Done event
                 if (startTimeRef.current) {
@@ -232,11 +250,9 @@ export default function PlaygroundPage() {
               console.error('Failed to parse SSE data:', data, e);
             }
           } else if (line.startsWith('event: ')) {
-            // Handle named events if needed
+            // Handle named events
             const eventType = line.slice(7);
-            if (eventType === 'error') {
-              // Next data line will contain error details
-            }
+            // Event type will be processed with next data line
           }
         }
       }
@@ -349,6 +365,39 @@ export default function PlaygroundPage() {
                 </button>
               </form>
             </Card>
+
+            {/* Memory Context */}
+            {memoryContext && memoryContext.results_count > 0 && (
+              <Card title="Memory Context Retrieved" icon="🧠" className="mt-4">
+                <div className="mt-4 space-y-3">
+                  <div className="text-sm text-gray-600">
+                    Retrieved {memoryContext.results_count} memory items ({memoryContext.total_tokens} tokens)
+                  </div>
+                  <div className="max-h-60 overflow-y-auto space-y-2">
+                    {memoryContext.results.map((result, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-md border border-gray-200">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-xs font-medium text-gray-500">
+                            #{index + 1} • {result.source_type}
+                          </span>
+                          <span className="text-xs text-blue-600">
+                            Score: {(result.score * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-700 line-clamp-3">
+                          {result.text}
+                        </div>
+                        {result.session_id && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            Session: {result.session_id}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {/* Timing Info */}
             {timing && (

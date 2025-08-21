@@ -15,6 +15,7 @@ import {
   UsageEventData,
   DoneEventData,
   ErrorEventData,
+  MemoryEventData,
   formatSSEEvent
 } from '@prototype/shared';
 import {
@@ -334,7 +335,7 @@ async function chatHandler(
           total_tokens: memoryContext?.total_tokens || 0
         });
 
-        // Log zep_search telemetry event
+        // Log zep_search telemetry event and send memory context to client
         if (memoryContext) {
           await telemetryService.logZepSearch(
             userId,
@@ -343,6 +344,19 @@ async function chatHandler(
             memoryContext.results.length,
             memoryContext.total_tokens
           );
+
+          // Send memory context to client
+          const memoryData: MemoryEventData = {
+            results: memoryContext.results.map(r => ({
+              text: r.text,
+              score: r.score,
+              source_type: r.source_type,
+              session_id: r.session_id
+            })),
+            total_tokens: memoryContext.total_tokens,
+            results_count: memoryContext.results.length
+          };
+          stream.sendEvent(ChatEventType.MEMORY, memoryData);
         }
       }
 

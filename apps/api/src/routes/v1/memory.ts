@@ -111,7 +111,7 @@ class ZepAdapter {
 
   constructor() {
     const apiKey = config.zep.apiKey;
-    
+
     if (!apiKey) {
       logger.error('ZEP_API_KEY is not configured');
       throw new Error('Zep API key is required');
@@ -122,7 +122,7 @@ class ZepAdapter {
       apiKey
     });
 
-    logger.info('Zep v3 SDK adapter initialized', { 
+    logger.info('Zep v3 SDK adapter initialized', {
       apiKeyPrefix: apiKey.substring(0, 10) + '...'
     });
   }
@@ -153,6 +153,7 @@ class ZepAdapter {
       throw error;
     }
   }
+
   async upsertFacts(
     userId: string,
     edges: CreateGraphEdge[],
@@ -160,7 +161,7 @@ class ZepAdapter {
   ): Promise<{ success: boolean; upserted: number }> {
     try {
       await this.ensureUser(userId);
-      
+
       // Convert edges to Zep graph format
       const graphData = {
         nodes: edges.map(edge => ({
@@ -221,7 +222,7 @@ class ZepAdapter {
       // If we have a specific session, get context from that thread
       // Otherwise, get user context across all threads
       let contextData: any;
-      
+
       if (options.sessionId) {
         // Get context for specific thread
         try {
@@ -231,9 +232,9 @@ class ZepAdapter {
             limit
           });
         } catch (error) {
-          logger.warn('Failed to get thread context, falling back to user threads', { 
-            sessionId: options.sessionId, 
-            error 
+          logger.warn('Failed to get thread context, falling back to user threads', {
+            sessionId: options.sessionId,
+            error
           });
           contextData = { messages: [] };
         }
@@ -242,7 +243,7 @@ class ZepAdapter {
         const threads = await this.client.user.getThreads(userId, {
           limit: 10 // Get recent threads
         });
-        
+
         // Collect messages from threads
         const allMessages: any[] = [];
         for (const thread of (threads.threads || [])) {
@@ -262,13 +263,13 @@ class ZepAdapter {
       const results: TelemetryRetrievalResult[] = (contextData.messages || []).map((message: any) => {
         const content = message.content || '';
         const resultId = message.uuid || message.id || `result-${Date.now()}-${Math.random()}`;
-        
+
         // Calculate basic relevance score based on query match
         let score = 0.5; // Default score
         if (query && content.toLowerCase().includes(query.toLowerCase())) {
           score = 0.8; // Higher score for direct matches
         }
-        
+
         return {
           id: resultId,
           session_id: message.threadId || options.sessionId || null,
@@ -348,7 +349,7 @@ class ZepAdapter {
       // Ensure user and thread exist
       await this.ensureUser(userId);
       await this.ensureThread(sessionId, userId);
-      
+
       // Store message in thread
       await this.client.thread.addMessages(sessionId, [
         {
