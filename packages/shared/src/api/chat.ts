@@ -13,6 +13,7 @@ export interface ChatRequest {
   useMemory?: boolean;
   sessionId?: string;
   model?: SupportedModel;
+  returnMemory?: boolean; // If true, return memory context in SSE events (for debugging/playground)
 }
 
 /**
@@ -43,6 +44,11 @@ export const chatRequestSchema = {
       enum: SUPPORTED_MODELS,
       default: 'gpt-4-mini',
       description: 'AI model to use'
+    },
+    returnMemory: {
+      type: 'boolean',
+      default: false,
+      description: 'Return memory context in SSE events (for debugging)'
     }
   },
   additionalProperties: false

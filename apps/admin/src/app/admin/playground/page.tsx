@@ -162,7 +162,8 @@ export default function PlaygroundPage() {
         message: message.trim(),
         useMemory,
         sessionId,
-        model
+        model,
+        returnMemory: true // Always request memory context in playground for debugging
       };
 
       // Make POST request to initiate SSE stream
@@ -191,6 +192,8 @@ export default function PlaygroundPage() {
       }
 
       // Process SSE stream
+      let currentEvent: string | null = null;
+      
       while (true) {
         const { done, value } = await reader.read();
 
@@ -201,7 +204,16 @@ export default function PlaygroundPage() {
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
+          if (line.trim() === '') {
+            // Empty line resets the event
+            currentEvent = null;
+            continue;
+          }
+          
+          if (line.startsWith('event: ')) {
+            // Store the event type for the next data line
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
             const data = line.slice(6);
 
             if (data === '[DONE]') {
@@ -217,9 +229,12 @@ export default function PlaygroundPage() {
 
             try {
               const parsed = JSON.parse(data);
-
-              // Handle different event types based on the event field in SSE
-              if (parsed.text !== undefined) {
+              
+              // Handle based on current event type
+              if (currentEvent === 'memory') {
+                console.log('Memory event received:', parsed);
+                setMemoryContext(parsed as MemoryData);
+              } else if (currentEvent === 'token' || (!currentEvent && parsed.text !== undefined)) {
                 // Token event
                 if (!firstTokenTimeRef.current && parsed.text) {
                   firstTokenTimeRef.current = Date.now();
@@ -231,13 +246,10 @@ export default function PlaygroundPage() {
                   }
                 }
                 setResponse(prev => prev + parsed.text);
-              } else if (parsed.tokens_in !== undefined) {
+              } else if (currentEvent === 'usage' || (!currentEvent && parsed.tokens_in !== undefined)) {
                 // Usage event
                 setUsage(parsed as UsageData);
-              } else if (parsed.results !== undefined && parsed.results_count !== undefined) {
-                // Memory context event
-                setMemoryContext(parsed as MemoryData);
-              } else if (parsed.finish_reason) {
+              } else if (currentEvent === 'done' || (!currentEvent && parsed.finish_reason)) {
                 // Done event
                 if (startTimeRef.current) {
                   setTiming(prev => ({
@@ -247,12 +259,8 @@ export default function PlaygroundPage() {
                 }
               }
             } catch (e) {
-              console.error('Failed to parse SSE data:', data, e);
+              console.error('Failed to parse SSE data:', currentEvent, data, e);
             }
-          } else if (line.startsWith('event: ')) {
-            // Handle named events
-            const eventType = line.slice(7);
-            // Event type will be processed with next data line
           }
         }
       }

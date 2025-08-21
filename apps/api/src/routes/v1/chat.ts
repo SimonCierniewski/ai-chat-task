@@ -289,7 +289,7 @@ async function chatHandler(
       });
     }
 
-    const { message, useMemory = false, sessionId } = req.body;
+    const { message, useMemory = false, sessionId, returnMemory = false } = req.body;
     const requestedModel = (req.body as any).model as string | undefined;
     const userId = authReq.user.id;
 
