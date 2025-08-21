@@ -19,31 +19,23 @@ import {
 } from 'recharts';
 
 interface MetricsData {
+  period: {
+    from: string;
+    to: string;
+  };
   kpis: {
     total_messages: number;
-    total_cost: number;
+    unique_users: number;
+    total_cost_usd: number;
     avg_ttft_ms: number;
-    avg_response_ms: number;
+    avg_duration_ms: number;
   };
-  daily: Array<{
+  time_series: Array<{
     day: string;
     messages: number;
-    total_cost: number;
+    users: number;
+    cost_usd: number;
     avg_ttft_ms: number;
-    avg_response_ms: number;
-    tokens_in: number;
-    tokens_out: number;
-  }>;
-  models: Array<{
-    model: string;
-    count: number;
-    total_cost: number;
-  }>;
-  users?: Array<{
-    user_id: string;
-    email: string;
-    message_count: number;
-    total_cost: number;
   }>;
 }
 
@@ -54,10 +46,21 @@ export default function TelemetryPage() {
   const [dateRange, setDateRange] = useState<'7' | '30'>('7');
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [selectedModel, setSelectedModel] = useState<string>('');
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    fetchMetrics();
+    // Prevent double initialization in development mode
+    if (!isInitialized) {
+      setIsInitialized(true);
+      fetchMetrics();
+    }
+  }, []); // Empty deps for initial load only
+
+  useEffect(() => {
+    // Only fetch if already initialized (skip first render)
+    if (isInitialized) {
+      fetchMetrics();
+    }
   }, [dateRange, selectedUser, selectedModel]);
 
   const fetchMetrics = async () => {
@@ -86,12 +89,6 @@ export default function TelemetryPage() {
 
       const data = await response.json();
       setMetrics(data);
-
-      // Extract unique models for filter
-      if (data.models) {
-        const models = data.models.map((m: any) => m.model);
-        setAvailableModels(models);
-      }
     } catch (err: any) {
       console.error('Error fetching metrics:', err);
       setError(err.message || 'Failed to load metrics');
@@ -205,45 +202,6 @@ export default function TelemetryPage() {
             </select>
           </div>
 
-          {metrics?.users && metrics.users.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                User (Optional)
-              </label>
-              <select
-                value={selectedUser}
-                onChange={(e) => setSelectedUser(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Users</option>
-                {metrics.users.map((user) => (
-                  <option key={user.user_id} value={user.user_id}>
-                    {user.email}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {availableModels.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Model (Optional)
-              </label>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Models</option>
-                {availableModels.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
 
         {/* KPI Cards */}
@@ -256,7 +214,7 @@ export default function TelemetryPage() {
           />
           <Card
             title="Total Cost"
-            value={formatCurrency(metrics?.kpis.total_cost || 0)}
+            value={formatCurrency(metrics?.kpis.total_cost_usd || 0)}
             description={`Last ${dateRange} days`}
             icon="💰"
           />
@@ -268,20 +226,20 @@ export default function TelemetryPage() {
           />
           <Card
             title="Avg Response Time"
-            value={formatTiming(metrics?.kpis.avg_response_ms || 0)}
+            value={formatTiming(metrics?.kpis.avg_duration_ms || 0)}
             description="End-to-end latency"
             icon="⏱️"
           />
         </div>
 
         {/* Charts */}
-        {metrics?.daily && metrics.daily.length > 0 && (
+        {metrics?.time_series && metrics.time_series.length > 0 && (
           <div className="space-y-8">
             {/* Messages per Day Chart */}
             <Card title="Messages per Day" icon="📊">
               <div className="mt-4 h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={metrics.daily}>
+                  <LineChart data={metrics.time_series}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis 
                       dataKey="day" 
@@ -311,7 +269,7 @@ export default function TelemetryPage() {
             <Card title="Average TTFT per Day" icon="⚡">
               <div className="mt-4 h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={metrics.daily}>
+                  <LineChart data={metrics.time_series}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis 
                       dataKey="day" 
@@ -335,14 +293,6 @@ export default function TelemetryPage() {
                       dot={{ fill: '#8b5cf6', r: 4 }}
                       name="Avg TTFT (ms)"
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="avg_response_ms" 
-                      stroke="#ec4899" 
-                      strokeWidth={2}
-                      dot={{ fill: '#ec4899', r: 4 }}
-                      name="Avg Response (ms)"
-                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -352,7 +302,7 @@ export default function TelemetryPage() {
             <Card title="Costs per Day" icon="💰">
               <div className="mt-4 h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={metrics.daily}>
+                  <AreaChart data={metrics.time_series}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis 
                       dataKey="day" 
@@ -370,7 +320,7 @@ export default function TelemetryPage() {
                     <Legend />
                     <Area 
                       type="monotone" 
-                      dataKey="total_cost" 
+                      dataKey="cost_usd" 
                       stroke="#10b981" 
                       fill="#10b981"
                       fillOpacity={0.3}
@@ -382,40 +332,6 @@ export default function TelemetryPage() {
               </div>
             </Card>
 
-            {/* Model Distribution */}
-            {metrics.models && metrics.models.length > 0 && (
-              <Card title="Model Usage & Costs" icon="🤖">
-                <div className="mt-4 h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={metrics.models}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="model" tick={{ fontSize: 12 }} />
-                      <YAxis yAxisId="left" orientation="left" tick={{ fontSize: 12 }} />
-                      <YAxis 
-                        yAxisId="right" 
-                        orientation="right" 
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(value) => `$${value}`}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend />
-                      <Bar 
-                        yAxisId="left" 
-                        dataKey="count" 
-                        fill="#3b82f6" 
-                        name="Message Count"
-                      />
-                      <Bar 
-                        yAxisId="right" 
-                        dataKey="total_cost" 
-                        fill="#10b981" 
-                        name="Total Cost (USD)"
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-            )}
           </div>
         )}
       </div>
