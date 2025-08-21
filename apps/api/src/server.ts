@@ -39,6 +39,9 @@ export async function buildServer(): Promise<FastifyInstance> {
                 translateTime: 'HH:MM:ss Z',
                 ignore: 'pid,hostname',
                 messageFormat: '[{req_id}] {msg}',
+                singleLine: false,
+                depth: 10,
+                errorLikeObjectKeys: ['err', 'error']
               },
             }
           : undefined,
@@ -55,6 +58,17 @@ export async function buildServer(): Promise<FastifyInstance> {
         res(reply) {
           return {
             statusCode: reply.statusCode,
+          };
+        },
+        err(error: any) {
+          return {
+            message: error.message,
+            code: error.code,
+            statusCode: error.statusCode,
+            stack: error.stack,
+            type: error.type,
+            validation: error.validation,
+            ...error
           };
         },
       },
