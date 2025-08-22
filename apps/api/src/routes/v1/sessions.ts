@@ -120,7 +120,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (server) => {
         let threadsResponse;
         try {
           threadsResponse = await client.thread.listAll({
-            userId: `user:${userId}`,
             pageSize,
             pageNumber: page
           });
@@ -132,7 +131,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (server) => {
           }, 'First attempt failed, trying without prefix');
           
           threadsResponse = await client.thread.listAll({
-            userId: userId,
             pageSize,
             pageNumber: page
           });
@@ -168,6 +166,9 @@ export const sessionsRoutes: FastifyPluginAsync = async (server) => {
         // Transform threads to session format
         const sessions = (threadsResponse.threads || [])
           .filter(thread => {
+             return thread.userId == userId
+          })
+          .filter(thread => {
             // Check for various ID fields that Zep might use
             const hasId = thread && (thread.id || thread.threadId || thread.thread_id);
             if (!hasId) {
@@ -177,12 +178,10 @@ export const sessionsRoutes: FastifyPluginAsync = async (server) => {
           })
           .map(thread => {
             // Extract session info from thread - try different ID fields
-            const sessionId = thread.id || thread.threadId || thread.thread_id;
+            const sessionId = thread.threadId;
             
             // Get message count and timestamps from thread metadata if available
-            const messageCount = thread.metadata?.messageCount || thread.messageCount || 0;
-            const createdAt = thread.createdAt || thread.created_at || new Date().toISOString();
-            const lastMessageAt = thread.updatedAt || thread.updated_at || null;
+            const createdAt = thread.createdAt;
             
             // Try to generate a title from the first message or use session ID
             const title = thread.name || thread.title || 
@@ -191,8 +190,6 @@ export const sessionsRoutes: FastifyPluginAsync = async (server) => {
             return {
               id: sessionId,
               createdAt,
-              lastMessageAt,
-              messageCount,
               title
             };
           });
