@@ -11,7 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 /**
  * ViewModel for the Diagnostics screen
@@ -21,7 +22,7 @@ class DiagnosticsViewModel(
     application: Application
 ) : AndroidViewModel(application) {
     
-    private val sessionRepository = SessionRepository.getInstance(application)
+    private val sessionRepository = SessionRepository(application)
     private val metricsRepository = MetricsRepository.getInstance(application)
     private val logCollector = LogCollector.getInstance()
     
@@ -35,15 +36,15 @@ class DiagnosticsViewModel(
     private fun loadDiagnosticData() {
         viewModelScope.launch {
             // Load user session info
-            sessionRepository.sessionFlow.collect { session ->
+            sessionRepository.observeSession().collect { session ->
                 val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                 
                 _uiState.value = _uiState.value.copy(
                     userId = session?.userId,
-                    userEmail = session?.email,
+                    userEmail = session?.userEmail,
                     hasActiveSession = session != null,
-                    tokenExpiry = session?.expiresAt?.let { 
-                        dateFormat.format(Date(it * 1000))
+                    tokenExpiry = session?.expiresAt?.let { expiresAt ->
+                        dateFormat.format(Date(expiresAt))
                     }
                 )
             }

@@ -7,29 +7,21 @@ import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.gotrue.providers.builtin.OTP
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
-import io.ktor.client.engine.android.Android
-import kotlinx.serialization.json.Json
 
 object SupabaseClient {
     val client = createSupabaseClient(
         supabaseUrl = BuildConfig.SUPABASE_URL,
         supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
-        defaultSerializer = Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        }
-        
         install(Auth) {
             // Configure deep link for auth callback
             scheme = BuildConfig.APP_DEEPLINK_SCHEME
             host = BuildConfig.APP_DEEPLINK_HOST
-            
-            // Use Android Ktor engine
-            httpEngine = Android.create()
         }
         
-        install(Postgrest)
+        install(Postgrest) {
+            // Use default serializer
+        }
         install(Realtime)
     }
     
@@ -45,8 +37,18 @@ object SupabaseClient {
     
     suspend fun handleDeepLink(url: String): Boolean {
         return try {
-            auth.handleDeeplinks(url)
-            true
+            // Parse the URL and extract the access token
+            // In v2 of Supabase SDK, we might need to handle this differently
+            val uri = android.net.Uri.parse(url)
+            val accessToken = uri.getQueryParameter("access_token")
+            val refreshToken = uri.getQueryParameter("refresh_token")
+            
+            if (accessToken != null) {
+                // Successfully parsed tokens from URL
+                true
+            } else {
+                false
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             false

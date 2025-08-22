@@ -4,12 +4,15 @@ import android.content.Context
 import com.prototype.aichat.core.config.AppConfig
 import com.prototype.aichat.data.auth.SessionRepository
 import kotlinx.coroutines.runBlocking
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.logging.HttpLoggingInterceptor
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.logging.HttpLoggingInterceptor
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -21,7 +24,7 @@ class ApiClient(
     private val sessionRepository: SessionRepository = SessionRepository(context)
 ) {
     
-    private val json = Json {
+    val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
         coerceInputValues = true
@@ -78,10 +81,10 @@ class ApiClient(
             val response = chain.proceed(request)
             
             when (response.code) {
-                401 -> throw UnauthorizedException("Authentication required")
-                403 -> throw ForbiddenException("Access denied")
-                429 -> throw RateLimitException("Too many requests. Please try again later.")
-                in 500..599 -> throw ServerException("Server error: ${response.code}")
+                401 -> throw ApiException.UnauthorizedException("Authentication required")
+                403 -> throw ApiException.ForbiddenException("Access denied")
+                429 -> throw ApiException.RateLimitException("Too many requests. Please try again later.")
+                in 500..599 -> throw ApiException.ServerException("Server error: ${response.code}")
             }
             
             return response
@@ -117,11 +120,11 @@ class ApiClient(
     inline fun <reified T> executeRequest(request: Request): T {
         okHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw ApiException("API call failed: ${response.code}")
+                throw ApiException.HttpException("API call failed: ${response.code}")
             }
             
             val responseBody = response.body?.string() 
-                ?: throw ApiException("Empty response body")
+                ?: throw ApiException.HttpException("Empty response body")
                 
             return json.decodeFromString(responseBody)
         }
@@ -131,9 +134,12 @@ class ApiClient(
 /**
  * Custom exception types for API errors
  */
-sealed class ApiException(message: String) : IOException(message)
-
-class UnauthorizedException(message: String) : ApiException(message)
-class ForbiddenException(message: String) : ApiException(message)
-class RateLimitException(message: String) : ApiException(message)
-class ServerException(message: String) : ApiException(message)
+sealed class ApiException(message: String) : IOException(message) {
+    class HttpException(message: String) : ApiException(message)
+    class NetworkException(message: String) : ApiException(message)
+    class ParseException(message: String) : ApiException(message)
+    class UnauthorizedException(message: String) : ApiException(message)
+    class ForbiddenException(message: String) : ApiException(message)
+    class RateLimitException(message: String) : ApiException(message)
+    class ServerException(message: String) : ApiException(message)
+}

@@ -7,11 +7,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import io.github.jan.supabase.gotrue.user.UserSession
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -30,7 +30,7 @@ class AuthRepository(private val context: Context) {
         loadSession()
         
         // Listen to auth state changes
-        kotlinx.coroutines.GlobalScope.launch {
+        GlobalScope.launch {
             SupabaseClient.auth.sessionStatus.collect { status ->
                 when (status) {
                     is io.github.jan.supabase.gotrue.SessionStatus.Authenticated -> {
@@ -45,7 +45,7 @@ class AuthRepository(private val context: Context) {
                         _authState.value = AuthState.Loading
                     }
                     is io.github.jan.supabase.gotrue.SessionStatus.NetworkError -> {
-                        _authState.value = AuthState.Error("Network error: ${status.message}")
+                        _authState.value = AuthState.Error("Network error: ${status}")
                     }
                 }
             }

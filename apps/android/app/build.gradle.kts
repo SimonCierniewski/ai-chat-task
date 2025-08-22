@@ -5,6 +5,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("kotlin-parcelize")
+    id("kotlin-kapt")
 }
 
 // Load local properties for environment variables
@@ -149,6 +150,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.runtime:runtime-livedata")
+    implementation("androidx.compose.foundation:foundation")
     
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
@@ -192,7 +194,8 @@ dependencies {
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
-    annotationProcessor("androidx.room:room-compiler:$roomVersion")
+    // Use kapt for Kotlin instead of annotationProcessor
+    kapt("androidx.room:room-compiler:$roomVersion")
     
     // Dependency Injection (optional, using manual DI for now)
     // implementation("io.insert-koin:koin-androidx-compose:3.5.3")

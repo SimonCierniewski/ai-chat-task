@@ -3,7 +3,7 @@ package com.prototype.aichat.domain.repository
 import com.prototype.aichat.domain.models.ChatMessage
 import com.prototype.aichat.domain.models.ChatRequest
 import com.prototype.aichat.domain.models.ChatSession
-import com.prototype.aichat.domain.models.SSEEvent
+import com.prototype.aichat.domain.models.SSEChatEvent
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -13,7 +13,7 @@ interface ChatRepository {
     /**
      * Send a chat message and receive SSE stream
      */
-    suspend fun sendMessage(request: ChatRequest): Flow<SSEEvent>
+    suspend fun sendMessage(request: ChatRequest): Flow<SSEChatEvent>
     
     /**
      * Save a message to local storage

@@ -1,12 +1,21 @@
 package com.prototype.aichat.ui.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.*
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.prototype.aichat.BuildConfig
-import com.prototype.aichat.ui.screens.*
+import com.prototype.aichat.data.AuthState
+import com.prototype.aichat.ui.screens.ChatScreen
+import com.prototype.aichat.ui.screens.DiagnosticsScreen
+import com.prototype.aichat.ui.screens.HistoryScreen
+import com.prototype.aichat.ui.screens.LoginScreen
+import com.prototype.aichat.ui.screens.SessionScreen
+import com.prototype.aichat.ui.screens.SessionsScreen
+import com.prototype.aichat.ui.screens.SplashScreen
 
 /**
  * Main navigation graph for the app
@@ -117,9 +126,23 @@ fun AppNavigation(
         }
         
         composable(Screen.Session.route) {
+            // For now, pass dummy auth state - should be provided from ViewModel
             SessionScreen(
-                onNavigateBack = {
-                    navController.popBackStack()
+                authState = AuthState.Authenticated(
+                    session = io.github.jan.supabase.gotrue.user.UserSession(
+                        accessToken = "dummy",
+                        refreshToken = "dummy",
+                        providerRefreshToken = null,
+                        providerToken = null,
+                        expiresIn = 3600,
+                        tokenType = "bearer",
+                        user = null
+                    )
+                ),
+                onSignOut = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
             )
         }

@@ -3,9 +3,19 @@ package com.prototype.aichat.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.prototype.aichat.data.api.ApiException
 import com.prototype.aichat.data.repository.ChatRepositoryImpl
-import com.prototype.aichat.domain.models.*
-import kotlinx.coroutines.flow.*
+import com.prototype.aichat.domain.models.ChatMessage
+import com.prototype.aichat.domain.models.ChatRequest
+import com.prototype.aichat.domain.models.MessageMetadata
+import com.prototype.aichat.domain.models.MessageRole
+import com.prototype.aichat.domain.models.SSEChatEvent
+import com.prototype.aichat.domain.models.StreamingState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -110,36 +120,41 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Handle incoming SSE events
      */
-    private fun handleSSEEvent(event: SSEEvent) {
-        when (event.event) {
-            "token" -> {
+    private fun handleSSEEvent(event: SSEChatEvent) {
+        when (event) {
+            is SSEChatEvent.Token -> {
                 // Append token to streaming text
-                streamingTextBuilder.append(event.data)
+                streamingTextBuilder.append(event.text)
                 updateStreamingMessage(streamingTextBuilder.toString())
             }
             
-            "usage" -> {
-                // Parse usage data and update message metadata
-                try {
-                    val usage = parseUsageData(event.data)
-                    finalizeStreamingMessage(usage)
-                } catch (e: Exception) {
-                    // If parsing fails, just finalize without usage
-                    finalizeStreamingMessage(null)
-                }
+            is SSEChatEvent.Usage -> {
+                // Update message metadata with usage info
+                val usage = MessageMetadata(
+                    tokensIn = event.tokensIn,
+                    tokensOut = event.tokensOut,
+                    costUsd = event.costUsd,
+                    model = event.model,
+                    ttftMs = null // TTFT is tracked separately
+                )
+                finalizeStreamingMessage(usage)
             }
             
-            "done" -> {
+            is SSEChatEvent.Done -> {
                 // Stream completed
                 if (!hasUsageData()) {
                     finalizeStreamingMessage(null)
                 }
             }
             
-            "error" -> {
+            is SSEChatEvent.Error -> {
                 // Show error in chat
-                showErrorMessage(event.data)
+                showErrorMessage(event.message)
                 _uiState.update { it.copy(isStreaming = false) }
+            }
+            
+            else -> {
+                // Ignore other events like Heartbeat
             }
         }
     }
@@ -198,13 +213,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun handleStreamError(exception: Throwable) {
         val errorMessage = when (exception) {
-            is com.prototype.aichat.data.api.UnauthorizedException -> {
+            is ApiException.UnauthorizedException -> {
                 "Session expired. Please login again."
             }
-            is com.prototype.aichat.data.api.RateLimitException -> {
+            is ApiException.RateLimitException -> {
                 "Rate limit exceeded. Please wait a moment."
             }
-            is com.prototype.aichat.data.api.ServerException -> {
+            is ApiException.ServerException -> {
                 "Server error. Please try again."
             }
             else -> {

@@ -9,11 +9,10 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import io.github.jan.supabase.gotrue.user.UserSession
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.util.Date
 
 /**
  * Repository for managing user session persistence using DataStore
@@ -45,7 +44,7 @@ class SessionRepository(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences[ACCESS_TOKEN_KEY] = session.accessToken
             preferences[REFRESH_TOKEN_KEY] = session.refreshToken ?: ""
-            preferences[EXPIRES_AT_KEY] = session.expiresAt?.time ?: 0L
+            preferences[EXPIRES_AT_KEY] = session.expiresIn?.toLong() ?: 0L
             session.user?.let { user ->
                 preferences[USER_ID_KEY] = user.id
                 preferences[USER_EMAIL_KEY] = user.email ?: ""
@@ -81,7 +80,7 @@ class SessionRepository(private val context: Context) {
                 SavedSession(
                     accessToken = accessToken,
                     refreshToken = refreshToken ?: "",
-                    expiresAt = if (expiresAt > 0) Date(expiresAt) else null,
+                    expiresAt = if (expiresAt > 0) expiresAt else null,
                     userId = userId,
                     userEmail = userEmail ?: "",
                     userRole = userRole ?: "user"
@@ -89,7 +88,7 @@ class SessionRepository(private val context: Context) {
             } else {
                 null
             }
-        }.map { it }.collect { it }
+        }.first()
     }
     
     /**
@@ -108,7 +107,7 @@ class SessionRepository(private val context: Context) {
                 SavedSession(
                     accessToken = accessToken,
                     refreshToken = refreshToken ?: "",
-                    expiresAt = if (expiresAt > 0) Date(expiresAt) else null,
+                    expiresAt = if (expiresAt > 0) expiresAt else null,
                     userId = userId,
                     userEmail = userEmail ?: "",
                     userRole = userRole ?: "user"
@@ -123,8 +122,8 @@ class SessionRepository(private val context: Context) {
      * Check if session is valid (not expired)
      */
     fun isSessionValid(session: SavedSession): Boolean {
-        val now = Date()
-        return session.expiresAt?.after(now) ?: false
+        val now = System.currentTimeMillis()
+        return session.expiresAt?.let { it > now } ?: false
     }
 }
 
@@ -135,7 +134,7 @@ class SessionRepository(private val context: Context) {
 data class SavedSession(
     val accessToken: String,
     val refreshToken: String,
-    val expiresAt: Date? = null,
+    val expiresAt: Long? = null,  // Changed from Date to Long
     val userId: String,
     val userEmail: String,
     val userRole: String = "user"

@@ -4,12 +4,22 @@ import android.content.Context
 import com.prototype.aichat.data.api.ApiClient
 import com.prototype.aichat.data.api.ApiException
 import com.prototype.aichat.data.sse.ChatSSEClient
-import com.prototype.aichat.domain.models.*
+import com.prototype.aichat.domain.models.ChatMessage
+import com.prototype.aichat.domain.models.ChatRequest
+import com.prototype.aichat.domain.models.ChatSession
+import com.prototype.aichat.domain.models.MessageMetadata
+import com.prototype.aichat.domain.models.SSEChatEvent
+import com.prototype.aichat.domain.models.StreamingState
 import com.prototype.aichat.domain.repository.ChatRepository
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 
 /**
@@ -34,7 +44,7 @@ class ChatRepositoryImpl(
      * Send a chat message and receive SSE stream
      * Handles lifecycle properly - cancellation stops upstream
      */
-    override suspend fun sendMessage(request: ChatRequest): Flow<SSEEvent> {
+    override suspend fun sendMessage(request: ChatRequest): Flow<SSEChatEvent> {
         return withContext(Dispatchers.IO) {
             try {
                 _streamingState.value = StreamingState.Connecting
@@ -98,26 +108,26 @@ class ChatRepositoryImpl(
                             is ApiException -> handleApiException(exception)
                             else -> exception.message ?: "Unknown error"
                         }
-                        emit(SSEEvent("error", errorMessage))
+                        emit(SSEChatEvent.Error(errorMessage, null))
                         _streamingState.value = StreamingState.Error(errorMessage)
                     }
-                    .map { chatEvent ->
-                        // Convert to legacy SSEEvent format if needed
-                        when (chatEvent) {
-                            is SSEChatEvent.Token -> SSEEvent("token", chatEvent.text)
-                            is SSEChatEvent.Usage -> SSEEvent("usage", buildString {
-                                append("{")
-                                append("\"tokens_in\":${chatEvent.tokensIn},")
-                                append("\"tokens_out\":${chatEvent.tokensOut},")
-                                append("\"cost_usd\":${chatEvent.costUsd},")
-                                append("\"model\":\"${chatEvent.model}\"")
-                                append("}")
-                            })
-                            is SSEChatEvent.Done -> SSEEvent("done", chatEvent.finishReason)
-                            is SSEChatEvent.Error -> SSEEvent("error", chatEvent.message)
-                            else -> SSEEvent("unknown", "")
-                        }
-                    }
+//                    .map { chatEvent ->
+//                        // Convert to legacy SSEEvent format if needed
+//                        when (chatEvent) {
+//                            is SSEChatEvent.Token -> SSEEvent("token", chatEvent.text)
+//                            is SSEChatEvent.Usage -> SSEEvent("usage", buildString {
+//                                append("{")
+//                                append("\"tokens_in\":${chatEvent.tokensIn},")
+//                                append("\"tokens_out\":${chatEvent.tokensOut},")
+//                                append("\"cost_usd\":${chatEvent.costUsd},")
+//                                append("\"model\":\"${chatEvent.model}\"")
+//                                append("}")
+//                            })
+//                            is SSEChatEvent.Done -> SSEEvent("done", chatEvent.finishReason)
+//                            is SSEChatEvent.Error -> SSEEvent("error", chatEvent.message)
+//                            else -> SSEEvent("unknown", "")
+//                        }
+//                    }
             } catch (e: Exception) {
                 _streamingState.value = StreamingState.Error(e.message ?: "Failed to start stream")
                 throw e
@@ -138,14 +148,14 @@ class ChatRepositoryImpl(
      */
     private fun handleApiException(exception: ApiException): String {
         return when (exception) {
-            is com.prototype.aichat.data.api.UnauthorizedException -> {
+            is ApiException.UnauthorizedException -> {
                 // Trigger re-login flow
                 "Session expired. Please login again."
             }
-            is com.prototype.aichat.data.api.RateLimitException -> {
+            is ApiException.RateLimitException -> {
                 "Too many requests. Please wait a moment."
             }
-            is com.prototype.aichat.data.api.ServerException -> {
+            is ApiException.ServerException -> {
                 "Server error. Please try again later."
             }
             else -> exception.message ?: "Connection error"

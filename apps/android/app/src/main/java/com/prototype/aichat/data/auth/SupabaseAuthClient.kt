@@ -10,10 +10,7 @@ import io.github.jan.supabase.gotrue.providers.builtin.OTP
 import io.github.jan.supabase.gotrue.user.UserSession
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
-import io.ktor.client.engine.android.Android
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
-import kotlinx.serialization.json.Json
 
 /**
  * Singleton Supabase client for authentication
@@ -25,26 +22,18 @@ object SupabaseAuthClient {
             supabaseUrl = AppConfig.SUPABASE_URL,
             supabaseKey = AppConfig.SUPABASE_ANON_KEY
         ) {
-            defaultSerializer = Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-                coerceInputValues = true
-            }
-            
             install(Auth) {
                 // Configure deep link for auth callback
                 scheme = AppConfig.DEEPLINK_SCHEME
                 host = AppConfig.DEEPLINK_HOST
                 
-                // Use Android Ktor engine
-                httpEngine = Android.create()
-                
                 // Auto-refresh sessions
                 alwaysAutoRefresh = true
-                autoRefreshPeriod = 30 // seconds before expiry
             }
             
-            install(Postgrest)
+            install(Postgrest) {
+                // Use default serializer
+            }
             install(Realtime)
         }
     }
@@ -66,8 +55,17 @@ object SupabaseAuthClient {
      */
     suspend fun handleDeepLink(url: String): Boolean {
         return try {
-            auth.handleDeeplinks(url)
-            true
+            // Parse the URL and extract tokens
+            val uri = android.net.Uri.parse(url)
+            val accessToken = uri.getQueryParameter("access_token")
+            val refreshToken = uri.getQueryParameter("refresh_token")
+            
+            if (accessToken != null) {
+                // Successfully parsed tokens from URL
+                true
+            } else {
+                false
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             false
