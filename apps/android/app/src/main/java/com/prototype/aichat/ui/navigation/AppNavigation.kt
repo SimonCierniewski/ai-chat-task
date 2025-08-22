@@ -9,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.prototype.aichat.BuildConfig
 import com.prototype.aichat.data.AuthState
+import com.prototype.aichat.data.auth.SupabaseAuthClient
 import com.prototype.aichat.ui.screens.ChatScreen
 import com.prototype.aichat.ui.screens.DiagnosticsScreen
 import com.prototype.aichat.ui.screens.HistoryScreen
@@ -16,6 +17,7 @@ import com.prototype.aichat.ui.screens.LoginScreen
 import com.prototype.aichat.ui.screens.SessionScreen
 import com.prototype.aichat.ui.screens.SessionsScreen
 import com.prototype.aichat.ui.screens.SplashScreen
+import io.github.jan.supabase.gotrue.user.UserSession
 
 /**
  * Main navigation graph for the app
@@ -126,18 +128,9 @@ fun AppNavigation(
         }
         
         composable(Screen.Session.route) {
-            // For now, pass dummy auth state - should be provided from ViewModel
             SessionScreen(
                 authState = AuthState.Authenticated(
-                    session = io.github.jan.supabase.gotrue.user.UserSession(
-                        accessToken = "dummy",
-                        refreshToken = "dummy",
-                        providerRefreshToken = null,
-                        providerToken = null,
-                        expiresIn = 3600,
-                        tokenType = "bearer",
-                        user = null
-                    )
+                    session = SupabaseAuthClient.getCurrentSession()!!
                 ),
                 onSignOut = {
                     navController.navigate(Screen.Login.route) {

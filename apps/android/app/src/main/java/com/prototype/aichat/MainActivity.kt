@@ -2,6 +2,7 @@ package com.prototype.aichat
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -14,10 +15,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.prototype.aichat.core.config.AppConfig
+import com.prototype.aichat.data.auth.SupabaseAuthClient
 import com.prototype.aichat.ui.navigation.AppNavigation
 import com.prototype.aichat.ui.navigation.Screen
 import com.prototype.aichat.ui.theme.AIChatTheme
 import com.prototype.aichat.viewmodel.AuthViewModel
+import io.github.jan.supabase.gotrue.handleDeeplinks
 
 class MainActivity : ComponentActivity() {
     
@@ -63,17 +66,8 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun handleIntent(intent: Intent) {
-        // Check if this is a deep link callback
-        val data = intent.data
-        if (data != null && 
-            data.scheme == AppConfig.DEEPLINK_SCHEME && 
-            data.host == AppConfig.DEEPLINK_HOST) {
-            
-            // Handle the deep link - extract token and session info
-            val url = data.toString()
-            
-            // Process magic link authentication
-            authViewModel.handleDeepLink(url)
+        SupabaseAuthClient.supabaseClient.handleDeeplinks(intent) {
+            Log.d("Auth", "User successfully logged in")
         }
     }
 }
