@@ -27,12 +27,12 @@ interface ChatRepository {
     suspend fun saveMessage(message: ChatMessage)
     
     /**
-     * Get messages for a session
+     * Get messages for a session from API
      */
     suspend fun getSessionMessages(sessionId: String): List<ChatMessage>
     
     /**
-     * Get all chat sessions
+     * Get all chat sessions from API
      */
     suspend fun getAllSessions(): List<ChatSession>
     

@@ -6,12 +6,16 @@ import com.prototype.aichat.core.config.AppConfig
 import com.prototype.aichat.data.api.ApiClient
 import com.prototype.aichat.data.api.ApiException
 import com.prototype.aichat.data.sse.ChatSSEClient
+import com.prototype.aichat.data.auth.SupabaseAuthClient
 import com.prototype.aichat.domain.models.ChatInitRequest
 import com.prototype.aichat.domain.models.ChatInitResponse
 import com.prototype.aichat.domain.models.ChatMessage
 import com.prototype.aichat.domain.models.ChatRequest
 import com.prototype.aichat.domain.models.ChatSession
+import com.prototype.aichat.domain.models.MessageRole
 import com.prototype.aichat.domain.models.SSEChatEvent
+import com.prototype.aichat.domain.models.SessionMessagesResponse
+import com.prototype.aichat.domain.models.SessionsListResponse
 import com.prototype.aichat.domain.models.StreamingState
 import com.prototype.aichat.domain.repository.ChatRepository
 import kotlinx.coroutines.Dispatchers
@@ -205,7 +209,41 @@ class ChatRepositoryImpl(
      */
     override suspend fun getSessionMessages(sessionId: String): List<ChatMessage> {
         return withContext(Dispatchers.IO) {
-            messagesCache[sessionId]?.toList() ?: emptyList()
+            try {
+                val url = "${AppConfig.API_BASE_URL}/api/v1/sessions/$sessionId/messages"
+                val request = apiClient.buildGetRequest(url)
+                val response = apiClient.executeRequest<SessionMessagesResponse>(request)
+                
+                // Convert API messages to ChatMessage
+                val messages = response.messages.map { msg ->
+                    ChatMessage(
+                        id = msg.id,
+                        content = msg.content,
+                        role = when(msg.role) {
+                            "user" -> MessageRole.USER
+                            "assistant" -> MessageRole.ASSISTANT
+                            else -> MessageRole.SYSTEM
+                        },
+                        timestamp = try {
+                            // Parse ISO timestamp if needed
+                            System.currentTimeMillis()
+                        } catch (e: Exception) {
+                            System.currentTimeMillis()
+                        },
+                        sessionId = sessionId,
+                        metadata = msg.metadata
+                    )
+                }
+                
+                // Cache the messages
+                messagesCache[sessionId] = messages.toMutableList()
+                
+                messages
+            } catch (e: Exception) {
+                Log.e("ChatRepository", "Failed to fetch messages for session $sessionId", e)
+                // Return cached messages if API fails
+                messagesCache[sessionId]?.toList() ?: emptyList()
+            }
         }
     }
     
@@ -214,7 +252,44 @@ class ChatRepositoryImpl(
      */
     override suspend fun getAllSessions(): List<ChatSession> {
         return withContext(Dispatchers.IO) {
-            sessionsCache.toList()
+            try {
+                val url = "${AppConfig.API_BASE_URL}/api/v1/sessions"
+                val request = apiClient.buildGetRequest(url)
+                val response = apiClient.executeRequest<SessionsListResponse>(request)
+                
+                // Convert API sessions to ChatSession
+                val sessions = response.sessions.map { session ->
+                    ChatSession(
+                        id = session.id,
+                        userId = SupabaseAuthClient.getUserId() ?: "",
+                        createdAt = try {
+                            // Parse ISO timestamp if needed
+                            System.currentTimeMillis()
+                        } catch (e: Exception) {
+                            System.currentTimeMillis()
+                        },
+                        lastMessageAt = session.lastMessageAt?.let {
+                            try {
+                                System.currentTimeMillis()
+                            } catch (e: Exception) {
+                                null
+                            }
+                        },
+                        title = session.title,
+                        messageCount = session.messageCount
+                    )
+                }
+                
+                // Cache the sessions
+                sessionsCache.clear()
+                sessionsCache.addAll(sessions)
+                
+                sessions
+            } catch (e: Exception) {
+                Log.e("ChatRepository", "Failed to fetch sessions", e)
+                // Return cached sessions if API fails
+                sessionsCache.toList()
+            }
         }
     }
     

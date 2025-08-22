@@ -68,6 +68,36 @@ data class SSEEvent(
     val data: String
 )
 
+@Serializable
+data class SessionsListResponse(
+    val sessions: List<SessionInfo>,
+    val total: Int
+)
+
+@Serializable
+data class SessionInfo(
+    val id: String,
+    val createdAt: String,
+    val lastMessageAt: String? = null,
+    val messageCount: Int = 0,
+    val title: String? = null
+)
+
+@Serializable
+data class SessionMessagesResponse(
+    val messages: List<MessageInfo>,
+    val sessionId: String
+)
+
+@Serializable
+data class MessageInfo(
+    val id: String,
+    val content: String,
+    val role: String,
+    val timestamp: String,
+    val metadata: MessageMetadata? = null
+)
+
 sealed class StreamingState {
     object Idle : StreamingState()
     object Connecting : StreamingState()

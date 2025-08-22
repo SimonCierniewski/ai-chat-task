@@ -3,6 +3,7 @@ import { authRoutes } from './auth';
 import { chatFastRoute } from './chat-fast';
 import { chatInitRoute } from './chat-init';
 import { memoryRoutes } from './memory';
+import { sessionsRoutes } from './sessions';
 import { adminRoutes } from './admin';
 import { requireAuth, requireAdmin } from '../../utils/guards';
 
@@ -23,6 +24,10 @@ export const v1Routes: FastifyPluginAsync = async (server) => {
           search: '/memory/search',
           upsert: '/memory/upsert',
         },
+        sessions: {
+          list: '/sessions',
+          messages: '/sessions/:sessionId/messages',
+        },
         admin: {
           users: '/admin/users',
           metrics: '/admin/metrics',
@@ -40,6 +45,7 @@ export const v1Routes: FastifyPluginAsync = async (server) => {
     await protectedRoutes.register(chatFastRoute, { prefix: '/chat' });
     await protectedRoutes.register(chatInitRoute, { prefix: '/chat' });
     await protectedRoutes.register(memoryRoutes, { prefix: '/memory' });
+    await protectedRoutes.register(sessionsRoutes, { prefix: '/sessions' });
   });
   
   await server.register(async (adminOnlyRoutes) => {
