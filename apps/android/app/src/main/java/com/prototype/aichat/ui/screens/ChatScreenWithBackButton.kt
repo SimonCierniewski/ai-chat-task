@@ -68,17 +68,10 @@ fun ChatScreenWithBackButton(
         topBar = {
             TopAppBar(
                 title = { 
-                    Column {
-                        Text(
-                            text = uiState.sessionTitle ?: "Session History",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = "${messages.size} messages",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = uiState.sessionTitle ?: "Session History",
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 },
                 navigationIcon = {
                     IconButton(
