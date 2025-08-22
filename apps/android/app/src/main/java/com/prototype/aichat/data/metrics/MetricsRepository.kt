@@ -83,6 +83,20 @@ class MetricsRepository private constructor(context: Context) {
     }
     
     /**
+     * Clear all metrics data
+     */
+    fun clearAllMetrics() {
+        prefs.edit().clear().apply()
+        _metricsFlow.value = Metrics(
+            lastTTFT = null,
+            lastSSEStatus = null,
+            totalMessages = 0,
+            memoryUsedBytes = 0,
+            activeConnections = 0
+        )
+    }
+    
+    /**
      * Load metrics from storage
      */
     private fun loadMetrics(): Metrics {

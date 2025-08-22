@@ -312,8 +312,14 @@ class ChatRepositoryImpl(
      */
     override suspend fun clearAllData() {
         withContext(Dispatchers.IO) {
+            // Cancel any active streaming
+            cancelStreaming()
+            
+            // Clear caches
             messagesCache.clear()
             sessionsCache.clear()
+            
+            // Reset state
             _streamingState.value = StreamingState.Idle
         }
     }

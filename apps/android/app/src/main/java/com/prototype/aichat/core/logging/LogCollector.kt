@@ -55,14 +55,6 @@ class LogCollector private constructor() {
     }
     
     /**
-     * Clear all logs
-     */
-    fun clearLogs() {
-        logBuffer.clear()
-        _logsFlow.value = ""
-    }
-    
-    /**
      * Get formatted logs as string
      */
     fun getFormattedLogs(): String {
@@ -80,6 +72,14 @@ class LogCollector private constructor() {
     
     private fun updateLogsFlow() {
         _logsFlow.value = getFormattedLogs()
+    }
+    
+    /**
+     * Clear all collected logs
+     */
+    fun clearLogs() {
+        logBuffer.clear()
+        _logsFlow.value = ""
     }
     
     // Helper functions for different log levels

@@ -19,7 +19,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.prototype.aichat.core.logging.LogCollector
 import com.prototype.aichat.data.auth.SupabaseAuthClient
+import com.prototype.aichat.data.metrics.MetricsRepository
+import com.prototype.aichat.data.repository.ChatRepositoryImpl
 import com.prototype.aichat.data.repository.SessionsRepository
 import com.prototype.aichat.viewmodel.ChatViewModel
 import com.prototype.aichat.viewmodel.SessionsViewModel
@@ -53,13 +56,35 @@ fun MainScreen(
     val handleLogout: () -> Unit = {
         scope.launch {
             try {
-                // Clear local cache
+                // 1. Clear sessions and messages cache
                 val sessionsRepository = SessionsRepository(context)
                 sessionsRepository.clearCache()
+                
+                // 2. Clear chat repository cache
+                val chatRepository = ChatRepositoryImpl(context)
+                chatRepository.clearAllData()
+                
+                // 3. Clear metrics data
+                val metricsRepository = MetricsRepository.getInstance(context)
+                metricsRepository.clearAllMetrics()
+                
+                // 4. Clear diagnostic logs (if in debug mode)
+                if (com.prototype.aichat.BuildConfig.DEBUG) {
+                    LogCollector.getInstance().clearLogs()
+                }
+                
+                // 5. Clear ViewModels by forcing recreation
+                // This happens automatically due to key change on userId
+                
             } catch (e: Exception) {
-                // Continue even if cache clearing fails
+                // Continue even if some clearing fails
+                // Log the error for debugging
+                if (com.prototype.aichat.BuildConfig.DEBUG) {
+                    LogCollector.getInstance().e("Logout", "Error clearing data: ${e.message}")
+                }
             }
-            // Call the original logout handler
+            
+            // Call the original logout handler (navigates to login)
             onLogout()
         }
         Unit
