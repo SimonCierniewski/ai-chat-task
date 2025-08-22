@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
@@ -18,8 +19,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.prototype.aichat.data.auth.SupabaseAuthClient
+import com.prototype.aichat.data.repository.SessionsRepository
 import com.prototype.aichat.viewmodel.ChatViewModel
 import com.prototype.aichat.viewmodel.SessionsViewModel
+import kotlinx.coroutines.launch
 
 /**
  * Main screen with bottom navigation containing Chat and History tabs
@@ -33,11 +37,29 @@ fun MainScreen(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     
     // Separate ViewModels for each tab to maintain independent state
     val chatViewModel: ChatViewModel = viewModel(key = "chat_tab")
     val historyViewModel: ChatViewModel = viewModel(key = "history_tab")
     val sessionsViewModel: SessionsViewModel = viewModel()
+    
+    // Enhanced logout handler that clears all cached data
+    val handleLogout: () -> Unit = {
+        scope.launch {
+            try {
+                // Clear local cache
+                val sessionsRepository = SessionsRepository(context)
+                sessionsRepository.clearCache()
+            } catch (e: Exception) {
+                // Continue even if cache clearing fails
+            }
+            // Call the original logout handler
+            onLogout()
+        }
+        Unit
+    }
     
     Scaffold(
         bottomBar = {
@@ -107,7 +129,7 @@ fun MainScreen(
                         sessionId = null, // New session
                         chatViewModel = chatViewModel,
                         onNavigateToDiagnostics = onNavigateToDiagnostics,
-                        onLogout = onLogout
+                        onLogout = handleLogout
                     )
                 }
                 
@@ -118,7 +140,7 @@ fun MainScreen(
                         sessionId = sessionId,
                         chatViewModel = chatViewModel,
                         onNavigateToDiagnostics = onNavigateToDiagnostics,
-                        onLogout = onLogout
+                        onLogout = handleLogout
                     )
                 }
                 
@@ -150,7 +172,7 @@ fun MainScreen(
                             }
                         },
                         onNavigateToDiagnostics = onNavigateToDiagnostics,
-                        onLogout = onLogout
+                        onLogout = handleLogout
                     )
                 }
             }

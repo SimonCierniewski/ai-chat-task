@@ -15,6 +15,9 @@ import com.prototype.aichat.ui.screens.MainScreen
 import com.prototype.aichat.ui.screens.SessionScreen
 import com.prototype.aichat.ui.screens.SplashScreen
 import io.github.jan.supabase.gotrue.user.UserSession
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Main navigation graph for the app
@@ -62,8 +65,16 @@ fun AppNavigation(
                     }
                 },
                 onLogout = {
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(0) { inclusive = true }
+                    // Sign out from Supabase first, then navigate to login
+                    CoroutineScope(Dispatchers.Main).launch {
+                        try {
+                            SupabaseAuthClient.signOut()
+                        } catch (e: Exception) {
+                            // Even if sign out fails, navigate to login
+                        }
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 }
             )
@@ -75,8 +86,16 @@ fun AppNavigation(
                 SessionScreen(
                     session = session,
                     onSignOut = {
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0) { inclusive = true }
+                        // Sign out from Supabase first, then navigate to login
+                        CoroutineScope(Dispatchers.Main).launch {
+                            try {
+                                SupabaseAuthClient.signOut()
+                            } catch (e: Exception) {
+                                // Even if sign out fails, navigate to login
+                            }
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
                         }
                     }
                 )
