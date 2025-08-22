@@ -27,26 +27,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         // Observe session changes and persist them
         viewModelScope.launch {
             sessionStatus.collect { status ->
-                android.util.Log.d("AuthViewModel", "Session status changed: ${status::class.simpleName}")
-                
                 when (status) {
                     is SessionStatus.Authenticated -> {
-                        android.util.Log.d("AuthViewModel", "User authenticated! Email: ${status.session.user?.email}")
-                        
                         // Save session to persistent storage
                         sessionRepository.saveSession(status.session)
                         _uiState.update { 
                             it.copy(
                                 isAuthenticated = true,
                                 isLoading = false,
-                                userEmail = SupabaseAuthClient.getUserEmail(),
-                                emailSent = false // Reset email sent state
+                                userEmail = SupabaseAuthClient.getUserEmail()
                             )
                         }
                     }
                     is SessionStatus.NotAuthenticated -> {
-                        android.util.Log.d("AuthViewModel", "User not authenticated")
-                        
                         // Clear session from storage
                         sessionRepository.clearSession()
                         _uiState.update { 
@@ -58,11 +51,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     is SessionStatus.LoadingFromStorage -> {
-                        android.util.Log.d("AuthViewModel", "Loading session from storage...")
                         _uiState.update { it.copy(isLoading = true) }
                     }
                     is SessionStatus.NetworkError -> {
-                        android.util.Log.e("AuthViewModel", "Network error in session status")
                         _uiState.update { 
                             it.copy(
                                 isLoading = false,
@@ -121,62 +112,25 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
      * Handle deep link from magic link
      */
     fun handleDeepLink(url: String) {
-        android.util.Log.d("AuthViewModel", "handleDeepLink called with URL: $url")
-        
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            android.util.Log.d("AuthViewModel", "Starting deep link processing...")
             
             try {
                 val success = SupabaseAuthClient.handleDeepLink(url)
-                android.util.Log.d("AuthViewModel", "Deep link processing result: $success")
-                
                 if (!success) {
-                    android.util.Log.e("AuthViewModel", "Deep link processing failed")
                     _uiState.update { 
                         it.copy(
                             isLoading = false,
                             error = "Invalid or expired magic link"
                         )
                     }
-                } else {
-                    android.util.Log.d("AuthViewModel", "Deep link processed successfully")
-                    
-                    // Since the SDK can't create a proper session, we'll work with the tokens directly
-                    // Update the UI to show we're authenticated
-                    _uiState.update { 
-                        it.copy(
-                            isAuthenticated = true,
-                            isLoading = false,
-                            userEmail = SupabaseAuthClient.getUserEmail(),
-                            emailSent = false
-                        )
-                    }
-                    
-                    // Save the tokens to persistent storage via a workaround
-                    val tokens = SupabaseAuthClient.getTempTokens()
-                    if (tokens != null) {
-                        // Create a fake session for storage
-                        // This is a workaround for SDK limitations
-                        val fakeSession = io.github.jan.supabase.gotrue.user.UserSession(
-                            accessToken = tokens.first!!,
-                            refreshToken = tokens.second!!,
-                            expiresIn = 3600,
-                            tokenType = "bearer",
-                            user = null
-                        )
-                        sessionRepository.saveSession(fakeSession)
-                        android.util.Log.d("AuthViewModel", "Tokens saved to persistent storage")
-                    }
                 }
                 // If successful, session observer will handle the rest
             } catch (e: Exception) {
-                android.util.Log.e("AuthViewModel", "Exception in handleDeepLink", e)
                 _uiState.update { 
                     it.copy(
                         isLoading = false,
-                        error = e.message ?: "Failed to process magic link",
-                        emailSent = false // Allow user to request new magic link
+                        error = e.message ?: "Failed to process magic link"
                     )
                 }
             }
