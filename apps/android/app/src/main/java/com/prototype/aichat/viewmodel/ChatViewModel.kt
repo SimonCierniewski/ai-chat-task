@@ -56,11 +56,49 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val session = chatRepository.createSession(userId)
             currentSessionId = session.id
             _messages.value = emptyList()
+            
+            // Update UI to show initializing state
             _uiState.update { it.copy(
                 currentInput = "",
                 error = null,
+                isInitialized = false,
+                initError = null,
                 sessionTitle = "New Chat"
             ) }
+            
+            // Initialize the chat on backend
+            initializeChat()
+        }
+    }
+    
+    /**
+     * Initialize chat session on backend
+     */
+    fun initializeChat() {
+        if (!::currentSessionId.isInitialized) {
+            startNewSession()
+            return
+        }
+        
+        viewModelScope.launch {
+            _uiState.update { it.copy(
+                isInitialized = false,
+                initError = null
+            ) }
+            
+            val response = chatRepository.initializeChat(currentSessionId)
+            
+            if (response.success) {
+                _uiState.update { it.copy(
+                    isInitialized = true,
+                    initError = null
+                ) }
+            } else {
+                _uiState.update { it.copy(
+                    isInitialized = false,
+                    initError = "Failed to initialize chat. Please tap refresh to try again."
+                ) }
+            }
         }
     }
     
@@ -79,8 +117,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(
                 currentInput = "",
                 error = null,
+                isInitialized = false,
+                initError = null,
                 sessionTitle = "Session ${sessionId.takeLast(4)}"
             ) }
+            
+            // Initialize the chat on backend
+            initializeChat()
         }
     }
     
@@ -93,6 +136,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // Initialize session if not already done
         if (!::currentSessionId.isInitialized) {
             startNewSession()
+            return
+        }
+        
+        // Don't send if not initialized
+        if (!_uiState.value.isInitialized) {
+            _uiState.update { it.copy(
+                error = "Chat not initialized. Please tap refresh to try again."
+            ) }
             return
         }
         
@@ -332,6 +383,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 data class ChatUiState(
     val currentInput: String = "",
     val isStreaming: Boolean = false,
+    val isInitialized: Boolean = false,
+    val initError: String? = null,
     val useMemory: Boolean = true,
     val error: String? = null,
     val lastRequest: ChatRequest? = null,

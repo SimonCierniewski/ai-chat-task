@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,9 +27,11 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -135,6 +138,7 @@ fun ChatScreen(
                     userScrolled = false // Reset to auto-scroll
                 },
                 isStreaming = uiState.isStreaming,
+                isEnabled = uiState.isInitialized,
                 onCancelStreaming = { chatViewModel.cancelStreaming() }
             )
         }
@@ -149,6 +153,14 @@ fun ChatScreen(
                 listState = listState,
                 isStreaming = streamingState is StreamingState.Streaming
             )
+            
+            // Initialization overlay
+            if (!uiState.isInitialized || uiState.initError != null) {
+                InitializationOverlay(
+                    error = uiState.initError,
+                    onRefresh = { chatViewModel.initializeChat() }
+                )
+            }
             
             // Error snackbar
             uiState.error?.let { error ->
@@ -318,6 +330,7 @@ fun ChatInputBar(
     onMessageChange: (String) -> Unit,
     onSendMessage: () -> Unit,
     isStreaming: Boolean,
+    isEnabled: Boolean = true,
     onCancelStreaming: () -> Unit
 ) {
     Surface(
@@ -336,12 +349,17 @@ fun ChatInputBar(
                 modifier = Modifier
                     .weight(1f)
                     .semantics { contentDescription = "Message input field" },
-                placeholder = { Text("Type a message...") },
+                placeholder = { 
+                    Text(
+                        if (!isEnabled) "Chat initializing..." 
+                        else "Type a message..."
+                    ) 
+                },
                 maxLines = 3,
-                enabled = !isStreaming,
+                enabled = isEnabled && !isStreaming,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(
-                    onSend = { if (messageText.isNotBlank()) onSendMessage() }
+                    onSend = { if (messageText.isNotBlank() && isEnabled) onSendMessage() }
                 )
             )
             
@@ -387,6 +405,68 @@ fun ScrollToBottomFab(onClick: () -> Unit) {
             Icons.Default.KeyboardArrowDown,
             contentDescription = null
         )
+    }
+}
+
+@Composable
+fun InitializationOverlay(
+    error: String?,
+    onRefresh: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            shadowElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (error != null) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    
+                    Text(
+                        text = "Chat Initialization Failed",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    FilledIconButton(
+                        onClick = onRefresh,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Refresh chat initialization"
+                        }
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null)
+                    }
+                } else {
+                    androidx.compose.material3.CircularProgressIndicator()
+                    
+                    Text(
+                        text = "Initializing chat...",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        }
     }
 }
 

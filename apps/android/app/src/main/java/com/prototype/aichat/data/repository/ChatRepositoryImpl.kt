@@ -94,9 +94,7 @@ class ChatRepositoryImpl(
                             }
                             is SSEChatEvent.Done -> {
                                 // Stream completed successfully
-                                if (_streamingState.value !is StreamingState.Complete) {
-                                    _streamingState.value = StreamingState.Complete
-                                }
+                                _streamingState.value = StreamingState.Complete
                             }
                             is SSEChatEvent.Error -> {
                                 _streamingState.value = StreamingState.Error(event.message)

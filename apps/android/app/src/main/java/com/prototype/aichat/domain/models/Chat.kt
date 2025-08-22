@@ -49,6 +49,20 @@ data class ChatRequest(
 )
 
 @Serializable
+data class ChatInitRequest(
+    val sessionId: String
+)
+
+@Serializable
+data class ChatInitResponse(
+    val success: Boolean,
+    val userId: String,
+    val sessionId: String,
+    val threadExists: Boolean,
+    val userExists: Boolean
+)
+
+@Serializable
 data class SSEEvent(
     val event: String,
     val data: String
