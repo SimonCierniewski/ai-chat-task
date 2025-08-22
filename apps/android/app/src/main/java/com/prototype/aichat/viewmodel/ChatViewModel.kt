@@ -48,6 +48,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     /**
+     * Check if we have an active session
+     */
+    fun hasActiveSession(): Boolean {
+        return ::currentSessionId.isInitialized
+    }
+    
+    /**
      * Start a new chat session
      */
     fun startNewSession() {
@@ -106,6 +113,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      * Load an existing session with its messages
      */
     fun loadSession(sessionId: String) {
+        // Don't reload if it's the same session
+        if (::currentSessionId.isInitialized && currentSessionId == sessionId) {
+            return
+        }
+        
         viewModelScope.launch {
             currentSessionId = sessionId
             

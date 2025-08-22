@@ -143,13 +143,16 @@ fun ChatScreenContent(
     onNavigateToDiagnostics: () -> Unit,
     onLogout: () -> Unit
 ) {
-    // Load session if sessionId is provided
+    // Only handle explicit session loading for history navigation
     LaunchedEffect(sessionId) {
         if (sessionId != null) {
+            // Only load if it's a different session
             chatViewModel.loadSession(sessionId)
-        } else {
+        } else if (!chatViewModel.hasActiveSession()) {
+            // Only start new session if we don't have one already
             chatViewModel.startNewSession()
         }
+        // If sessionId is null and we have an active session, do nothing (preserve current chat)
     }
     
     // Use the existing ChatScreen but without navigation controls

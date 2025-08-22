@@ -98,15 +98,6 @@ fun ChatScreen(
     // Auto-scroll behavior
     var userScrolled by remember { mutableStateOf(false) }
     
-    // Initialize chat on first load
-    LaunchedEffect(sessionId) {
-        if (sessionId != null) {
-            chatViewModel.loadSession(sessionId)
-        } else {
-            chatViewModel.startNewSession()
-        }
-    }
-    
     // Detect user scroll
     LaunchedEffect(listState.isScrollInProgress) {
         if (listState.isScrollInProgress) {
