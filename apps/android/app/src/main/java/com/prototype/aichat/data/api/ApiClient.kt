@@ -93,7 +93,7 @@ class ApiClient(
     /**
      * Build a POST request with JSON body
      */
-    fun buildJsonRequest(url: String, body: Any): Request {
+    inline fun <reified T> buildJsonRequest(url: String, body: T): Request {
         val jsonBody = json.encodeToString(body)
         val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
         

@@ -3,6 +3,7 @@ package com.prototype.aichat.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -96,6 +97,15 @@ fun ChatScreen(
     
     // Auto-scroll behavior
     var userScrolled by remember { mutableStateOf(false) }
+    
+    // Initialize chat on first load
+    LaunchedEffect(sessionId) {
+        if (sessionId != null) {
+            chatViewModel.loadSession(sessionId)
+        } else {
+            chatViewModel.startNewSession()
+        }
+    }
     
     // Detect user scroll
     LaunchedEffect(listState.isScrollInProgress) {
@@ -416,13 +426,15 @@ fun InitializationOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f))
             .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
-            shadowElevation = 8.dp
+            shadowElevation = 8.dp,
+            color = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -458,7 +470,7 @@ fun InitializationOverlay(
                         Icon(Icons.Default.Refresh, contentDescription = null)
                     }
                 } else {
-                    androidx.compose.material3.CircularProgressIndicator()
+                    CircularProgressIndicator()
                     
                     Text(
                         text = "Initializing chat...",

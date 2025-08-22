@@ -142,7 +142,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // Don't send if not initialized
         if (!_uiState.value.isInitialized) {
             _uiState.update { it.copy(
-                error = "Chat not initialized. Please tap refresh to try again."
+                initError = "Failed to initialize chat. Please tap refresh to try again."
             ) }
             return
         }

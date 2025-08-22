@@ -1,6 +1,7 @@
 package com.prototype.aichat.data.repository
 
 import android.content.Context
+import android.util.Log
 import com.prototype.aichat.core.config.AppConfig
 import com.prototype.aichat.data.api.ApiClient
 import com.prototype.aichat.data.api.ApiException
@@ -48,10 +49,15 @@ class ChatRepositoryImpl(
     override suspend fun initializeChat(sessionId: String): ChatInitResponse {
         return withContext(Dispatchers.IO) {
             try {
+                Log.d("ChatRepository", "Initializing chat for session: $sessionId")
                 val url = "${AppConfig.API_BASE_URL}/api/v1/chat/init"
-                val request = apiClient.buildJsonRequest(url, ChatInitRequest(sessionId))
-                apiClient.executeRequest<ChatInitResponse>(request)
+                val initRequest = ChatInitRequest(sessionId)
+                val request = apiClient.buildJsonRequest(url, initRequest)
+                val response = apiClient.executeRequest<ChatInitResponse>(request)
+                Log.d("ChatRepository", "Chat initialized successfully: ${response.success}")
+                response
             } catch (e: Exception) {
+                Log.e("ChatRepository", "initializeChat failed for session $sessionId", e)
                 // Return failure response on error
                 ChatInitResponse(
                     success = false,
