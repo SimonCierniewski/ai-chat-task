@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.prototype.aichat.data.api.ApiException
+import com.prototype.aichat.data.auth.SupabaseAuthClient
 import com.prototype.aichat.data.repository.ChatRepositoryImpl
 import com.prototype.aichat.domain.models.ChatMessage
 import com.prototype.aichat.domain.models.ChatRequest
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
+import com.prototype.aichat.core.utils.SessionIdGenerator
 
 /**
  * ViewModel for Chat screen with SSE streaming support
@@ -40,12 +42,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     // Current streaming text accumulator
     private val streamingTextBuilder = StringBuilder()
     private var currentStreamingMessageId: String? = null
-    private var currentSessionId: String = UUID.randomUUID().toString()
+    private lateinit var currentSessionId: String
     
     init {
         // Create initial session
         viewModelScope.launch {
-            val session = chatRepository.createSession("user-id")
+            val userId = SupabaseAuthClient.getUserId()!!
+            val session = chatRepository.createSession(userId)
             currentSessionId = session.id
         }
     }

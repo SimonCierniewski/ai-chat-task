@@ -2,6 +2,7 @@ package com.prototype.aichat.domain.models
 
 import kotlinx.serialization.Serializable
 import java.util.UUID
+import com.prototype.aichat.core.utils.SessionIdGenerator
 
 /**
  * Domain models for the chat feature
@@ -36,7 +37,7 @@ data class MessageMetadata(
 
 @Serializable
 data class ChatSession(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = SessionIdGenerator.generate(),
     val userId: String,
     val createdAt: Long = System.currentTimeMillis(),
     val lastMessageAt: Long? = null,
