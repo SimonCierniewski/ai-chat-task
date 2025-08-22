@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -123,8 +124,12 @@ fun MainScreen(
                 
                 // History tab - shows list of sessions
                 composable("history") {
+                    // Get the current session ID from the Chat tab's ViewModel
+                    val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
+                    
                     SessionsListScreen(
                         sessionsViewModel = sessionsViewModel,
+                        excludeSessionId = chatUiState.sessionId, // Hide current chat session
                         onSessionClick = { session ->
                             // Navigate to history detail within History tab
                             navController.navigate("history/${session.id}")

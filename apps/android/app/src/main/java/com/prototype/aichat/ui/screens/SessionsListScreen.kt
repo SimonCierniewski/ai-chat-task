@@ -31,10 +31,18 @@ import java.util.*
 @Composable
 fun SessionsListScreen(
     sessionsViewModel: SessionsViewModel,
+    excludeSessionId: String? = null,
     onSessionClick: (ChatSession) -> Unit
 ) {
     val uiState by sessionsViewModel.uiState.collectAsStateWithLifecycle()
-    val sessions by sessionsViewModel.sessions.collectAsStateWithLifecycle()
+    val allSessions by sessionsViewModel.sessions.collectAsStateWithLifecycle()
+    
+    // Filter out the excluded session (current chat session)
+    val sessions = if (excludeSessionId != null) {
+        allSessions.filter { it.id != excludeSessionId }
+    } else {
+        allSessions
+    }
     
     // Pull to refresh state
     val pullToRefreshState = rememberPullToRefreshState()

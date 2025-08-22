@@ -70,7 +70,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 error = null,
                 isInitialized = false,
                 initError = null,
-                sessionTitle = "New Chat"
+                sessionTitle = "New Chat",
+                sessionId = session.id
             ) }
             
             // Initialize the chat on backend
@@ -131,7 +132,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 error = null,
                 isInitialized = false,
                 initError = null,
-                sessionTitle = "Session ${sessionId.takeLast(4)}"
+                sessionTitle = "Session ${sessionId.takeLast(4)}",
+                sessionId = sessionId
             ) }
             
             // Initialize the chat on backend
@@ -400,5 +402,6 @@ data class ChatUiState(
     val useMemory: Boolean = true,
     val error: String? = null,
     val lastRequest: ChatRequest? = null,
-    val sessionTitle: String = "New Chat"
+    val sessionTitle: String = "New Chat",
+    val sessionId: String? = null
 )
