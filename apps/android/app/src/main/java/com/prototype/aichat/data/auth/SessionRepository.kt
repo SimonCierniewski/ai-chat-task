@@ -14,14 +14,18 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+// Create DataStore as a top-level property to ensure singleton
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "auth_session"
+)
+
 /**
  * Repository for managing user session persistence using DataStore
+ * 
+ * IMPORTANT: This class must be used as a singleton to avoid DataStore conflicts.
+ * Use SessionRepository.getInstance(context) to get the singleton instance.
  */
-class SessionRepository(private val context: Context) {
-    
-    private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
-        name = "auth_session"
-    )
+class SessionRepository private constructor(private val context: Context) {
     
     private val json = Json {
         ignoreUnknownKeys = true
@@ -29,12 +33,23 @@ class SessionRepository(private val context: Context) {
     }
     
     companion object {
+        @Volatile
+        private var INSTANCE: SessionRepository? = null
+        
         private val ACCESS_TOKEN_KEY = stringPreferencesKey("access_token")
         private val REFRESH_TOKEN_KEY = stringPreferencesKey("refresh_token")
         private val EXPIRES_AT_KEY = longPreferencesKey("expires_at")
         private val USER_ID_KEY = stringPreferencesKey("user_id")
         private val USER_EMAIL_KEY = stringPreferencesKey("user_email")
         private val USER_ROLE_KEY = stringPreferencesKey("user_role")
+        
+        fun getInstance(context: Context): SessionRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: SessionRepository(context.applicationContext).also {
+                    INSTANCE = it
+                }
+            }
+        }
     }
     
     /**

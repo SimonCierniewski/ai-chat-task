@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
  */
 class ApiClient(
     private val context: Context,
-    private val sessionRepository: SessionRepository = SessionRepository(context)
+    private val sessionRepository: SessionRepository = SessionRepository.getInstance(context)
 ) {
     
     val json = Json {

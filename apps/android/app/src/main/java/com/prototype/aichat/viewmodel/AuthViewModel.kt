@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
  */
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
     
-    private val sessionRepository = SessionRepository(application)
+    private val sessionRepository = SessionRepository.getInstance(application)
     
     // UI State
     private val _uiState = MutableStateFlow(AuthUiState())

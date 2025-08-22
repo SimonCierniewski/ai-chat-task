@@ -22,7 +22,7 @@ class DiagnosticsViewModel(
     application: Application
 ) : AndroidViewModel(application) {
     
-    private val sessionRepository = SessionRepository(application)
+    private val sessionRepository = SessionRepository.getInstance(application)
     private val metricsRepository = MetricsRepository.getInstance(application)
     private val logCollector = LogCollector.getInstance()
     
