@@ -36,7 +36,6 @@ export const chatRequestSchema = {
     },
     model: {
       type: 'string',
-      default: 'gpt-4-mini',
       description: 'AI model to use'
     },
     returnMemory: {

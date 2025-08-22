@@ -49,8 +49,7 @@ data class ChatSession(
 data class ChatRequest(
     val message: String,
     val useMemory: Boolean = true,
-    val sessionId: String? = null,
-    val model: String? = null
+    val sessionId: String? = null
 )
 
 @Serializable

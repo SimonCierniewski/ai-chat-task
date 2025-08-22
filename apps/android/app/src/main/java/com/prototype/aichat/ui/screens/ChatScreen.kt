@@ -20,9 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Logout
@@ -121,10 +119,7 @@ fun ChatScreen(
         topBar = {
             ChatTopBar(
                 useMemory = uiState.useMemory,
-                selectedModel = uiState.selectedModel,
-                availableModels = uiState.availableModels,
                 onToggleMemory = { chatViewModel.toggleMemory() },
-                onSelectModel = { chatViewModel.selectModel(it) },
                 onNavigateToSession = onNavigateToSession,
                 onNavigateToDiagnostics = onNavigateToDiagnostics,
                 onLogout = onLogout
@@ -192,15 +187,11 @@ fun ChatScreen(
 @Composable
 fun ChatTopBar(
     useMemory: Boolean,
-    selectedModel: String,
-    availableModels: List<String>,
     onToggleMemory: () -> Unit,
-    onSelectModel: (String) -> Unit,
     onNavigateToSession: () -> Unit,
     onNavigateToDiagnostics: () -> Unit,
     onLogout: () -> Unit
 ) {
-    var showModelMenu by remember { mutableStateOf(false) }
     
     TopAppBar(
         title = { Text("AI Chat") },
@@ -217,41 +208,6 @@ fun ChatTopBar(
                     contentDescription = null,
                     tint = if (useMemory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-            
-            // Model selector
-            Box {
-                TextButton(
-                    onClick = { showModelMenu = true },
-                    modifier = Modifier.semantics {
-                        contentDescription = "Select model: $selectedModel"
-                    }
-                ) {
-                    Text(selectedModel.substringAfterLast("-"))
-                    Icon(
-                        Icons.Default.ArrowDropDown,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-                
-                DropdownMenu(
-                    expanded = showModelMenu,
-                    onDismissRequest = { showModelMenu = false }
-                ) {
-                    availableModels.forEach { model ->
-                        DropdownMenuItem(
-                            text = { Text(model) },
-                            onClick = {
-                                onSelectModel(model)
-                                showModelMenu = false
-                            },
-                            leadingIcon = if (model == selectedModel) {
-                                { Icon(Icons.Default.Check, contentDescription = null) }
-                            } else null
-                        )
-                    }
-                }
             }
             
             // Session history

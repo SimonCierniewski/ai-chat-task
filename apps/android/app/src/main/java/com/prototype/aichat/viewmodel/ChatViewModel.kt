@@ -82,8 +82,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val request = ChatRequest(
                 message = text,
                 useMemory = _uiState.value.useMemory,
-                sessionId = currentSessionId,
-                model = _uiState.value.selectedModel
+                sessionId = currentSessionId
             )
             
             // Store request for retry
@@ -275,12 +274,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(useMemory = !it.useMemory) }
     }
     
-    /**
-     * Select model
-     */
-    fun selectModel(model: String) {
-        _uiState.update { it.copy(selectedModel = model) }
-    }
     
     /**
      * Update current input text
@@ -345,13 +338,6 @@ data class ChatUiState(
     val currentInput: String = "",
     val isStreaming: Boolean = false,
     val useMemory: Boolean = true,
-    val selectedModel: String = "gpt-4-mini",
-    val availableModels: List<String> = listOf(
-        "gpt-4-mini",
-        "gpt-4",
-        "gpt-4-turbo",
-        "gpt-3.5-turbo"
-    ),
     val error: String? = null,
     val lastRequest: ChatRequest? = null,
     val lastTTFT: Long? = null

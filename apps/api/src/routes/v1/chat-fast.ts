@@ -185,8 +185,8 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
       const stream = new SSEStream(reply, req.id);
 
       try {
-        // Step 1: Validate model (fast lookup)
-        const model = requestedModel || 'gpt-4o-mini';
+        // Step 1: Use admin-configured default model if no model specified
+        const model = requestedModel || config.openai.defaultModel;
 
         // Step 2: Get context block if memory is enabled (simple, no processing)
         let contextBlock: string | undefined = undefined;
