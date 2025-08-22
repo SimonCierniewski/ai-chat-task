@@ -119,14 +119,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         
+        // Clear messages immediately to avoid showing old content
+        _messages.value = emptyList()
+        
         viewModelScope.launch {
             currentSessionId = sessionId
             
-            // Load messages for this session
-            val sessionMessages = chatRepository.getSessionMessages(sessionId)
-            _messages.value = sessionMessages
-            
-            // Update UI state
+            // Update UI state immediately with loading state
             _uiState.update { it.copy(
                 currentInput = "",
                 error = null,
@@ -135,6 +134,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 sessionTitle = "Session ${sessionId.takeLast(4)}",
                 sessionId = sessionId
             ) }
+            
+            // Load messages for this session
+            val sessionMessages = chatRepository.getSessionMessages(sessionId)
+            _messages.value = sessionMessages
             
             // Initialize the chat on backend
             initializeChat()

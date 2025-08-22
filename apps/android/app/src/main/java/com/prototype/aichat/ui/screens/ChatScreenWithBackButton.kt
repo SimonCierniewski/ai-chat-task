@@ -146,11 +146,28 @@ fun ChatScreenWithBackButton(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            MessageList(
-                messages = messages,
-                listState = listState,
-                isStreaming = streamingState is StreamingState.Streaming
-            )
+            // Show loading indicator when no messages and not initialized
+            if (messages.isEmpty() && !uiState.isInitialized) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Loading session...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                MessageList(
+                    messages = messages,
+                    listState = listState,
+                    isStreaming = streamingState is StreamingState.Streaming
+                )
+            }
             
             // Error snackbar
             uiState.error?.let { error ->
