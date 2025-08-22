@@ -3,11 +3,14 @@ package com.prototype.aichat.data.repository
 import android.content.Context
 import com.prototype.aichat.core.config.AppConfig
 import com.prototype.aichat.data.api.ApiClient
+import com.prototype.aichat.data.auth.SupabaseAuthClient
 import com.prototype.aichat.data.local.ChatDatabase
 import com.prototype.aichat.data.local.entities.MessageEntity
 import com.prototype.aichat.data.local.entities.SessionEntity
 import com.prototype.aichat.domain.models.ChatMessage
 import com.prototype.aichat.domain.models.ChatSession
+import com.prototype.aichat.domain.models.MessageMetadata
+import com.prototype.aichat.domain.models.MessageRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
@@ -198,7 +201,12 @@ class SessionsRepository(
                 val url = "${AppConfig.API_BASE_URL}/api/v1/sessions"
                 val request = apiClient.buildGetRequest(url)
                 val response: SessionsResponse = apiClient.executeRequest(request)
-                response.sessions
+                
+                // Get userId from the first existing session or use a default
+                val userId = SupabaseAuthClient.getUserId()!!
+                
+                // Convert API models to domain models
+                response.sessions.map { it.toDomainModel(userId) }
             } catch (e: Exception) {
                 // Return empty list if API fails
                 emptyList()
@@ -212,12 +220,15 @@ class SessionsRepository(
     private suspend fun fetchSessionMessagesFromApi(sessionId: String) {
         withContext(Dispatchers.IO) {
             try {
-                val url = "${AppConfig.API_BASE_URL}/api/v1/memory/sessions/$sessionId/messages"
+                val url = "${AppConfig.API_BASE_URL}/api/v1/sessions/$sessionId/messages"
                 val request = apiClient.buildGetRequest(url)
                 val response: MessagesResponse = apiClient.executeRequest(request)
                 
+                // Convert API models to domain models
+                val messages = response.messages.map { it.toDomainModel(sessionId) }
+                
                 // Update local cache
-                val messageEntities = response.messages.mapIndexed { index, message ->
+                val messageEntities = messages.mapIndexed { index, message ->
                     MessageEntity.fromDomainModel(message, index)
                 }
                 
@@ -285,13 +296,82 @@ class SessionsRepository(
  */
 @Serializable
 private data class SessionsResponse(
-    val sessions: List<ChatSession>
+    val sessions: List<SessionApiModel>,
+    val total: Int
 )
 
 @Serializable
+private data class SessionApiModel(
+    val id: String,
+    val createdAt: String,
+    val lastMessageAt: String? = null,
+    val messageCount: Int = 0,
+    val title: String? = null
+) {
+    fun toDomainModel(userId: String): ChatSession {
+        return ChatSession(
+            id = id,
+            userId = userId,
+            createdAt = parseIsoDate(createdAt),
+            lastMessageAt = lastMessageAt?.let { parseIsoDate(it) },
+            messageCount = messageCount,
+            title = title
+        )
+    }
+    
+    private fun parseIsoDate(dateString: String): Long {
+        return try {
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                .parse(dateString.replace("Z", "").split(".")[0])?.time 
+                ?: System.currentTimeMillis()
+        } catch (e: Exception) {
+            System.currentTimeMillis()
+        }
+    }
+}
+
+@Serializable
 private data class MessagesResponse(
-    val messages: List<ChatMessage>
+    val messages: List<MessageApiModel>,
+    val sessionId: String
 )
+
+@Serializable
+private data class MessageApiModel(
+    val id: String,
+    val content: String,
+    val role: String,
+    val timestamp: String,
+    val metadata: MessageMetadata? = null
+) {
+    fun toDomainModel(sessionId: String): ChatMessage {
+        return ChatMessage(
+            id = id,
+            sessionId = sessionId,
+            content = content,
+            role = when(role.lowercase()) {
+                "user" -> MessageRole.USER
+                "assistant" -> MessageRole.ASSISTANT
+                "system" -> MessageRole.SYSTEM
+                else -> MessageRole.USER
+            },
+            timestamp = parseIsoDate(timestamp),
+            metadata = metadata
+        )
+    }
+    
+    private fun parseIsoDate(dateString: String): Long {
+        return try {
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                .parse(dateString.replace("Z", "").split(".")[0])?.time 
+                ?: System.currentTimeMillis()
+        } catch (e: Exception) {
+            System.currentTimeMillis()
+        }
+    }
+}
 
 @Serializable
 private data class CreateSessionRequest(
