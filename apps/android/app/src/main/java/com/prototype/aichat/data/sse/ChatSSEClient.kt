@@ -30,16 +30,12 @@ class ChatSSEClient(
     }
     
     private var currentEventSource: EventSource? = null
-    private var metrics: StreamingMetrics? = null
     
     /**
      * Start SSE stream for chat endpoint
      * Returns a Flow of SSEChatEvent that can be collected
      */
     fun streamChat(request: ChatRequest): Flow<SSEChatEvent> = callbackFlow {
-        // Reset metrics for new stream
-        metrics = StreamingMetrics()
-        
         // Build request
         val url = "${AppConfig.API_BASE_URL}/api/v1/chat"
         val jsonBody = json.encodeToString(request)
@@ -86,21 +82,6 @@ class ChatSSEClient(
         ) {
             // Parse and emit event
             val event = SSEEventParser.parseEvent(type, data)
-            
-            // Track TTFT for first non-empty token
-            if (event is SSEChatEvent.Token && event.text.isNotBlank()) {
-                val currentMetrics = metrics
-                if (currentMetrics != null && currentMetrics.firstTokenTime == null) {
-                    metrics = currentMetrics.withFirstToken()
-                    // Log or report TTFT
-                    val ttft = metrics?.ttftMs
-                    if (ttft != null && AppConfig.IS_DEBUG) {
-                        println("TTFT: ${ttft}ms")
-                    }
-                } else if (currentMetrics != null) {
-                    metrics = currentMetrics.withNewToken()
-                }
-            }
             
             // Send event to flow (ignore heartbeats by default)
             if (event !is SSEChatEvent.Heartbeat) {
@@ -152,13 +133,7 @@ class ChatSSEClient(
     fun disconnect() {
         currentEventSource?.cancel()
         currentEventSource = null
-        metrics = null
     }
-    
-    /**
-     * Get current streaming metrics (TTFT, token count, etc.)
-     */
-    fun getMetrics(): StreamingMetrics? = metrics
     
     /**
      * Check if currently connected

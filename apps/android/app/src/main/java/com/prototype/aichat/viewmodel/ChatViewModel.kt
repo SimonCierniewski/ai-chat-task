@@ -8,7 +8,6 @@ import com.prototype.aichat.data.auth.SupabaseAuthClient
 import com.prototype.aichat.data.repository.ChatRepositoryImpl
 import com.prototype.aichat.domain.models.ChatMessage
 import com.prototype.aichat.domain.models.ChatRequest
-import com.prototype.aichat.domain.models.MessageMetadata
 import com.prototype.aichat.domain.models.MessageRole
 import com.prototype.aichat.domain.models.SSEChatEvent
 import com.prototype.aichat.domain.models.StreamingState
@@ -169,22 +168,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             
             is SSEChatEvent.Usage -> {
-                // Update message metadata with usage info
-                val usage = MessageMetadata(
-                    tokensIn = event.tokensIn,
-                    tokensOut = event.tokensOut,
-                    costUsd = event.costUsd,
-                    model = event.model,
-                    ttftMs = null // TTFT is tracked separately
-                )
-                finalizeStreamingMessage(usage)
+                // Ignore usage events - we're not tracking costs/tokens
             }
             
             is SSEChatEvent.Done -> {
                 // Stream completed
-                if (!hasUsageData()) {
-                    finalizeStreamingMessage(null)
-                }
+                finalizeStreamingMessage()
             }
             
             is SSEChatEvent.Error -> {
@@ -216,9 +205,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     /**
-     * Finalize streaming message with usage data
+     * Finalize streaming message
      */
-    private fun finalizeStreamingMessage(metadata: MessageMetadata?) {
+    private fun finalizeStreamingMessage() {
         val messageId = currentStreamingMessageId ?: return
         val finalContent = streamingTextBuilder.toString()
         
@@ -227,7 +216,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (message.id == messageId) {
                     message.copy(
                         content = finalContent,
-                        metadata = metadata
+                        metadata = null  // No metadata tracking
                     )
                 } else {
                     message
@@ -239,12 +228,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val finalMessage = _messages.value.find { it.id == messageId }
             finalMessage?.let { chatRepository.saveMessage(it) }
-        }
-        
-        // Get TTFT if available
-        val ttft = chatRepository.getCurrentTTFT()
-        if (ttft != null) {
-            _uiState.update { it.copy(lastTTFT = ttft) }
         }
     }
     
@@ -335,32 +318,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(isStreaming = false) }
     }
     
-    /**
-     * Parse usage data from JSON string
-     */
-    private fun parseUsageData(data: String): MessageMetadata {
-        // Simple parsing - in production use proper JSON parser
-        val tokensInMatch = "\"tokens_in\":(\\d+)".toRegex().find(data)
-        val tokensOutMatch = "\"tokens_out\":(\\d+)".toRegex().find(data)
-        val costMatch = "\"cost_usd\":([0-9.]+)".toRegex().find(data)
-        val modelMatch = "\"model\":\"([^\"]+)\"".toRegex().find(data)
-        
-        return MessageMetadata(
-            tokensIn = tokensInMatch?.groupValues?.get(1)?.toIntOrNull(),
-            tokensOut = tokensOutMatch?.groupValues?.get(1)?.toIntOrNull(),
-            costUsd = costMatch?.groupValues?.get(1)?.toDoubleOrNull(),
-            model = modelMatch?.groupValues?.get(1),
-            ttftMs = chatRepository.getCurrentTTFT()
-        )
-    }
-    
-    /**
-     * Check if current message has usage data
-     */
-    private fun hasUsageData(): Boolean {
-        val messageId = currentStreamingMessageId ?: return false
-        return _messages.value.find { it.id == messageId }?.metadata != null
-    }
     
     override fun onCleared() {
         super.onCleared()
@@ -378,6 +335,5 @@ data class ChatUiState(
     val useMemory: Boolean = true,
     val error: String? = null,
     val lastRequest: ChatRequest? = null,
-    val lastTTFT: Long? = null,
     val sessionTitle: String = "New Chat"
 )

@@ -28,10 +28,6 @@ enum class MessageRole {
 @Serializable
 data class MessageMetadata(
     val model: String? = null,
-    val tokensIn: Int? = null,
-    val tokensOut: Int? = null,
-    val costUsd: Double? = null,
-    val ttftMs: Long? = null,
     val durationMs: Long? = null
 )
 
@@ -62,6 +58,6 @@ sealed class StreamingState {
     object Idle : StreamingState()
     object Connecting : StreamingState()
     data class Streaming(val tokens: List<String>) : StreamingState()
-    data class Complete(val usage: MessageMetadata) : StreamingState()
+    object Complete : StreamingState()
     data class Error(val message: String) : StreamingState()
 }

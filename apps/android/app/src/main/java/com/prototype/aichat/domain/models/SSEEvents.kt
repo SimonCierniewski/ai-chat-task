@@ -14,14 +14,9 @@ sealed class SSEChatEvent {
     data class Token(val text: String) : SSEChatEvent()
     
     /**
-     * Usage event with token counts and cost information
+     * Usage event (ignored in pure chat mode)
      */
-    data class Usage(
-        val tokensIn: Int,
-        val tokensOut: Int,
-        val costUsd: Double,
-        val model: String
-    ) : SSEChatEvent()
+    object Usage : SSEChatEvent()
     
     /**
      * Done event signaling stream completion
@@ -52,13 +47,6 @@ data class TokenEventData(
     val text: String
 )
 
-@Serializable
-data class UsageEventData(
-    val tokens_in: Int,
-    val tokens_out: Int,
-    val cost_usd: Double,
-    val model: String
-)
 
 @Serializable
 data class DoneEventData(
@@ -103,17 +91,8 @@ object SSEEventParser {
             }
             
             "usage" -> {
-                try {
-                    val data = json.decodeFromString<UsageEventData>(eventData)
-                    SSEChatEvent.Usage(
-                        tokensIn = data.tokens_in,
-                        tokensOut = data.tokens_out,
-                        costUsd = data.cost_usd,
-                        model = data.model
-                    )
-                } catch (e: SerializationException) {
-                    SSEChatEvent.Error("Failed to parse usage data", "PARSE_ERROR")
-                }
+                // Ignore usage events in pure chat mode
+                SSEChatEvent.Usage
             }
             
             "done" -> {
@@ -142,43 +121,3 @@ object SSEEventParser {
     }
 }
 
-/**
- * Streaming state with TTFT tracking
- */
-data class StreamingMetrics(
-    val startTime: Long = System.currentTimeMillis(),
-    val firstTokenTime: Long? = null,
-    val lastTokenTime: Long? = null,
-    val tokenCount: Int = 0,
-    val ttftMs: Long? = null
-) {
-    /**
-     * Calculate TTFT when first token arrives
-     */
-    fun withFirstToken(): StreamingMetrics {
-        if (firstTokenTime != null) return this
-        
-        val now = System.currentTimeMillis()
-        return copy(
-            firstTokenTime = now,
-            lastTokenTime = now,
-            tokenCount = tokenCount + 1,
-            ttftMs = now - startTime
-        )
-    }
-    
-    /**
-     * Update metrics for subsequent tokens
-     */
-    fun withNewToken(): StreamingMetrics {
-        val now = System.currentTimeMillis()
-        return if (firstTokenTime == null) {
-            withFirstToken()
-        } else {
-            copy(
-                lastTokenTime = now,
-                tokenCount = tokenCount + 1
-            )
-        }
-    }
-}

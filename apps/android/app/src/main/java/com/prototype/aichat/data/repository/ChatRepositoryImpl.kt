@@ -1,13 +1,15 @@
 package com.prototype.aichat.data.repository
 
 import android.content.Context
+import com.prototype.aichat.core.config.AppConfig
 import com.prototype.aichat.data.api.ApiClient
 import com.prototype.aichat.data.api.ApiException
 import com.prototype.aichat.data.sse.ChatSSEClient
+import com.prototype.aichat.domain.models.ChatInitRequest
+import com.prototype.aichat.domain.models.ChatInitResponse
 import com.prototype.aichat.domain.models.ChatMessage
 import com.prototype.aichat.domain.models.ChatRequest
 import com.prototype.aichat.domain.models.ChatSession
-import com.prototype.aichat.domain.models.MessageMetadata
 import com.prototype.aichat.domain.models.SSEChatEvent
 import com.prototype.aichat.domain.models.StreamingState
 import com.prototype.aichat.domain.repository.ChatRepository
@@ -41,6 +43,28 @@ class ChatRepositoryImpl(
     val streamingState: StateFlow<StreamingState> = _streamingState.asStateFlow()
     
     /**
+     * Initialize a chat session on the backend
+     */
+    override suspend fun initializeChat(sessionId: String): ChatInitResponse {
+        return withContext(Dispatchers.IO) {
+            try {
+                val url = "${AppConfig.API_BASE_URL}/api/v1/chat/init"
+                val request = apiClient.buildJsonRequest(url, ChatInitRequest(sessionId))
+                apiClient.executeRequest<ChatInitResponse>(request)
+            } catch (e: Exception) {
+                // Return failure response on error
+                ChatInitResponse(
+                    success = false,
+                    userId = "",
+                    sessionId = sessionId,
+                    threadExists = false,
+                    userExists = false
+                )
+            }
+        }
+    }
+    
+    /**
      * Send a chat message and receive SSE stream
      * Handles lifecycle properly - cancellation stops upstream
      */
@@ -66,22 +90,12 @@ class ChatRepositoryImpl(
                                 }
                             }
                             is SSEChatEvent.Usage -> {
-                                _streamingState.value = StreamingState.Complete(
-                                    MessageMetadata(
-                                        tokensIn = event.tokensIn,
-                                        tokensOut = event.tokensOut,
-                                        costUsd = event.costUsd,
-                                        model = event.model,
-                                        ttftMs = sseClient.getMetrics()?.ttftMs
-                                    )
-                                )
+                                // Ignore usage events - we're not tracking costs/tokens
                             }
                             is SSEChatEvent.Done -> {
                                 // Stream completed successfully
                                 if (_streamingState.value !is StreamingState.Complete) {
-                                    _streamingState.value = StreamingState.Complete(
-                                        MessageMetadata(ttftMs = sseClient.getMetrics()?.ttftMs)
-                                    )
+                                    _streamingState.value = StreamingState.Complete
                                 }
                             }
                             is SSEChatEvent.Error -> {
@@ -225,10 +239,6 @@ class ChatRepositoryImpl(
         }
     }
     
-    /**
-     * Get current TTFT if available
-     */
-    fun getCurrentTTFT(): Long? = sseClient.getMetrics()?.ttftMs
     
     /**
      * Check if currently streaming
