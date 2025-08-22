@@ -260,11 +260,6 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
             }
           },
           onUsage: async (usage) => {
-            logger.debug({
-              tokens_in: usageCalc.tokens_in,
-              tokens_out: usageCalc.tokens_out,
-              cost_usd: usageCalc.cost_usd,
-            }, 'Streaming provider USAGE');
             if (!stream.isClosed()) {
               hasProviderUsage = true;
               usageCalc = await usageService.calculateFromProvider(usage, model);
@@ -274,6 +269,11 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                 cost_usd: usageCalc.cost_usd,
                 model
               });
+              logger.debug({
+                tokens_in: usageCalc.tokens_in,
+                tokens_out: usageCalc.tokens_out,
+                cost_usd: usageCalc.cost_usd,
+              }, 'Streaming provider USAGE');
             }
           },
           onDone: async (reason: 'stop' | 'length' | 'content_filter' | 'error') => {
