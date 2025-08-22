@@ -110,16 +110,34 @@ export class TelemetryService {
     userId: string,
     sessionId: string | undefined,
     zepMs: number,
-    resultsCount: number,
-    totalTokens: number
+    resultsLength: number
   ): Promise<void> {
     await this.logEvent(
       userId,
       'zep_search',
       {
         zep_ms: zepMs,
-        results_count: resultsCount,
-        total_tokens: totalTokens
+        results_length: resultsLength,
+      },
+      sessionId
+    );
+  }
+  
+  /**
+   * Log Zep upsert event
+   */
+  async logZepUpsert(
+    userId: string,
+    sessionId: string | undefined,
+    zepMs: number,
+    success: boolean
+  ): Promise<void> {
+    await this.logEvent(
+      userId,
+      'zep_upsert',
+      {
+        zep_ms: zepMs,
+        success: success,
       },
       sessionId
     );

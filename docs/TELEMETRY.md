@@ -49,9 +49,9 @@ The main event storage table that captures all telemetry data in real-time.
 3. **zep_upsert** - Memory facts written to Zep
    - Required payload fields:
      - `zep_ms`: Zep API response time
-     - `edge_count`: Number of facts/edges being upserted
      - `success`: Boolean indicating if operation succeeded
    - Optional payload fields:
+     - `edge_count`: Number of facts/edges being upserted
      - `total_ms`: Total request duration including validation
      - `session_id`: Session identifier if facts are session-specific
      - `req_id`: Request ID for tracing
@@ -59,10 +59,11 @@ The main event storage table that captures all telemetry data in real-time.
 4. **zep_search** - Memory retrieval from Zep
    - Required payload fields:
      - `zep_ms`: Zep API response time
-     - `results_count`: Number of results returned
-     - `query_length`: Length of search query in characters
      - `success`: Boolean indicating if operation succeeded
    - Optional payload fields:
+     - `results_length`: Length of result in characters
+     - `results_count`: Number of results returned
+     - `query_length`: Length of search query in characters
      - `total_ms`: Total request duration including processing
      - `total_tokens`: Total estimated tokens in results
      - `session_id`: Session identifier if search is session-scoped

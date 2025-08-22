@@ -67,7 +67,7 @@ class SSEStream {
     });
 
     reply.raw.on('error', (error) => {
-      logger.warn('SSE stream error', { error: error.message });
+      logger.warn('SSE stream error', {error: error.message});
       this.abortController.abort();
       this.close();
     });
@@ -189,12 +189,12 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         const model = requestedModel || config.openai.defaultModel;
 
         // Step 2: Get context block if memory is enabled (simple, no processing)
+        const memoryStartMs = Date.now()
         let contextBlock: string | undefined = undefined;
         if (useMemory) {
           contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode);
         }
-
-        const memoryMs = Date.now() - startTime;
+        const memoryMs = Date.now() - memoryStartMs;
 
         // Step 3: Build prompt (no complex assembly, just concatenation)
         const messages: any[] = [];
@@ -224,6 +224,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
 
         // Step 4: Start OpenAI streaming IMMEDIATELY
         let ttftMs: number | undefined;
+        let totalMs: number | undefined;
         let outputText = '';
         let hasProviderUsage = false;
         let usageCalc: any = null;
@@ -240,7 +241,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         }, 'Fast chat: Starting OpenAI stream');
 
         // Start streaming with minimal setup
-        const metrics = await openAIProvider.streamCompletion({
+        const openAIMetrics = await openAIProvider.streamCompletion({
           message,
           model,
           messages,
@@ -259,6 +260,11 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
             }
           },
           onUsage: async (usage) => {
+            logger.debug({
+              tokens_in: usageCalc.tokens_in,
+              tokens_out: usageCalc.tokens_out,
+              cost_usd: usageCalc.cost_usd,
+            }, 'Streaming provider USAGE');
             if (!stream.isClosed()) {
               hasProviderUsage = true;
               usageCalc = await usageService.calculateFromProvider(usage, model);
@@ -277,8 +283,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
               reason: reason
             }, 'Streaming provider DONE');
             if (!stream.isClosed()) {
-              const openAIMs = Date.now() - openAIStartTime;
-              const totalMs = Date.now() - startTime;
+              totalMs = Date.now() - startTime;
 
               if (returnMemory) {
                 // Send memory context to client
@@ -288,73 +293,64 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                 };
                 stream.sendEvent(ChatEventType.MEMORY, memoryData);
               }
+              
+              stream.sendEvent(ChatEventType.DONE, {finish_reason: reason});
+              stream.close();
 
-              // // Fallback: estimate usage if not provided by provider
-              // if (!hasProviderUsage && reason !== 'error') {
-              //   const promptText = promptPlan.messages.map(m => m.content).join('\n');
-              //   usageCalc = await usageService.estimateUsage(
-              //     promptText,
-              //     outputText,
-              //     model
-              //   );
-              //
-              //   // Send estimated usage
-              //   stream.sendEvent(ChatEventType.USAGE, {
-              //     tokens_in: usageCalc.tokens_in,
-              //     tokens_out: usageCalc.tokens_out,
-              //     cost_usd: usageCalc.cost_usd,
-              //     model
-              //   });
-              //
-              //   // Log telemetry with fallback flag
-              //
-              //   await telemetryService.logMessageSent(
-              //     userId,
-              //     sessionId,
-              //     totalMs,
-              //     message.length
-              //   );
-              //
-              //   await telemetryService.logOpenAICall(
-              //     userId,
-              //     sessionId,
-              //     {
-              //       model,
-              //       tokens_in: usageCalc.tokens_in,
-              //       tokens_out: usageCalc.tokens_out,
-              //       cost_usd: usageCalc.cost_usd,
-              //       ttft_ms: ttftMs || metrics?.ttftMs,
-              //       openai_ms: openAIMs || metrics?.openAiMs,
-              //       has_provider_usage: false,
-              //       prompt_plan: promptAssembler.getPromptPlanSummary(promptPlan),
-              //       provider_retry_count: metrics?.retryCount || 0,
-              //       input_price_per_mtok: modelValidation.pricing?.input_per_mtok,
-              //       output_price_per_mtok: modelValidation.pricing?.output_per_mtok
-              //     }
-              //   );
-              //
-              //   logger.info({
-              //     req_id: req.id,
-              //     user_id: userId,
-              //     total_ms: totalMs,
-              //     ttft_ms: ttftMs,
-              //     openai_ms: openAIMs,
-              //     tokens_in: usageCalc.tokens_in,
-              //     tokens_out: usageCalc.tokens_out,
-              //     cost_usd: usageCalc.cost_usd,
-              //     has_provider_usage: false
-              //   }, 'Chat completion finished (fallback usage)');
-              // }
-              //
-              // Store conversation in Zep if successful and session exists
+              // Step 5: Handle telemetry and memory AFTER streaming (non-blocking)
+              // This happens after the response is sent to the client
+              try {
+
+                // Log telemetry
+                await telemetryService.logMessageSent(userId, sessionId, totalMs!!, message.length);
+
+                if (usageCalc) {
+                  await telemetryService.logOpenAICall(userId, sessionId || '', {
+                    model,
+                    tokens_in: usageCalc.tokens_in,
+                    tokens_out: usageCalc.tokens_out,
+                    cost_usd: usageCalc.cost_usd,
+                    ttft_ms: openAIMetrics?.ttftMs,
+                    openai_ms: openAIMetrics?.openAiMs,
+                    has_provider_usage: hasProviderUsage
+                  });
+                }
+                
+                if (contextBlock) {
+                  await telemetryService.logZepSearch(
+                    userId,
+                    sessionId,
+                    memoryMs,
+                    contextBlock?.length
+                  )
+                }
+
+              } catch (error: any) {
+                logger.error({
+                  req_id: reqId,
+                  error: error.message,
+                  stack: error.stack
+                }, 'Fast chat: Saving telemetry error');
+              }
+              
+              // Step 6: Store conversation in Zep if successful and session exists
               if (reason === 'stop' && sessionId && outputText) {
                 try {
+                  const memoryUpsertStartMs = Date.now()
                   const stored = await zepAdapter.storeConversationTurn(
                     userId,
                     sessionId,
                     message,
                     outputText
                   );
+                  const memoryUpsertMs = Date.now() - memoryUpsertStartMs;
+
+                  await telemetryService.logZepUpsert(
+                    userId,
+                    sessionId,
+                    memoryUpsertMs,
+                    stored
+                  )
 
                   if (stored) {
                     logger.info({
@@ -371,9 +367,6 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                   }, 'Failed to store conversation in Zep');
                 }
               }
-
-              stream.sendEvent(ChatEventType.DONE, { finish_reason: reason });
-              stream.close();
             }
           },
           onError: async (error: Error, statusCode?: number) => {
@@ -399,7 +392,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                 userId,
                 sessionId,
                 error,
-                { model, request_id: req.id, status_code: statusCode }
+                {model, request_id: req.id, status_code: statusCode}
               );
 
               // Send user-friendly error message based on status
@@ -418,60 +411,13 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
               }
 
               // Send error as a token message for user visibility
-              stream.sendEvent(ChatEventType.TOKEN, { text: errorCode + ": " + userMessage });
+              stream.sendEvent(ChatEventType.TOKEN, {text: errorCode + ": " + userMessage});
 
-              stream.sendEvent(ChatEventType.DONE, { finish_reason: 'error' });
+              stream.sendEvent(ChatEventType.DONE, {finish_reason: 'error'});
               stream.close();
             }
           }
         });
-
-
-        // Step 5: Handle telemetry and memory AFTER streaming (non-blocking)
-        // This happens after the response is sent to the client
-        // setImmediate(async () => {
-        //   try {
-        //
-        //     // Log telemetry
-        //     await telemetryService.logMessageSent(userId, sessionId || '', totalMs, message.length);
-        //
-        //     if (usageCalc) {
-        //       await telemetryService.logOpenAICall(userId, sessionId || '', {
-        //         model,
-        //         tokens_in: usageCalc.tokens_in,
-        //         tokens_out: usageCalc.tokens_out,
-        //         cost_usd: usageCalc.cost_usd,
-        //         ttft_ms: ttftMs,
-        //         openai_ms: metrics?.openAiMs,
-        //         has_provider_usage: hasProviderUsage
-        //       });
-        //     }
-        //
-        //     // Store conversation in Zep if we have a session
-        //     if (sessionId && outputText) {
-        //       await zepAdapter.storeConversationTurn(
-        //         userId,
-        //         sessionId,
-        //         message,
-        //         outputText
-        //       );
-        //     }
-        //
-        //     logger.info({
-        //       req_id: reqId,
-        //       userId,
-        //       sessionId,
-        //       total_ms: totalMs,
-        //       ttft_ms: ttftMs
-        //     }, 'Fast chat: Background tasks completed');
-        //   } catch (error: any) {
-        //     logger.error({
-        //       req_id: reqId,
-        //       error: error.message,
-        //       stack: error.stack
-        //     }, 'Fast chat: Background task error');
-        //   }
-        // });
 
       } catch (error: any) {
         logger.error({

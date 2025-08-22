@@ -529,6 +529,7 @@ class ZepAdapter {
     userMessage: string,
     assistantMessage: string
   ): Promise<boolean> {
+    
     try {
       logger.info({
         userId,
