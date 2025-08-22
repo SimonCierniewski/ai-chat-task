@@ -47,10 +47,12 @@ fun SessionsListScreen(
     // Pull to refresh state
     val pullToRefreshState = rememberPullToRefreshState()
     
-    // Sessions are automatically loaded via the Flow in SessionsViewModel
-    // No need to manually refresh on first composition
+    // Refresh sessions when screen is first displayed
+    LaunchedEffect(Unit) {
+        sessionsViewModel.refreshSessions()
+    }
     
-    // Handle refresh
+    // Handle pull to refresh
     if (pullToRefreshState.isRefreshing) {
         LaunchedEffect(true) {
             sessionsViewModel.refreshSessions()

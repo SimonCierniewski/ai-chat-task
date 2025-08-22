@@ -40,10 +40,14 @@ fun MainScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
+    // Get current user ID to key ViewModels (ensures fresh state after login)
+    val userId = remember { SupabaseAuthClient.getUserId() ?: "anonymous" }
+    
     // Separate ViewModels for each tab to maintain independent state
-    val chatViewModel: ChatViewModel = viewModel(key = "chat_tab")
-    val historyViewModel: ChatViewModel = viewModel(key = "history_tab")
-    val sessionsViewModel: SessionsViewModel = viewModel()
+    // Key by user ID to ensure ViewModels are recreated after logout/login
+    val chatViewModel: ChatViewModel = viewModel(key = "chat_tab_$userId")
+    val historyViewModel: ChatViewModel = viewModel(key = "history_tab_$userId")
+    val sessionsViewModel: SessionsViewModel = viewModel(key = "sessions_$userId")
     
     // Enhanced logout handler that clears all cached data
     val handleLogout: () -> Unit = {

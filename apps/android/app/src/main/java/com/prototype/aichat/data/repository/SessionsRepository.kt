@@ -46,8 +46,8 @@ class SessionsRepository(
                 entities.map { it.toDomainModel() }
             }
             .onStart {
-                // Check if cache is stale and refresh if needed
-                checkAndRefreshCache()
+                // Don't auto-refresh here, let the UI control when to refresh
+                // This prevents stale data from persisting
             }
     }
     
@@ -148,10 +148,15 @@ class SessionsRepository(
             try {
                 val sessions = fetchSessionsFromApi()
                 
-                // Update local cache
-                sessionDao.insertSessions(
-                    sessions.map { SessionEntity.fromDomainModel(it) }
-                )
+                // Clear old sessions first to ensure fresh data
+                sessionDao.clearAllSessions()
+                
+                // Insert new sessions
+                if (sessions.isNotEmpty()) {
+                    sessionDao.insertSessions(
+                        sessions.map { SessionEntity.fromDomainModel(it) }
+                    )
+                }
             } catch (e: Exception) {
                 // Handle error - cache remains valid
                 throw e
@@ -202,14 +207,15 @@ class SessionsRepository(
                 val request = apiClient.buildGetRequest(url)
                 val response: SessionsResponse = apiClient.executeRequest(request)
                 
-                // Get userId from the first existing session or use a default
-                val userId = SupabaseAuthClient.getUserId()!!
+                // Get userId from current auth session
+                val userId = SupabaseAuthClient.getUserId() 
+                    ?: throw Exception("User not authenticated")
                 
                 // Convert API models to domain models
                 response.sessions.map { it.toDomainModel(userId) }
             } catch (e: Exception) {
-                // Return empty list if API fails
-                emptyList()
+                // Propagate the error so UI can handle it
+                throw e
             }
         }
     }
