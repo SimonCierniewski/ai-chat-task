@@ -90,7 +90,7 @@ export class TelemetryService {
       tokens_out: number;
       cost_usd: number;
       ttft_ms?: number;
-      duration_ms?: number;
+      openai_ms?: number;
       has_provider_usage?: boolean;
       prompt_plan?: Record<string, any>;
     }

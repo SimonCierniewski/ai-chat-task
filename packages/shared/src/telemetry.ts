@@ -201,7 +201,6 @@ export function validateEventPayload(type: TelemetryEventType, payload: Telemetr
              typeof payload.tokens_in === 'number' &&
              typeof payload.tokens_out === 'number' &&
              typeof payload.cost_usd === 'number';
-             typeof payload.duration_ms === 'number';
       
     case 'zep_upsert':
     case 'zep_search':

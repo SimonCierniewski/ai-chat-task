@@ -34,7 +34,6 @@ The main event storage table that captures all telemetry data in real-time.
      - `tokens_in`: Input token count
      - `tokens_out`: Output token count
      - `cost_usd`: Calculated cost in USD
-     - `duration_ms`: Total request duration
    - Optional payload fields:
      - `ttft_ms`: Time to first token (for streaming)
      - `has_provider_usage`: Boolean indicating if usage came from OpenAI or was estimated
