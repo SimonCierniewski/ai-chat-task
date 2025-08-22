@@ -192,28 +192,106 @@ async function getUsersHandler(req: FastifyRequest, reply: FastifyReply) {
 
     // Fetch usage stats (sum of calls and cost across all time)
     const usageByUser = new Map<string, { message_count: number; total_cost_usd: number }>();
+    
+    // Try multiple approaches to get usage data
     if (userIds.length > 0) {
-      const { data: usageRows, error: usageError } = await supabaseAdmin
-        .from('daily_usage_view')
-        .select('user_id, calls, cost_usd')
-        .in('user_id', userIds);
+      logger.info({
+        req_id: req.id,
+        user_ids: userIds,
+      }, 'Fetching usage stats for users');
+      
+      // Approach 1: Try aggregating from daily_usage_view
+      try {
+        // Use raw SQL query for proper aggregation
+        const { data: aggregatedUsage, error: aggError } = await supabaseAdmin.rpc('get_user_usage_stats', {
+          user_ids: userIds
+        }).select('*');
 
-      if (usageError) {
-        logger.warn({
+        if (!aggError && aggregatedUsage) {
+          logger.info({
+            req_id: req.id,
+            row_count: aggregatedUsage.length,
+          }, 'RPC aggregation result');
+          
+          for (const row of aggregatedUsage) {
+            usageByUser.set(row.user_id, {
+              message_count: Number(row.total_messages || 0),
+              total_cost_usd: Number(row.total_cost_usd || 0)
+            });
+          }
+        }
+      } catch (rpcError) {
+        logger.debug({
           req_id: req.id,
-          error: usageError.message,
-        }, 'Failed to fetch usage stats for users');
-      } else if (usageRows) {
-        for (const row of usageRows as any[]) {
-          const uid = row.user_id as string;
-          const calls = Number(row.calls || 0);
-          const cost = typeof row.cost_usd === 'string' ? parseFloat(row.cost_usd) : Number(row.cost_usd || 0);
-          const acc = usageByUser.get(uid) || { message_count: 0, total_cost_usd: 0 };
-          acc.message_count += calls;
-          acc.total_cost_usd += cost;
-          usageByUser.set(uid, acc);
+          error: rpcError,
+        }, 'RPC function not available, trying direct query');
+      }
+
+      // Approach 2: If RPC doesn't work, try direct telemetry_events query
+      if (usageByUser.size === 0) {
+        const { data: usageRows, error: usageError } = await supabaseAdmin
+          .from('telemetry_events')
+          .select('user_id, type, payload_json')
+          .eq('type', 'openai_call')
+          .in('user_id', userIds);
+
+        logger.info({
+          req_id: req.id,
+          row_count: usageRows?.length || 0,
+          error: usageError?.message,
+        }, 'Direct telemetry query result');
+
+        if (!usageError && usageRows && usageRows.length > 0) {
+          // Aggregate by user
+          for (const row of usageRows as any[]) {
+            const uid = row.user_id as string;
+            const payload = row.payload_json || {};
+            const cost = typeof payload.cost_usd === 'string' ? parseFloat(payload.cost_usd) : Number(payload.cost_usd || 0);
+            
+            const acc = usageByUser.get(uid) || { message_count: 0, total_cost_usd: 0 };
+            acc.message_count += 1; // Each row is one API call
+            acc.total_cost_usd += cost;
+            usageByUser.set(uid, acc);
+          }
         }
       }
+      
+      // Approach 3: If still no data, try daily_usage_view with manual aggregation
+      if (usageByUser.size === 0) {
+        const { data: dailyRows, error: dailyError } = await supabaseAdmin
+          .from('daily_usage_view')
+          .select('user_id, calls, cost_usd')
+          .in('user_id', userIds);
+          
+        logger.info({
+          req_id: req.id,
+          row_count: dailyRows?.length || 0,
+          error: dailyError?.message,
+        }, 'Daily usage view query result');
+
+        if (!dailyError && dailyRows && dailyRows.length > 0) {
+          for (const row of dailyRows as any[]) {
+            const uid = row.user_id as string;
+            const calls = Number(row.calls || 0);
+            const cost = typeof row.cost_usd === 'string' ? parseFloat(row.cost_usd) : Number(row.cost_usd || 0);
+            
+            const acc = usageByUser.get(uid) || { message_count: 0, total_cost_usd: 0 };
+            acc.message_count += calls;
+            acc.total_cost_usd += cost;
+            usageByUser.set(uid, acc);
+          }
+        }
+      }
+      
+      logger.info({
+        req_id: req.id,
+        usage_map_size: usageByUser.size,
+        usage_summary: Array.from(usageByUser.entries()).map(([uid, stats]) => ({
+          user_id: uid,
+          messages: stats.message_count,
+          cost: stats.total_cost_usd
+        })),
+      }, 'Final usage aggregation');
     }
 
     // TODO: Get usage stats from daily_usage table
