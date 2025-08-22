@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.prototype.aichat.core.logging.LogCollector
-import com.prototype.aichat.data.auth.SessionRepository
+import com.prototype.aichat.data.auth.SupabaseAuthClient
 import com.prototype.aichat.data.metrics.MetricsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +22,6 @@ class DiagnosticsViewModel(
     application: Application
 ) : AndroidViewModel(application) {
     
-    private val sessionRepository = SessionRepository.getInstance(application)
     private val metricsRepository = MetricsRepository.getInstance(application)
     private val logCollector = LogCollector.getInstance()
     
@@ -36,18 +35,15 @@ class DiagnosticsViewModel(
     private fun loadDiagnosticData() {
         viewModelScope.launch {
             // Load user session info
-            sessionRepository.observeSession().collect { session ->
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-                
-                _uiState.value = _uiState.value.copy(
-                    userId = session?.userId,
-                    userEmail = session?.userEmail,
-                    hasActiveSession = session != null,
-                    tokenExpiry = session?.expiresAt?.let { expiresAt ->
-                        dateFormat.format(Date(expiresAt))
-                    }
-                )
-            }
+            val session = SupabaseAuthClient.getCurrentSession()
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+
+            _uiState.value = _uiState.value.copy(
+                userId = session?.user?.id,
+                userEmail = session?.user?.email,
+                hasActiveSession = session != null,
+                tokenExpiry = session?.expiresAt?.toString()
+            )
         }
         
         viewModelScope.launch {

@@ -66,8 +66,6 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun handleIntent(intent: Intent) {
-        SupabaseAuthClient.supabaseClient.handleDeeplinks(intent) {
-            Log.d("Auth", "User successfully logged in")
-        }
+        SupabaseAuthClient.handleDeeplinks(intent)
     }
 }

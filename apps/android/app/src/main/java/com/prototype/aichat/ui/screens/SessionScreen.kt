@@ -37,7 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.prototype.aichat.data.AuthState
+import io.github.jan.supabase.gotrue.user.UserSession
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -45,11 +45,10 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionScreen(
-    authState: AuthState.Authenticated,
+    session: UserSession,
     onSignOut: () -> Unit
 ) {
     val context = LocalContext.current
-    val session = authState.session
     val scrollState = rememberScrollState()
     
     Scaffold(

@@ -2,7 +2,7 @@ package com.prototype.aichat.data.api
 
 import android.content.Context
 import com.prototype.aichat.core.config.AppConfig
-import com.prototype.aichat.data.auth.SessionRepository
+import com.prototype.aichat.data.auth.SupabaseAuthClient
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -21,7 +21,6 @@ import java.util.concurrent.TimeUnit
  */
 class ApiClient(
     private val context: Context,
-    private val sessionRepository: SessionRepository = SessionRepository.getInstance(context)
 ) {
     
     val json = Json {
@@ -57,7 +56,7 @@ class ApiClient(
             
             // Get access token from session repository
             val accessToken = runBlocking {
-                sessionRepository.getSession()?.accessToken
+                SupabaseAuthClient.getCurrentSession()?.accessToken
             }
             
             val request = if (accessToken != null) {

@@ -3,7 +3,6 @@ package com.prototype.aichat.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.prototype.aichat.data.auth.SessionRepository
 import com.prototype.aichat.data.auth.SupabaseAuthClient
 import io.github.jan.supabase.gotrue.SessionStatus
 import kotlinx.coroutines.flow.*
@@ -13,8 +12,6 @@ import kotlinx.coroutines.launch
  * ViewModel for authentication functionality with magic link support
  */
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
-    
-    private val sessionRepository = SessionRepository.getInstance(application)
     
     // UI State
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -29,8 +26,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             sessionStatus.collect { status ->
                 when (status) {
                     is SessionStatus.Authenticated -> {
-                        // Save session to persistent storage
-                        sessionRepository.saveSession(status.session)
                         _uiState.update { 
                             it.copy(
                                 isAuthenticated = true,
@@ -40,8 +35,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     is SessionStatus.NotAuthenticated -> {
-                        // Clear session from storage
-                        sessionRepository.clearSession()
                         _uiState.update { 
                             it.copy(
                                 isAuthenticated = false,
@@ -64,9 +57,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
-        
-        // Try to restore session on app start
-        restoreSession()
     }
     
     /**
@@ -109,35 +99,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     /**
-     * Handle deep link from magic link
-     */
-    fun handleDeepLink(url: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            
-            try {
-                val success = SupabaseAuthClient.handleDeepLink(url)
-                if (!success) {
-                    _uiState.update { 
-                        it.copy(
-                            isLoading = false,
-                            error = "Invalid or expired magic link"
-                        )
-                    }
-                }
-                // If successful, session observer will handle the rest
-            } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(
-                        isLoading = false,
-                        error = e.message ?: "Failed to process magic link"
-                    )
-                }
-            }
-        }
-    }
-    
-    /**
      * Sign out current user
      */
     fun signOut() {
@@ -146,7 +107,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             
             try {
                 SupabaseAuthClient.signOut()
-                sessionRepository.clearSession()
                 _uiState.update { 
                     AuthUiState() // Reset to initial state
                 }
@@ -159,33 +119,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
-    }
-    
-    /**
-     * Restore session from persistent storage
-     */
-    private fun restoreSession() {
-        viewModelScope.launch {
-            try {
-                val savedSession = sessionRepository.getSession()
-                if (savedSession != null && sessionRepository.isSessionValid(savedSession)) {
-                    SupabaseAuthClient.restoreSession(
-                        savedSession.accessToken,
-                        savedSession.refreshToken
-                    )
-                }
-            } catch (e: Exception) {
-                // Session restoration failed, user needs to login
-                e.printStackTrace()
-            }
-        }
-    }
-    
-    /**
-     * Get current access token for API calls
-     */
-    fun getAccessToken(): String? {
-        return SupabaseAuthClient.getAccessToken()
     }
     
     /**

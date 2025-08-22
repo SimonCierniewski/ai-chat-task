@@ -8,7 +8,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.prototype.aichat.BuildConfig
-import com.prototype.aichat.data.AuthState
 import com.prototype.aichat.data.auth.SupabaseAuthClient
 import com.prototype.aichat.ui.screens.ChatScreen
 import com.prototype.aichat.ui.screens.DiagnosticsScreen
@@ -129,9 +128,7 @@ fun AppNavigation(
         
         composable(Screen.Session.route) {
             SessionScreen(
-                authState = AuthState.Authenticated(
-                    session = SupabaseAuthClient.getCurrentSession()!!
-                ),
+                session = SupabaseAuthClient.getCurrentSession()!!,
                 onSignOut = {
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
