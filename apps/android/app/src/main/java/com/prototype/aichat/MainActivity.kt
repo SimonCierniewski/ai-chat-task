@@ -63,17 +63,37 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun handleIntent(intent: Intent) {
+        // Log all intent data for debugging
+        android.util.Log.d("MainActivity", "handleIntent called")
+        android.util.Log.d("MainActivity", "Intent action: ${intent.action}")
+        android.util.Log.d("MainActivity", "Intent data: ${intent.data}")
+        
         // Check if this is a deep link callback
         val data = intent.data
-        if (data != null && 
-            data.scheme == AppConfig.DEEPLINK_SCHEME && 
-            data.host == AppConfig.DEEPLINK_HOST) {
+        if (data != null) {
+            android.util.Log.d("MainActivity", "Data URI: $data")
+            android.util.Log.d("MainActivity", "Scheme: ${data.scheme}")
+            android.util.Log.d("MainActivity", "Host: ${data.host}")
+            android.util.Log.d("MainActivity", "Fragment: ${data.fragment}")
+            android.util.Log.d("MainActivity", "Query: ${data.query}")
             
-            // Handle the deep link - extract token and session info
-            val url = data.toString()
-            
-            // Process magic link authentication
-            authViewModel.handleDeepLink(url)
+            // Check both exact match and any auth-related deep link
+            if ((data.scheme == AppConfig.DEEPLINK_SCHEME && data.host == AppConfig.DEEPLINK_HOST) ||
+                (data.scheme == "aichat-dev" && data.host == "auth")) {
+                
+                android.util.Log.d("MainActivity", "Deep link matched! Processing...")
+                
+                // Handle the deep link - extract token and session info
+                val url = data.toString()
+                android.util.Log.d("MainActivity", "Full URL: $url")
+                
+                // Process magic link authentication
+                authViewModel.handleDeepLink(url)
+            } else {
+                android.util.Log.d("MainActivity", "Deep link not matched. Expected: ${AppConfig.DEEPLINK_SCHEME}://${AppConfig.DEEPLINK_HOST}")
+            }
+        } else {
+            android.util.Log.d("MainActivity", "No data URI in intent")
         }
     }
 }
