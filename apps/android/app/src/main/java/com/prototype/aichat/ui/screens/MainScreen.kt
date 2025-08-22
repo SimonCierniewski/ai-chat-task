@@ -33,8 +33,9 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     
-    // ViewModels shared across tabs
-    val chatViewModel: ChatViewModel = viewModel()
+    // Separate ViewModels for each tab to maintain independent state
+    val chatViewModel: ChatViewModel = viewModel(key = "chat_tab")
+    val historyViewModel: ChatViewModel = viewModel(key = "history_tab")
     val sessionsViewModel: SessionsViewModel = viewModel()
     
     Scaffold(
@@ -68,7 +69,8 @@ fun MainScreen(
                 NavigationBarItem(
                     icon = {
                         Icon(
-                            if (currentDestination?.route == "history") {
+                            if (currentDestination?.route == "history" || 
+                                currentDestination?.route?.startsWith("history/") == true) {
                                 Icons.Filled.History
                             } else {
                                 Icons.Outlined.History
@@ -77,7 +79,8 @@ fun MainScreen(
                         )
                     },
                     label = { Text("History") },
-                    selected = currentDestination?.route == "history",
+                    selected = currentDestination?.route == "history" || 
+                              currentDestination?.route?.startsWith("history/") == true,
                     onClick = {
                         navController.navigate("history") {
                             popUpTo("chat")
@@ -123,9 +126,26 @@ fun MainScreen(
                     SessionsListScreen(
                         sessionsViewModel = sessionsViewModel,
                         onSessionClick = { session ->
-                            // Navigate to chat with the selected session
-                            navController.navigate("chat/${session.id}")
+                            // Navigate to history detail within History tab
+                            navController.navigate("history/${session.id}")
                         }
+                    )
+                }
+                
+                // History tab - session detail view
+                composable("history/{sessionId}") { backStackEntry ->
+                    val sessionId = backStackEntry.arguments?.getString("sessionId")
+                    HistoryDetailScreen(
+                        sessionId = sessionId,
+                        chatViewModel = historyViewModel,
+                        sessionsViewModel = sessionsViewModel,
+                        onNavigateBack = {
+                            navController.navigate("history") {
+                                popUpTo("history") { inclusive = true }
+                            }
+                        },
+                        onNavigateToDiagnostics = onNavigateToDiagnostics,
+                        onLogout = onLogout
                     )
                 }
             }
@@ -159,6 +179,34 @@ fun ChatScreenContent(
     // (those are now handled by bottom navigation)
     ChatScreenWithoutNav(
         chatViewModel = chatViewModel,
+        onNavigateToDiagnostics = onNavigateToDiagnostics,
+        onLogout = onLogout
+    )
+}
+
+/**
+ * History detail screen showing a session from history
+ */
+@Composable
+fun HistoryDetailScreen(
+    sessionId: String?,
+    chatViewModel: ChatViewModel,
+    sessionsViewModel: SessionsViewModel,
+    onNavigateBack: () -> Unit,
+    onNavigateToDiagnostics: () -> Unit,
+    onLogout: () -> Unit
+) {
+    // Load the session when entering this screen
+    LaunchedEffect(sessionId) {
+        if (sessionId != null) {
+            chatViewModel.loadSession(sessionId)
+        }
+    }
+    
+    // Show the chat interface with a back button
+    ChatScreenWithBackButton(
+        chatViewModel = chatViewModel,
+        onNavigateBack = onNavigateBack,
         onNavigateToDiagnostics = onNavigateToDiagnostics,
         onLogout = onLogout
     )
