@@ -15,7 +15,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun SplashScreen(
     onNavigateToLogin: () -> Unit,
-    onNavigateToChat: () -> Unit
+    onNavigateToMain: () -> Unit
 ) {
     // Check auth status on launch
     LaunchedEffect(Unit) {

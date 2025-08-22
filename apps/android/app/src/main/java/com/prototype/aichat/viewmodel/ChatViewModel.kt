@@ -45,11 +45,43 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private lateinit var currentSessionId: String
     
     init {
-        // Create initial session
+        // Session will be initialized via loadSession or startNewSession
+    }
+    
+    /**
+     * Start a new chat session
+     */
+    fun startNewSession() {
         viewModelScope.launch {
             val userId = SupabaseAuthClient.getUserId()!!
             val session = chatRepository.createSession(userId)
             currentSessionId = session.id
+            _messages.value = emptyList()
+            _uiState.update { it.copy(
+                currentInput = "",
+                error = null,
+                sessionTitle = "New Chat"
+            ) }
+        }
+    }
+    
+    /**
+     * Load an existing session with its messages
+     */
+    fun loadSession(sessionId: String) {
+        viewModelScope.launch {
+            currentSessionId = sessionId
+            
+            // Load messages for this session
+            val sessionMessages = chatRepository.getSessionMessages(sessionId)
+            _messages.value = sessionMessages
+            
+            // Update UI state
+            _uiState.update { it.copy(
+                currentInput = "",
+                error = null,
+                sessionTitle = "Session ${sessionId.takeLast(4)}"
+            ) }
         }
     }
     
@@ -58,6 +90,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun sendMessage(text: String) {
         if (text.isBlank() || _uiState.value.isStreaming) return
+        
+        // Initialize session if not already done
+        if (!::currentSessionId.isInitialized) {
+            startNewSession()
+            return
+        }
         
         viewModelScope.launch {
             // Add user message
@@ -340,5 +378,6 @@ data class ChatUiState(
     val useMemory: Boolean = true,
     val error: String? = null,
     val lastRequest: ChatRequest? = null,
-    val lastTTFT: Long? = null
+    val lastTTFT: Long? = null,
+    val sessionTitle: String = "New Chat"
 )

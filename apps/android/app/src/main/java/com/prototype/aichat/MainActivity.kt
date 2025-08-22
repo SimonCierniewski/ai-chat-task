@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
                     // Navigate based on auth state
                     LaunchedEffect(authState.isAuthenticated) {
                         if (authState.isAuthenticated) {
-                            navController.navigate(Screen.Chat.route) {
+                            navController.navigate(Screen.Main.route) {
                                 popUpTo(0) { inclusive = true }
                             }
                         }
