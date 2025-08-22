@@ -311,7 +311,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                     tokens_out: usageCalc.tokens_out,
                     cost_usd: usageCalc.cost_usd,
                     ttft_ms: openAIMetrics?.ttftMs,
-                    openai_ms: openAIMetrics?.openAiMs,
+                    duration_ms: openAIMetrics?.openAiMs,
                     has_provider_usage: hasProviderUsage
                   });
                 }
