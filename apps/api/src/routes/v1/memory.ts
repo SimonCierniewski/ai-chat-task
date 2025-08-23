@@ -971,6 +971,118 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
     }
   }, searchMemoryHandler);
 
+  // POST /api/v1/memory/graph-status - Check graph build completion status
+  fastify.post('/graph-status', {
+    schema: {
+      summary: 'Check graph build completion status',
+      description: 'Check if Zep has finished processing the knowledge graph for a user',
+      tags: ['Memory'],
+      body: Type.Object({
+        userId: Type.String({minLength: 1})
+      }),
+      response: {
+        200: Type.Object({
+          episodeStatus: Type.String(),
+          episodeCount: Type.Optional(Type.Number()),
+          lastEpisodeId: Type.Optional(Type.String()),
+          message: Type.Optional(Type.String()),
+          episodes: Type.Optional(Type.Array(Type.Object({
+            id: Type.String(),
+            status: Type.String()
+          })))
+        }),
+        400: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        }),
+        500: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        })
+      }
+    }
+  }, async (request: FastifyRequest<{ Body: { userId: string } }>, reply: FastifyReply) => {
+    const { userId } = request.body;
+    
+    try {
+      logger.info(`Checking graph status for user ${userId}`);
+      
+      // Use the existing Zep adapter instance
+      
+      try {
+        // Get episodes for the user
+        const episodes = await zepAdapter.client.graph.episode.getByUserId(userId);
+        
+        logger.info(`Found episodes for user ${userId}`, { 
+          count: episodes?.episodes?.length,
+          firstEpisode: episodes?.episodes?.[0]
+        });
+        
+        if (!episodes || episodes.episodes.length === 0) {
+          return reply.send({
+            episodeStatus: 'no_episodes',
+            episodeCount: 0,
+            message: 'No episodes found for this user'
+          });
+        }
+        
+        // Get the last episode
+        const lastEpisode = episodes.episodes[episodes.episodes.length - 1];
+        
+        // Get episode ID - might be in different properties
+        const episodeId = lastEpisode.episodeId || lastEpisode.episode_id || lastEpisode.id;
+        
+        // Get detailed status of the last episode
+        let episodeDetails;
+        if (episodeId) {
+          try {
+            episodeDetails = await zepAdapter.client.graph.episode.get(episodeId);
+          } catch (error) {
+            logger.warn(`Could not get episode details for ${episodeId}`, error);
+          }
+        }
+        
+        // Check status of all episodes
+        const allComplete = episodes.episodes.every((ep: any) => 
+          ep.status === 'complete' || ep.status === 'completed'
+        );
+        
+        const episodeStatus = allComplete ? 'complete' : 'incomplete';
+        
+        return reply.send({
+          episodeStatus,
+          episodeCount: episodes.episodes.length,
+          lastEpisodeId: episodeId,
+          message: allComplete 
+            ? 'All episodes have been processed successfully' 
+            : `Processing in progress. ${episodes.episodes.filter((ep: any) => ep.status === 'complete' || ep.status === 'completed').length}/${episodes.episodes.length} episodes complete`,
+          episodes: episodes.episodes.map((ep: any) => ({
+            id: ep.episodeId || ep.episode_id || ep.id || '',
+            status: ep.status || 'unknown'
+          }))
+        });
+        
+      } catch (error: any) {
+        // Handle case where user doesn't exist or has no graph data
+        if (error.statusCode === 404 || error.message?.includes('not found')) {
+          return reply.send({
+            episodeStatus: 'no_data',
+            episodeCount: 0,
+            message: 'No graph data found for this user. Import some conversations first.'
+          });
+        }
+        throw error;
+      }
+      
+    } catch (error) {
+      logger.error('Error checking graph status:', error);
+      return reply.status(500).send({
+        error: 'GRAPH_STATUS_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to check graph status'
+      });
+    }
+  });
+
   // POST /api/v1/memory/init - Initialize user and thread in Zep
   fastify.post('/init', {
     schema: {

@@ -58,6 +58,11 @@ export default function PlaygroundPage() {
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const importTextAreaRef = useRef<HTMLTextAreaElement>(null);
   
+  // Graph check state
+  const [isCheckingGraph, setIsCheckingGraph] = useState(false);
+  const [graphStatus, setGraphStatus] = useState<'idle' | 'checking' | 'complete' | 'incomplete'>('idle');
+  const [graphCheckResult, setGraphCheckResult] = useState<any>(null);
+  
   // User management state
   const [users, setUsers] = useState<PlaygroundUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -500,6 +505,54 @@ export default function PlaygroundPage() {
     
     const totalDelay = typingTime + readingTime;
     return Math.max(500, Math.min(totalDelay, 30000)); // Between 0.5s and 30s
+  };
+
+  const handleCheckGraph = async () => {
+    if (!selectedUserId || isCheckingGraph) return;
+    
+    setIsCheckingGraph(true);
+    setGraphStatus('checking');
+    setGraphCheckResult(null);
+    
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Please sign in to check graph status');
+      }
+      
+      // Call API to check graph status
+      const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/graph-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ userId: selectedUserId })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setGraphCheckResult(data);
+      
+      // Check if all episodes are complete
+      const isComplete = data.episodeStatus === 'complete' || 
+                        (data.episodes && data.episodes.every((ep: any) => ep.status === 'complete'));
+      
+      setGraphStatus(isComplete ? 'complete' : 'incomplete');
+      
+    } catch (err: any) {
+      console.error('Graph check error:', err);
+      setError(err.message || 'Failed to check graph status');
+      setGraphStatus('incomplete');
+    } finally {
+      setIsCheckingGraph(false);
+    }
   };
 
   const handleImportConversations = async () => {
@@ -1263,6 +1316,98 @@ export default function PlaygroundPage() {
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                   <p className="text-sm text-yellow-700">
                     Please select a user from the User card above before importing conversations.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Check Graph Build Completion Card */}
+        <div className="mt-8">
+          <Card title="Check Graph Build Completion" icon="🔍">
+            <div className="mt-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                Check if Zep has finished processing and building the knowledge graph for the selected user.
+              </p>
+              
+              {/* Check button */}
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleCheckGraph}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={isCheckingGraph || !selectedUserId}
+                >
+                  {isCheckingGraph ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Checking...
+                    </>
+                  ) : (
+                    'Check'
+                  )}
+                </button>
+                
+                {/* Status indicator */}
+                {graphStatus !== 'idle' && !isCheckingGraph && (
+                  <div className="flex items-center gap-2">
+                    {graphStatus === 'complete' ? (
+                      <>
+                        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="text-green-600 font-medium">Complete</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <span className="text-red-600 font-medium">Incomplete</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Result details */}
+              {graphCheckResult && (
+                <div className="p-4 bg-gray-50 rounded-md space-y-2">
+                  <div className="text-sm">
+                    <span className="font-medium text-gray-700">Status: </span>
+                    <span className={graphStatus === 'complete' ? 'text-green-600' : 'text-orange-600'}>
+                      {graphCheckResult.episodeStatus || 'Unknown'}
+                    </span>
+                  </div>
+                  
+                  {graphCheckResult.episodeCount !== undefined && (
+                    <div className="text-sm">
+                      <span className="font-medium text-gray-700">Episodes: </span>
+                      <span className="text-gray-600">{graphCheckResult.episodeCount}</span>
+                    </div>
+                  )}
+                  
+                  {graphCheckResult.lastEpisodeId && (
+                    <div className="text-sm">
+                      <span className="font-medium text-gray-700">Last Episode ID: </span>
+                      <span className="text-gray-600 font-mono text-xs">{graphCheckResult.lastEpisodeId}</span>
+                    </div>
+                  )}
+                  
+                  {graphCheckResult.message && (
+                    <div className="text-sm text-gray-600 italic mt-2">
+                      {graphCheckResult.message}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* User selection warning */}
+              {!selectedUserId && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-700">
+                    Please select a user from the User card above before checking graph status.
                   </p>
                 </div>
               )}
