@@ -455,20 +455,22 @@ export default function PlaygroundPage() {
 
   const handleAddAssistant = () => {
     setImportText(prev => prev + '\n\n## Assistant ##\n');
-    // Scroll to bottom of textarea
+    // Scroll to bottom and focus textarea
     setTimeout(() => {
       if (importTextAreaRef.current) {
         importTextAreaRef.current.scrollTop = importTextAreaRef.current.scrollHeight;
+        importTextAreaRef.current.focus();
       }
     }, 10);
   };
 
   const handleAddUser = () => {
     setImportText(prev => prev + '\n\n## User ##\n');
-    // Scroll to bottom of textarea
+    // Scroll to bottom and focus textarea
     setTimeout(() => {
       if (importTextAreaRef.current) {
         importTextAreaRef.current.scrollTop = importTextAreaRef.current.scrollHeight;
+        importTextAreaRef.current.focus();
       }
     }, 10);
   };
