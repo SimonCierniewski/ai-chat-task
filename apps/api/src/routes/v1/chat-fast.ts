@@ -8,7 +8,7 @@
  */
 
 import {FastifyPluginAsync, FastifyReply} from 'fastify';
-import {ChatRequest, ChatEventType, chatRequestSchema, MemoryEventData, UserMessage, AssistantMessage, MemoryMessage, MemoryContextWithExpiry, needsRefresh, DEFAULT_MEMORY_CONTEXT_TTL} from '@prototype/shared';
+import {ChatRequest, ChatEventType, chatRequestSchema, MemoryEventData, UserMessage, AssistantMessage, MemoryMessage} from '@prototype/shared';
 import {logger} from '../../utils/logger';
 import {OpenAIProvider} from '../../providers/openai-provider';
 import {UsageService} from '../../services/usage-service';
@@ -189,49 +189,11 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         // Step 1: Use admin-configured default model if no model specified
         const model = requestedModel || config.openai.defaultModel;
 
-        // Step 2: Get context block if memory is enabled
+        // Step 2: Get context block if memory is enabled (simple, no processing)
         const memoryStartMs = Date.now()
         let contextBlock: string | undefined = undefined;
-        let contextFromCache = false;
-        
         if (useMemory) {
-          const supabaseAdmin = getSupabaseAdmin();
-          
-          // Try to get context from DB cache first
-          try {
-            const { data: cachedContext, error } = await supabaseAdmin
-              .rpc('get_or_create_memory_context', {
-                p_user_id: userId,
-                p_check_expiry: true
-              });
-            
-            if (!error && cachedContext && cachedContext.length > 0) {
-              const context = cachedContext[0] as MemoryContextWithExpiry;
-              
-              // Check if we can use the cached context
-              if (!needsRefresh(context)) {
-                contextBlock = context.context_block;
-                contextFromCache = true;
-                logger.info({
-                  req_id: req.id,
-                  user_id: userId,
-                  cache_version: context.version,
-                  cached: true
-                }, 'Using cached memory context');
-              }
-            }
-          } catch (cacheError) {
-            logger.warn({
-              req_id: req.id,
-              error: cacheError
-            }, 'Failed to check memory context cache');
-          }
-          
-          // If no valid cache, fetch from Zep
-          if (!contextBlock) {
-            contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode);
-            contextFromCache = false;
-          }
+          contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode);
         }
         const memoryMs = Date.now() - memoryStartMs;
 
@@ -268,6 +230,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         let hasProviderUsage = false;
         let usageCalc: any = null;
         const openAIStartTime = Date.now();
+        let openAIDoneTime: number | undefined;
 
         // Log that we're starting
         logger.info({
@@ -275,7 +238,6 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
           userId,
           model,
           hasContext: !!contextBlock,
-          contextFromCache,
           memoryMs: memoryMs,
           prepTime: openAIStartTime - startTime
         }, 'Fast chat: Starting OpenAI stream');
@@ -323,6 +285,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
               reason: reason
             }, 'Streaming provider DONE');
             if (!stream.isClosed()) {
+              openAIDoneTime = Date.now()
               totalMs = Date.now() - startTime;
 
               if (returnMemory) {
@@ -402,50 +365,6 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       user_id: userId,
                       session_id: sessionId
                     }, 'Conversation stored in Zep');
-                    
-                    // Step 8: Update memory context cache after successful Zep storage
-                    // Only update if we didn't use cache or if contextMode might have changed
-                    if (!contextFromCache || contextBlock) {
-                      try {
-                        // Fetch fresh context from Zep
-                        const freshContext = await zepAdapter.getContextBlock(userId, sessionId, contextMode);
-                        
-                        if (freshContext) {
-                          // Store in database cache
-                          const supabaseAdmin = getSupabaseAdmin();
-                          const { error: updateError } = await supabaseAdmin
-                            .rpc('update_memory_context', {
-                              p_user_id: userId,
-                              p_context_block: freshContext,
-                              p_zep_parameters: { mode: contextMode },
-                              p_session_id: sessionId,
-                              p_ttl_minutes: DEFAULT_MEMORY_CONTEXT_TTL
-                            });
-                          
-                          if (updateError) {
-                            logger.warn({
-                              req_id: req.id,
-                              user_id: userId,
-                              error: updateError.message
-                            }, 'Failed to update memory context cache');
-                          } else {
-                            logger.info({
-                              req_id: req.id,
-                              user_id: userId,
-                              session_id: sessionId,
-                              context_length: freshContext.length
-                            }, 'Memory context cache updated');
-                          }
-                        }
-                      } catch (cacheUpdateError) {
-                        // Don't fail if cache update fails
-                        logger.warn({
-                          req_id: req.id,
-                          user_id: userId,
-                          error: cacheUpdateError
-                        }, 'Failed to refresh memory context cache');
-                      }
-                    }
                   }
                   
                   // Step 7: Store messages in database
@@ -491,7 +410,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       tokens_out: usageCalc?.tokens_out || 0,
                       price: usageCalc?.cost_usd || 0,
                       model: model,
-                      created_at: new Date(openAIStartTime + (openAIMetrics?.openAiMs || 0)).toISOString()
+                      created_at: new Date(openAIDoneTime).toISOString()
                     };
                     messagesToInsert.push(assistantMessage);
                     
