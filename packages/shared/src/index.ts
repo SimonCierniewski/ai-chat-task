@@ -79,6 +79,9 @@ export {
 // Export admin settings types
 export * from './admin-settings';
 
+// Export message types
+export * from './messages';
+
 // Export API DTOs and schemas (with specific imports to avoid conflicts)
 export * from './api/chat';
 export * from './api/admin';

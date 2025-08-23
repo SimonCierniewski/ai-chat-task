@@ -8,13 +8,14 @@
  */
 
 import {FastifyPluginAsync, FastifyReply} from 'fastify';
-import {ChatRequest, ChatEventType, chatRequestSchema, MemoryEventData} from '@prototype/shared';
+import {ChatRequest, ChatEventType, chatRequestSchema, MemoryEventData, UserMessage, AssistantMessage} from '@prototype/shared';
 import {logger} from '../../utils/logger';
 import {OpenAIProvider} from '../../providers/openai-provider';
 import {UsageService} from '../../services/usage-service';
 import {TelemetryService} from '../../services/telemetry-service';
 import {zepAdapter} from './memory';
 import {config} from '../../config';
+import {getSupabaseAdmin} from '../../services/supabase-admin';
 
 // Initialize services
 const openAIProvider = new OpenAIProvider();
@@ -362,6 +363,61 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       user_id: userId,
                       session_id: sessionId
                     }, 'Conversation stored in Zep');
+                  }
+                  
+                  // Step 7: Store messages in database
+                  try {
+                    const supabaseAdmin = getSupabaseAdmin();
+                    const startMs = startTime;
+                    
+                    // Store user message
+                    const userMessage: UserMessage = {
+                      thread_id: sessionId,
+                      role: 'user',
+                      content: message,
+                      user_id: userId
+                    };
+                    
+                    // Store assistant message with metrics
+                    const assistantMessage: AssistantMessage = {
+                      thread_id: sessionId,
+                      role: 'assistant',
+                      content: outputText,
+                      user_id: userId,
+                      start_ms: startMs,
+                      ttft_ms: openAIMetrics?.ttftMs,
+                      total_ms: totalMs || 0,
+                      tokens_in: usageCalc?.tokens_in || 0,
+                      tokens_out: usageCalc?.tokens_out || 0,
+                      price: usageCalc?.cost_usd || 0,
+                      model: model
+                    };
+                    
+                    // Insert both messages
+                    const { error: insertError } = await supabaseAdmin
+                      .from('messages')
+                      .insert([userMessage, assistantMessage]);
+                    
+                    if (insertError) {
+                      logger.warn({
+                        req_id: reqId,
+                        error: insertError.message,
+                        thread_id: sessionId
+                      }, 'Failed to store messages in database');
+                    } else {
+                      logger.info({
+                        req_id: reqId,
+                        thread_id: sessionId,
+                        user_id: userId
+                      }, 'Messages stored in database');
+                    }
+                  } catch (dbError: any) {
+                    // Don't fail the request if database storage fails
+                    logger.error({
+                      req_id: reqId,
+                      error: dbError.message,
+                      thread_id: sessionId
+                    }, 'Failed to store messages in database');
                   }
                 } catch (error) {
                   // Don't fail the request if Zep storage fails
