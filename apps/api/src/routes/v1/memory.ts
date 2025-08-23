@@ -300,18 +300,27 @@ class ZepAdapter {
    * Get context block from Zep (for fast chat endpoint)
    * This retrieves the context in either basic or summarized mode
    */
-  async getContextBlock(userId: string, sessionId: string, mode: 'basic' | 'summarized' = 'basic'): Promise<string | undefined> {
+  async getContextBlock(userId: string, sessionId: string, mode: 'basic' | 'summarized' = 'basic', minRating?: number): Promise<string | undefined> {
     try {
+      // Build options
+      const options: any = {
+        mode: mode === 'basic' ? 'basic' : undefined // Default mode is summarized
+      };
+      
+      // Add min_rating if provided
+      if (minRating !== undefined && minRating > 0) {
+        options.min_rating = minRating;
+      }
+      
       // Get thread context which includes facts and summaries
-      const context = mode === 'basic' 
-        ? await this.client.thread.getUserContext(sessionId, {mode: "basic"})
-        : await this.client.thread.getUserContext(sessionId); // Default mode is summarized
+      const context = await this.client.thread.getUserContext(sessionId, options);
       return context.context;
     } catch (error: any) {
       logger.warn('Failed to get context block', {
         userId,
         sessionId,
         mode,
+        minRating,
         error: error.message
       });
       return undefined;
@@ -478,6 +487,44 @@ class ZepAdapter {
     } catch (error) {
       logger.error('Error upserting facts to Zep', {error, userId});
       return {success: false, upserted: 0};
+    }
+  }
+
+  /**
+   * Update user fact rating instructions
+   */
+  async updateFactRatingInstructions(
+    userId: string,
+    instruction: string,
+    examples: { high: string; medium: string; low: string }
+  ): Promise<boolean> {
+    try {
+      await this.ensureUser(userId);
+      
+      // Update user with fact rating instructions
+      await this.client.user.update(userId, {
+        fact_rating_instruction: {
+          instruction,
+          examples: [
+            { rating: 'high', example: examples.high },
+            { rating: 'medium', example: examples.medium },
+            { rating: 'low', example: examples.low }
+          ]
+        }
+      });
+      
+      logger.info('Updated fact rating instructions', {
+        userId,
+        instruction: instruction.substring(0, 50) + '...'
+      });
+      
+      return true;
+    } catch (error: any) {
+      logger.error('Failed to update fact rating instructions', {
+        userId,
+        error: error.message
+      });
+      return false;
     }
   }
 
@@ -1192,6 +1239,90 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       return reply.status(mappedError.status).send({
         error: 'GRAPH_ADD_ERROR',
         message: mappedError.message || 'Failed to add data to graph'
+      });
+    }
+  });
+
+  // PUT /api/v1/memory/fact-ratings - Update fact rating instructions
+  fastify.put('/fact-ratings', {
+    schema: {
+      summary: 'Update fact rating instructions',
+      description: 'Update the fact rating instructions for a user',
+      tags: ['Memory'],
+      body: Type.Object({
+        userId: Type.String({minLength: 1}),
+        instruction: Type.String({minLength: 1}),
+        examples: Type.Object({
+          high: Type.String({minLength: 1}),
+          medium: Type.String({minLength: 1}),
+          low: Type.String({minLength: 1})
+        })
+      }),
+      response: {
+        200: Type.Object({
+          ok: Type.Literal(true),
+          message: Type.String()
+        }),
+        400: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        }),
+        500: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        })
+      }
+    }
+  }, async (request: FastifyRequest<{ Body: { userId: string; instruction: string; examples: { high: string; medium: string; low: string } } }>, reply: FastifyReply) => {
+    const { userId, instruction, examples } = request.body;
+    const reqId = request.id;
+    const startTime = Date.now();
+    
+    try {
+      // Ensure user is initialized
+      await zepAdapter.ensureUser(userId);
+      
+      // Update fact rating instructions
+      const success = await zepAdapter.updateFactRatingInstructions(userId, instruction, examples);
+      
+      if (!success) {
+        throw new Error('Failed to update fact rating instructions');
+      }
+      
+      const totalMs = Date.now() - startTime;
+      
+      logger.info({
+        req_id: reqId,
+        userId,
+        total_ms: totalMs
+      }, 'Fact rating instructions updated');
+      
+      return reply.send({
+        ok: true,
+        message: 'Fact rating instructions updated successfully'
+      });
+      
+    } catch (error: any) {
+      const totalMs = Date.now() - startTime;
+      
+      logger.error({
+        req_id: reqId,
+        userId,
+        error: error.message,
+        stack: error.stack,
+        total_ms: totalMs
+      }, 'Failed to update fact rating instructions');
+      
+      if (error.statusCode === 404) {
+        return reply.status(400).send({
+          error: 'USER_NOT_FOUND',
+          message: 'User not found. Please initialize the user first.'
+        });
+      }
+      
+      return reply.status(500).send({
+        error: 'FACT_RATING_UPDATE_ERROR',
+        message: error.message || 'Failed to update fact rating instructions'
       });
     }
   });

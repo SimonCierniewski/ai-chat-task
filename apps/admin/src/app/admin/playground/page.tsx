@@ -61,6 +61,16 @@ export default function PlaygroundPage() {
   const [mmrLambda, setMmrLambda] = useState(0.5);
   const [centerNodeUuid, setCenterNodeUuid] = useState('');
   
+  // Generic context mode parameters
+  const [genericMinRating, setGenericMinRating] = useState(0.0);
+  
+  // Fact ratings state
+  const [factRatingInstruction, setFactRatingInstruction] = useState('Rate the facts by poignancy. Highly poignant facts have a significant emotional impact or relevance to the user. Facts with low poignancy are minimally relevant or of little emotional significance.');
+  const [factRatingHigh, setFactRatingHigh] = useState("The user received news of a family member's serious illness.");
+  const [factRatingMedium, setFactRatingMedium] = useState('The user completed a challenging marathon.');
+  const [factRatingLow, setFactRatingLow] = useState('The user bought a new brand of toothpaste.');
+  const [isUpdatingFactRatings, setIsUpdatingFactRatings] = useState(false);
+  
   // Add data to graph state
   const [graphData, setGraphData] = useState('');
   const [isAddingToGraph, setIsAddingToGraph] = useState(false);
@@ -348,6 +358,11 @@ export default function PlaygroundPage() {
         testingMode, // Add testing mode parameter
         pastMessagesCount
       };
+      
+      // Add minRating for generic context modes
+      if (['basic', 'summarized'].includes(contextMode)) {
+        requestBody.minRating = genericMinRating;
+      }
       
       // Add graph search parameters if using query-based context modes
       if (['node_search', 'edge_search', 'node_edge_search', 'bfs'].includes(contextMode)) {
@@ -654,6 +669,56 @@ export default function PlaygroundPage() {
       setError(err.message || 'Failed to add data to graph');
     } finally {
       setIsAddingToGraph(false);
+    }
+  };
+
+  const handleUpdateFactRatings = async () => {
+    if (!selectedUserId || isUpdatingFactRatings) return;
+    
+    setIsUpdatingFactRatings(true);
+    setError(null);
+    
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Please sign in to update fact ratings');
+      }
+      
+      // Call API to update fact ratings
+      const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/fact-ratings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          userId: selectedUserId,
+          instruction: factRatingInstruction.trim(),
+          examples: {
+            high: factRatingHigh.trim(),
+            medium: factRatingMedium.trim(),
+            low: factRatingLow.trim()
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      // Show success feedback
+      alert('Fact ratings updated successfully');
+      
+    } catch (err: any) {
+      console.error('Fact ratings update error:', err);
+      setError(err.message || 'Failed to update fact ratings');
+    } finally {
+      setIsUpdatingFactRatings(false);
     }
   };
 
@@ -1135,6 +1200,26 @@ export default function PlaygroundPage() {
                           </label>
                         </div>
                       </div>
+                      
+                      {/* Min Rating for Generic modes */}
+                      {['basic', 'summarized'].includes(contextMode) && (
+                        <div className="mt-2">
+                          <label className="block text-xs text-gray-600 mb-1">Min Rating (0.0-1.0)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={genericMinRating}
+                            onChange={(e) => setGenericMinRating(parseFloat(e.target.value) || 0.0)}
+                            className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            disabled={isStreaming}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Filter facts by minimum rating (0 = include all)
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                   
@@ -1860,6 +1945,102 @@ export default function PlaygroundPage() {
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                   <p className="text-sm text-yellow-700">
                     Please select a user from the User card above before adding data to the graph.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+        
+        {/* Fact Ratings Card */}
+        <div className="mt-8">
+          <Card title="Fact Ratings" icon="⭐">
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Instruction
+                </label>
+                <textarea
+                  value={factRatingInstruction}
+                  onChange={(e) => setFactRatingInstruction(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  rows={3}
+                  disabled={isUpdatingFactRatings}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Rate the facts by poignancy. Highly poignant facts have a significant emotional impact or relevance to the user. Facts with low poignancy are minimally relevant or of little emotional significance.
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  High
+                </label>
+                <input
+                  type="text"
+                  value={factRatingHigh}
+                  onChange={(e) => setFactRatingHigh(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isUpdatingFactRatings}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  The user received news of a family member's serious illness.
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Medium
+                </label>
+                <input
+                  type="text"
+                  value={factRatingMedium}
+                  onChange={(e) => setFactRatingMedium(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isUpdatingFactRatings}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  The user completed a challenging marathon.
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Low
+                </label>
+                <input
+                  type="text"
+                  value={factRatingLow}
+                  onChange={(e) => setFactRatingLow(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isUpdatingFactRatings}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  The user bought a new brand of toothpaste.
+                </p>
+              </div>
+              
+              <button
+                type="button"
+                onClick={handleUpdateFactRatings}
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={isUpdatingFactRatings || !selectedUserId}
+              >
+                {isUpdatingFactRatings ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Updating...
+                  </>
+                ) : (
+                  'Update'
+                )}
+              </button>
+              
+              {/* User selection warning */}
+              {!selectedUserId && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-700">
+                    Please select a user from the User card above before updating fact ratings.
                   </p>
                 </div>
               )}

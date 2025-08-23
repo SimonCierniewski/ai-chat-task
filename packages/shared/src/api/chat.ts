@@ -35,6 +35,7 @@ export interface ChatRequest {
   assistantOutput?: string; // Pre-defined assistant response (skip OpenAI, used for importing conversations)
   pastMessagesCount?: number; // Number of past messages to include in context (0-10)
   graphSearchParams?: GraphSearchParams; // Advanced graph search parameters for query-based context modes
+  minRating?: number; // Minimum fact rating for generic context modes (0.0-1.0)
 }
 
 /**
@@ -130,6 +131,13 @@ export const chatRequestSchema = {
       maximum: 10,
       default: 4,
       description: 'Number of past messages to include in context'
+    },
+    minRating: {
+      type: 'number',
+      minimum: 0,
+      maximum: 1,
+      default: 0,
+      description: 'Minimum fact rating for generic context modes'
     }
   },
   additionalProperties: false

@@ -562,7 +562,8 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         contextMode = 'basic',
         testingMode = false,
         pastMessagesCount = 4,
-        graphSearchParams
+        graphSearchParams,
+        minRating
       } = req.body;
       const userId: string = req.user!.id;
       const reqId = req.id;
@@ -595,7 +596,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
 
             // If no valid cache, fetch from Zep
             if (!contextBlock) {
-              contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode as 'basic' | 'summarized');
+              contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode as 'basic' | 'summarized', minRating);
               contextFromCache = true;
             }
           }
