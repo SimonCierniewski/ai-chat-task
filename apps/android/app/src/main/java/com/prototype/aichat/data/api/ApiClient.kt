@@ -48,6 +48,28 @@ class ApiClient(
     }
     
     /**
+     * Separate client for SSE streaming without body logging
+     * Body logging buffers the entire response, preventing real-time streaming
+     */
+    val sseOkHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS) // Longer timeout for streaming
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor(AuthInterceptor())
+            .addInterceptor(ErrorInterceptor())
+            .addInterceptor(HttpLoggingInterceptor().apply {
+                // Only log headers for SSE, not body
+                level = if (AppConfig.IS_DEBUG) {
+                    HttpLoggingInterceptor.Level.HEADERS
+                } else {
+                    HttpLoggingInterceptor.Level.NONE
+                }
+            })
+            .build()
+    }
+    
+    /**
      * Interceptor to add Authorization header to all requests
      */
     private inner class AuthInterceptor : Interceptor {

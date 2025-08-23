@@ -52,8 +52,8 @@ class ChatSSEClient(
         // Create event source listener
         val listener = createEventSourceListener(this)
         
-        // Create and store event source
-        currentEventSource = EventSources.createFactory(apiClient.okHttpClient)
+        // Create and store event source using SSE-specific client
+        currentEventSource = EventSources.createFactory(apiClient.sseOkHttpClient)
             .newEventSource(httpRequest, listener)
         
         // Wait for close and cleanup

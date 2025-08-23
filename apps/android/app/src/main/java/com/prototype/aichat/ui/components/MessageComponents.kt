@@ -60,15 +60,11 @@ fun MessageBubbleWithStreaming(
     isStreaming: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier) {
-        MessageBubble(
-            message = message
-        )
-        // Show streaming cursor if this message is being streamed
-        if (isStreaming && message.role == MessageRole.ASSISTANT) {
-            StreamingCursor()
-        }
-    }
+    MessageBubble(
+        message = message,
+        isStreaming = isStreaming,
+        modifier = modifier
+    )
 }
 
 /**
@@ -77,6 +73,7 @@ fun MessageBubbleWithStreaming(
 @Composable
 fun MessageBubble(
     message: ChatMessage,
+    isStreaming: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isUser = message.role == MessageRole.USER
@@ -120,17 +117,22 @@ fun MessageBubble(
                 modifier = Modifier.padding(12.dp)
             ) {
                 // Message content
-                if (message.content.isNotEmpty()) {
+                if (message.content.isNotEmpty() || isStreaming) {
                     SelectionContainer {
-                        Text(
-                            text = message.content,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = when {
-                                isError -> MaterialTheme.colorScheme.onErrorContainer
-                                isUser -> MaterialTheme.colorScheme.onPrimaryContainer
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                text = if (message.content.isEmpty() && isStreaming) "..." else message.content,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = when {
+                                    isError -> MaterialTheme.colorScheme.onErrorContainer
+                                    isUser -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                            if (isStreaming && message.role == MessageRole.ASSISTANT) {
+                                StreamingCursor()
                             }
-                        )
+                        }
                     }
                 }
                 

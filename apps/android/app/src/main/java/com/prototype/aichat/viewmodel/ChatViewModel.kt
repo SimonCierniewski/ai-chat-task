@@ -232,7 +232,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             is SSEChatEvent.Token -> {
                 // Append token to streaming text
                 streamingTextBuilder.append(event.text)
-                updateStreamingMessage(streamingTextBuilder.toString())
+                val currentText = streamingTextBuilder.toString()
+                android.util.Log.d("ChatViewModel", "Token received: '${event.text}', Total length: ${currentText.length}")
+                updateStreamingMessage(currentText)
             }
             
             is SSEChatEvent.Usage -> {

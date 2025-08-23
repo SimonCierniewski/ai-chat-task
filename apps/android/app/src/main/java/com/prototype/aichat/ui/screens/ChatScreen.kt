@@ -314,8 +314,7 @@ fun MessageList(
     ) {
         itemsIndexed(
             items = messages,
-            key = { _, message -> message.id },
-            contentType = { _, message -> message.role }
+            key = { _, message -> "${message.id}_${message.content.length}" }
         ) { index, message ->
             val isLastAssistantMessage = index == messages.lastIndex && 
                 message.role == MessageRole.ASSISTANT && 
@@ -324,13 +323,6 @@ fun MessageList(
                 message = message, 
                 isStreaming = isLastAssistantMessage
             )
-        }
-        
-        // Streaming indicator
-        if (isStreaming && messages.lastOrNull()?.content?.isEmpty() == true) {
-            item {
-                StreamingIndicator()
-            }
         }
     }
 }
