@@ -90,6 +90,8 @@ export interface UsageEventData {
  */
 export interface DoneEventData {
   finish_reason: 'stop' | 'length' | 'content_filter' | 'error';
+  ttft_ms?: number;
+  openai_ms?: number;
 }
 
 /**

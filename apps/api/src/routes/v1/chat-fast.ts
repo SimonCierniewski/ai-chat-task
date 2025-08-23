@@ -294,7 +294,11 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                 stream.sendEvent(ChatEventType.MEMORY, memoryData);
               }
               
-              stream.sendEvent(ChatEventType.DONE, {finish_reason: reason});
+              stream.sendEvent(ChatEventType.DONE, {
+                finish_reason: reason,
+                ttft_ms: openAIMetrics?.ttftMs,
+                openai_ms: openAIMetrics?.openAiMs
+              });
               stream.close();
 
               // Step 5: Handle telemetry and memory AFTER streaming (non-blocking)

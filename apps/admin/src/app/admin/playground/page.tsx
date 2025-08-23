@@ -20,6 +20,7 @@ interface UsageData {
 interface TimingData {
   ttft_ms?: number;
   total_ms?: number;
+  openai_ms?: number;
 }
 
 interface MemoryData {
@@ -283,11 +284,13 @@ export default function PlaygroundPage() {
                 // Usage event
                 setUsage(parsed as UsageData);
               } else if (currentEvent === 'done' || (!currentEvent && parsed.finish_reason)) {
-                // Done event
+                // Done event - extract OpenAI metrics
                 if (startTimeRef.current) {
                   setTiming(prev => ({
                     ...prev,
-                    total_ms: Date.now() - startTimeRef.current!
+                    total_ms: Date.now() - startTimeRef.current!,
+                    ttft_ms: parsed.ttft_ms || prev?.ttft_ms,
+                    openai_ms: parsed.openai_ms
                   }));
                 }
               }
@@ -541,6 +544,25 @@ export default function PlaygroundPage() {
                   </div>
                 )}
               </div>
+              {/* OpenAI Processing Times */}
+              {timing && (timing.ttft_ms !== undefined || timing.openai_ms !== undefined) && (
+                <div className="mt-2 px-4 py-2 bg-blue-50 rounded-md">
+                  <div className="flex items-center gap-4 text-sm text-blue-700">
+                    {timing.ttft_ms !== undefined && (
+                      <>
+                        <span className="font-medium">TTFT:</span>
+                        <span>{formatTiming(timing.ttft_ms)}</span>
+                      </>
+                    )}
+                    {timing.openai_ms !== undefined && (
+                      <>
+                        <span className="font-medium">OpenAI Processing:</span>
+                        <span>{formatTiming(timing.openai_ms)}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Usage Stats */}
               {usage && (
