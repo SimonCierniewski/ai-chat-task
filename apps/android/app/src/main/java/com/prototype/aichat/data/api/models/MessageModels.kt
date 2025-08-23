@@ -94,12 +94,38 @@ data class ThreadSummary(
     val lastMessage: String? = null
 ) {
     fun toDomainModel(userId: String): ChatSession {
+        // Parse the ISO timestamp from the API (format: 2025-01-23T18:26:24.018Z)
+        val lastMessageTimestamp = try {
+            // Try parsing with milliseconds first
+            val formats = listOf(
+                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                "yyyy-MM-dd'T'HH:mm:ss"
+            )
+            
+            var timestamp: Long? = null
+            for (format in formats) {
+                try {
+                    timestamp = java.text.SimpleDateFormat(format, java.util.Locale.US).apply {
+                        timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    }.parse(lastMessageAt)?.time
+                    if (timestamp != null) break
+                } catch (e: Exception) {
+                    // Try next format
+                }
+            }
+            timestamp ?: System.currentTimeMillis()
+        } catch (e: Exception) {
+            System.currentTimeMillis()
+        }
+        
         return ChatSession(
             id = threadId,
             userId = userId,
             title = firstMessage?.take(50) ?: "Chat Session",
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
+            createdAt = lastMessageTimestamp, // Use the actual last message time
+            updatedAt = lastMessageTimestamp,
+            lastMessageAt = lastMessageTimestamp,
             messageCount = messageCount
         )
     }
