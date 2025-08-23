@@ -8,7 +8,7 @@
  */
 
 import {FastifyPluginAsync, FastifyReply} from 'fastify';
-import {ChatRequest, ChatEventType, chatRequestSchema, MemoryEventData, UserMessage, AssistantMessage, MemoryMessage} from '@prototype/shared';
+import {ChatRequest, ChatEventType, chatRequestSchema, MemoryEventData, UserMessage, AssistantMessage, MemoryMessage, MemoryContextWithStatus, needsRefresh} from '@prototype/shared';
 import {logger} from '../../utils/logger';
 import {OpenAIProvider} from '../../providers/openai-provider';
 import {UsageService} from '../../services/usage-service';
@@ -189,11 +189,48 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         // Step 1: Use admin-configured default model if no model specified
         const model = requestedModel || config.openai.defaultModel;
 
-        // Step 2: Get context block if memory is enabled (simple, no processing)
+        // Step 2: Get context block if memory is enabled
         const memoryStartMs = Date.now()
         let contextBlock: string | undefined = undefined;
+        let contextFromCache = false;
+
         if (useMemory) {
-          contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode);
+          const supabaseAdmin = getSupabaseAdmin();
+
+          // Try to get context from DB cache first
+          try {
+            const { data: cachedContext, error } = await supabaseAdmin
+              .rpc('get_or_create_memory_context', {
+                p_user_id: userId
+              });
+
+            if (!error && cachedContext && cachedContext.length > 0) {
+              const context = cachedContext[0] as MemoryContextWithStatus;
+
+              // Check if we can use the cached context
+              if (!needsRefresh(context)) {
+                contextBlock = context.context_block;
+                contextFromCache = true;
+                logger.info({
+                  req_id: req.id,
+                  user_id: userId,
+                  cache_version: context.version,
+                  cached: true
+                }, 'Using cached memory context');
+              }
+            }
+          } catch (cacheError) {
+            logger.warn({
+              req_id: req.id,
+              error: cacheError
+            }, 'Failed to check memory context cache');
+          }
+
+          // If no valid cache, fetch from Zep
+          if (!contextBlock) {
+            contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode);
+            contextFromCache = false;
+          }
         }
         const memoryMs = Date.now() - memoryStartMs;
 
@@ -296,7 +333,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                 };
                 stream.sendEvent(ChatEventType.MEMORY, memoryData);
               }
-              
+
               stream.sendEvent(ChatEventType.DONE, {
                 finish_reason: reason,
                 ttft_ms: openAIMetrics?.ttftMs,
@@ -322,7 +359,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                     has_provider_usage: hasProviderUsage
                   });
                 }
-                
+
                 if (contextBlock) {
                   await telemetryService.logZepSearch(
                     userId,
@@ -339,7 +376,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                   stack: error.stack
                 }, 'Fast chat: Saving telemetry error');
               }
-              
+
               // Step 6: Store conversation in Zep if successful and session exists
               if (reason === 'stop' && sessionId && outputText) {
                 try {
@@ -365,12 +402,55 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       user_id: userId,
                       session_id: sessionId
                     }, 'Conversation stored in Zep');
+
+                    // Step 8: Update memory context cache after successful Zep storage
+                    // Only update if we didn't use cache or if contextMode might have changed
+                    if (!contextFromCache || contextBlock) {
+                      try {
+                        // Fetch fresh context from Zep
+                        const freshContext = await zepAdapter.getContextBlock(userId, sessionId, contextMode);
+
+                        if (freshContext) {
+                          // Store in database cache
+                          const supabaseAdmin = getSupabaseAdmin();
+                          const { error: updateError } = await supabaseAdmin
+                            .rpc('update_memory_context', {
+                              p_user_id: userId,
+                              p_context_block: freshContext,
+                              p_zep_parameters: { mode: contextMode },
+                              p_session_id: sessionId
+                            });
+
+                          if (updateError) {
+                            logger.warn({
+                              req_id: req.id,
+                              user_id: userId,
+                              error: updateError.message
+                            }, 'Failed to update memory context cache');
+                          } else {
+                            logger.info({
+                              req_id: req.id,
+                              user_id: userId,
+                              session_id: sessionId,
+                              context_length: freshContext.length
+                            }, 'Memory context cache updated');
+                          }
+                        }
+                      } catch (cacheUpdateError) {
+                        // Don't fail if cache update fails
+                        logger.warn({
+                          req_id: req.id,
+                          user_id: userId,
+                          error: cacheUpdateError
+                        }, 'Failed to refresh memory context cache');
+                      }
+                    }
                   }
-                  
+
                   // Step 7: Store messages in database
                   try {
                     const supabaseAdmin = getSupabaseAdmin();
-                    
+
                     // Store user message with startTime as created_at
                     const userMessage: UserMessage = {
                       thread_id: sessionId,
@@ -379,10 +459,10 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       user_id: userId,
                       created_at: new Date(startTime).toISOString()
                     };
-                    
+
                     // Build messages array
                     const messagesToInsert: any[] = [userMessage];
-                    
+
                     // Store memory context if available
                     if (contextBlock) {
                       const memoryContextMessage: MemoryMessage = {
@@ -396,7 +476,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       };
                       messagesToInsert.push(memoryContextMessage);
                     }
-                    
+
                     // Store assistant message with metrics
                     const assistantMessage: AssistantMessage = {
                       thread_id: sessionId,
@@ -413,12 +493,12 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       created_at: new Date(openAIDoneTime).toISOString()
                     };
                     messagesToInsert.push(assistantMessage);
-                    
+
                     // Insert all messages
                     const { error: insertError } = await supabaseAdmin
                       .from('messages')
                       .insert(messagesToInsert);
-                    
+
                     if (insertError) {
                       logger.warn({
                         req_id: reqId,

@@ -1,0 +1,224 @@
+-- Migration: 013_create_memory_context_table.sql
+-- Purpose: Create memory_context table for caching Zep context blocks
+-- Author: AI Chat Task
+-- Date: 2025-01-22
+
+-- Drop existing table if it exists (for clean recreation)
+DROP TABLE IF EXISTS public.memory_context CASCADE;
+
+-- Create memory_context table
+CREATE TABLE public.memory_context (
+    -- Primary key - user_id is the main identifier
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    
+    -- Optional owner_id for shared contexts (future feature)
+    owner_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    
+    -- The actual context block from Zep (can be large text)
+    context_block TEXT,
+    
+    -- Zep parameters used to generate this context (JSON)
+    zep_parameters JSONB DEFAULT '{}'::jsonb,
+    
+    -- Timestamps
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    
+    -- TTL tracking - when should this cache be refreshed
+    expires_at TIMESTAMPTZ,
+    
+    -- Version/generation counter for cache invalidation
+    version INTEGER DEFAULT 1 NOT NULL,
+    
+    -- Session ID that last updated this context
+    last_session_id TEXT,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}'::jsonb
+);
+
+-- Create indices for performance
+CREATE INDEX idx_memory_context_updated_at ON public.memory_context(updated_at DESC);
+CREATE INDEX idx_memory_context_expires_at ON public.memory_context(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_memory_context_owner_id ON public.memory_context(owner_id) WHERE owner_id IS NOT NULL;
+
+-- Add comments for documentation
+COMMENT ON TABLE public.memory_context IS 'Caches Zep memory context blocks for users to reduce API calls';
+COMMENT ON COLUMN public.memory_context.user_id IS 'Primary key - the user this context belongs to';
+COMMENT ON COLUMN public.memory_context.owner_id IS 'Optional owner for shared contexts (future feature)';
+COMMENT ON COLUMN public.memory_context.context_block IS 'The cached context block from Zep';
+COMMENT ON COLUMN public.memory_context.zep_parameters IS 'Parameters used to fetch this context from Zep';
+COMMENT ON COLUMN public.memory_context.created_at IS 'When this record was first created';
+COMMENT ON COLUMN public.memory_context.updated_at IS 'When this context was last updated';
+COMMENT ON COLUMN public.memory_context.expires_at IS 'When this cache should be refreshed';
+COMMENT ON COLUMN public.memory_context.version IS 'Version counter for cache invalidation';
+COMMENT ON COLUMN public.memory_context.last_session_id IS 'Session that last updated this context';
+COMMENT ON COLUMN public.memory_context.metadata IS 'Additional metadata (e.g., token count, retrieval stats)';
+
+-- Row Level Security (RLS)
+ALTER TABLE public.memory_context ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can read their own context
+CREATE POLICY "Users can read own context" ON public.memory_context
+    FOR SELECT
+    USING (auth.uid() = user_id);
+
+-- Policy: Users can insert/update their own context
+CREATE POLICY "Users can manage own context" ON public.memory_context
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+-- Policy: Service role has full access
+CREATE POLICY "Service role has full access" ON public.memory_context
+    FOR ALL
+    USING (auth.role() = 'service_role');
+
+-- Grant permissions
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.memory_context TO authenticated;
+GRANT ALL ON public.memory_context TO service_role;
+
+-- Create function to update the updated_at timestamp
+CREATE OR REPLACE FUNCTION public.update_memory_context_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    NEW.version = OLD.version + 1;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to automatically update updated_at
+CREATE TRIGGER update_memory_context_updated_at
+    BEFORE UPDATE ON public.memory_context
+    FOR EACH ROW
+    EXECUTE FUNCTION public.update_memory_context_updated_at();
+
+-- Create function to get or create memory context (no expiry)
+CREATE OR REPLACE FUNCTION public.get_or_create_memory_context(
+    p_user_id UUID
+)
+RETURNS TABLE(
+    user_id UUID,
+    owner_id UUID,
+    context_block TEXT,
+    zep_parameters JSONB,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    version INTEGER,
+    last_session_id TEXT,
+    metadata JSONB,
+    needs_initial_fetch BOOLEAN
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    -- First try to get existing context
+    RETURN QUERY
+    SELECT 
+        mc.user_id,
+        mc.owner_id,
+        mc.context_block,
+        mc.zep_parameters,
+        mc.created_at,
+        mc.updated_at,
+        mc.expires_at,
+        mc.version,
+        mc.last_session_id,
+        mc.metadata,
+        FALSE as needs_initial_fetch -- Existing records don't need initial fetch
+    FROM public.memory_context mc
+    WHERE mc.user_id = p_user_id;
+    
+    -- If no record exists, create one
+    IF NOT FOUND THEN
+        INSERT INTO public.memory_context (user_id)
+        VALUES (p_user_id)
+        ON CONFLICT (user_id) DO NOTHING;
+        
+        -- Return the newly created record
+        RETURN QUERY
+        SELECT 
+            mc.user_id,
+            mc.owner_id,
+            mc.context_block,
+            mc.zep_parameters,
+            mc.created_at,
+            mc.updated_at,
+            mc.expires_at,
+            mc.version,
+            mc.last_session_id,
+            mc.metadata,
+            TRUE as needs_initial_fetch -- New record needs initial fetch
+        FROM public.memory_context mc
+        WHERE mc.user_id = p_user_id;
+    END IF;
+END;
+$$;
+
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION public.get_or_create_memory_context(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_or_create_memory_context(UUID) TO service_role;
+
+COMMENT ON FUNCTION public.get_or_create_memory_context IS 'Gets existing memory context or creates a new one if it doesn''t exist';
+
+-- Create function to update memory context (no expiry)
+CREATE OR REPLACE FUNCTION public.update_memory_context(
+    p_user_id UUID,
+    p_context_block TEXT,
+    p_zep_parameters JSONB DEFAULT NULL,
+    p_session_id TEXT DEFAULT NULL
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    UPDATE public.memory_context
+    SET 
+        context_block = p_context_block,
+        zep_parameters = COALESCE(p_zep_parameters, zep_parameters),
+        expires_at = NULL, -- Never expires
+        last_session_id = COALESCE(p_session_id, last_session_id)
+    WHERE user_id = p_user_id;
+    
+    RETURN FOUND;
+END;
+$$;
+
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION public.update_memory_context(UUID, TEXT, JSONB, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_memory_context(UUID, TEXT, JSONB, TEXT) TO service_role;
+
+COMMENT ON FUNCTION public.update_memory_context IS 'Updates memory context for a user (never expires)';
+
+-- Create function to cleanup expired contexts (for scheduled jobs)
+CREATE OR REPLACE FUNCTION public.cleanup_expired_memory_contexts()
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    rows_deleted INTEGER;
+BEGIN
+    -- Clear context blocks that have been expired for more than 24 hours
+    -- We keep the record but clear the content to save space
+    UPDATE public.memory_context
+    SET 
+        context_block = NULL,
+        metadata = jsonb_build_object('cleared_at', NOW())
+    WHERE expires_at < NOW() - INTERVAL '24 hours'
+      AND context_block IS NOT NULL;
+    
+    GET DIAGNOSTICS rows_deleted = ROW_COUNT;
+    
+    RETURN rows_deleted;
+END;
+$$;
+
+-- Grant execute permission to service role only
+GRANT EXECUTE ON FUNCTION public.cleanup_expired_memory_contexts() TO service_role;
+
+COMMENT ON FUNCTION public.cleanup_expired_memory_contexts IS 'Cleans up expired memory contexts to save storage space';
