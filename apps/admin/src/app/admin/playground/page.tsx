@@ -267,6 +267,8 @@ export default function PlaygroundPage() {
         setNewUserName('');
         setNewExperimentTitle('');
         setShowCreateUser(false);
+        // Refresh the users list
+        fetchUsers();
       } else {
         const error = await response.json();
         console.error('Failed to create user:', response.status, error);
