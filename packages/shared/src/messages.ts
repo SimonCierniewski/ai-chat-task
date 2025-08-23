@@ -5,7 +5,7 @@
 /**
  * Message role in conversation
  */
-export type MessageRole = 'user' | 'assistant' | 'system';
+export type MessageRole = 'user' | 'assistant' | 'system' | 'memory';
 
 /**
  * Base message structure
@@ -60,6 +60,15 @@ export interface AssistantMessage extends Message {
  */
 export interface SystemMessage extends Omit<Message, 'role' | 'start_ms' | 'ttft_ms' | 'total_ms' | 'tokens_in' | 'tokens_out' | 'price' | 'model'> {
   role: 'system';
+}
+
+/**
+ * Memory context message
+ */
+export interface MemoryMessage extends Omit<Message, 'role' | 'ttft_ms' | 'tokens_in' | 'tokens_out' | 'price' | 'model'> {
+  role: 'memory';
+  start_ms?: number;
+  total_ms?: number;
 }
 
 /**

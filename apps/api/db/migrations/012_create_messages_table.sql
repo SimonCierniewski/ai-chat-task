@@ -14,8 +14,8 @@ CREATE TABLE public.messages (
     -- Thread/Session identifier (matches Zep session IDs)
     thread_id TEXT NOT NULL,
     
-    -- Message role: 'user', 'assistant', 'system'
-    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+    -- Message role: 'user', 'assistant', 'system', 'memory'
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'memory')),
     
     -- Message content
     content TEXT NOT NULL,
@@ -52,7 +52,7 @@ CREATE INDEX idx_messages_thread_user ON public.messages(thread_id, user_id);
 COMMENT ON TABLE public.messages IS 'Stores chat conversation history with performance metrics and cost tracking';
 COMMENT ON COLUMN public.messages.id IS 'Unique message identifier';
 COMMENT ON COLUMN public.messages.thread_id IS 'Thread/session identifier, matches Zep session IDs';
-COMMENT ON COLUMN public.messages.role IS 'Message role: user, assistant, or system';
+COMMENT ON COLUMN public.messages.role IS 'Message role: user, assistant, system, or memory';
 COMMENT ON COLUMN public.messages.content IS 'The actual message content';
 COMMENT ON COLUMN public.messages.created_at IS 'Timestamp when message was created';
 COMMENT ON COLUMN public.messages.start_ms IS 'Unix timestamp (ms) when processing started (assistant messages only)';

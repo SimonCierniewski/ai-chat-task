@@ -8,7 +8,7 @@
  */
 
 import {FastifyPluginAsync, FastifyReply} from 'fastify';
-import {ChatRequest, ChatEventType, chatRequestSchema, MemoryEventData, UserMessage, AssistantMessage} from '@prototype/shared';
+import {ChatRequest, ChatEventType, chatRequestSchema, MemoryEventData, UserMessage, AssistantMessage, MemoryMessage} from '@prototype/shared';
 import {logger} from '../../utils/logger';
 import {OpenAIProvider} from '../../providers/openai-provider';
 import {UsageService} from '../../services/usage-service';
@@ -369,21 +369,31 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                   try {
                     const supabaseAdmin = getSupabaseAdmin();
                     
-                    // Store user message
+                    // Store user message with startTime as created_at
                     const userMessage: UserMessage = {
                       thread_id: sessionId,
                       role: 'user',
                       content: message,
-                      user_id: userId
+                      user_id: userId,
+                      created_at: new Date(startTime).toISOString()
                     };
                     
-                    // Store user message
-                    const memoryContext: MemoryMessage = {
-                      thread_id: sessionId,
-                      role: 'memory',
-                      content: contextBlock,
-                      user_id: userId
-                    };
+                    // Build messages array
+                    const messagesToInsert: any[] = [userMessage];
+                    
+                    // Store memory context if available
+                    if (contextBlock) {
+                      const memoryContextMessage: MemoryMessage = {
+                        thread_id: sessionId,
+                        role: 'memory',
+                        content: contextBlock,
+                        user_id: userId,
+                        start_ms: memoryStartMs,
+                        total_ms: memoryMs,
+                        created_at: new Date(memoryStartMs).toISOString()
+                      };
+                      messagesToInsert.push(memoryContextMessage);
+                    }
                     
                     // Store assistant message with metrics
                     const assistantMessage: AssistantMessage = {
@@ -397,13 +407,15 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       tokens_in: usageCalc?.tokens_in || 0,
                       tokens_out: usageCalc?.tokens_out || 0,
                       price: usageCalc?.cost_usd || 0,
-                      model: model
+                      model: model,
+                      created_at: new Date(openAIStartTime + (openAIMetrics?.openAiMs || 0)).toISOString()
                     };
+                    messagesToInsert.push(assistantMessage);
                     
-                    // Insert both messages
+                    // Insert all messages
                     const { error: insertError } = await supabaseAdmin
                       .from('messages')
-                      .insert([userMessage, memoryContext, assistantMessage]);
+                      .insert(messagesToInsert);
                     
                     if (insertError) {
                       logger.warn({
