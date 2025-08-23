@@ -12,13 +12,16 @@
   },
   "dependencies": {
     "@prototype/shared": "workspace:*",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.0.10",
     "@supabase/supabase-js": "^2.39.0",
+    "@types/uuid": "^10.0.0",
     "lucide-react": "^0.541.0",
     "next": "14.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.10.3"
+    "recharts": "^2.10.3",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

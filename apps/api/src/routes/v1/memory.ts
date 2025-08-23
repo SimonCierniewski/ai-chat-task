@@ -970,6 +970,90 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       }
     }
   }, searchMemoryHandler);
+
+  // POST /api/v1/memory/init - Initialize user and thread in Zep
+  fastify.post('/init', {
+    schema: {
+      summary: 'Initialize user and thread in Zep',
+      description: 'Create a new user and thread in Zep memory system',
+      tags: ['Memory'],
+      body: Type.Object({
+        userId: Type.String({minLength: 1}),
+        sessionId: Type.String({minLength: 1})
+      }),
+      response: {
+        200: Type.Object({
+          ok: Type.Literal(true),
+          userId: Type.String(),
+          sessionId: Type.String()
+        }),
+        400: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        }),
+        500: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        })
+      }
+    }
+  }, async (request: FastifyRequest<{ Body: { userId: string; sessionId: string } }>, reply: FastifyReply) => {
+    const startTime = Date.now();
+    const { userId, sessionId } = request.body;
+    
+    try {
+      logger.info(`Initializing Zep for user ${userId} with session ${sessionId}`);
+      
+      // Initialize Zep client
+      const zepClient = new ZepClient({
+        apiKey: config.zep.apiKey
+      });
+      
+      // Create or get user
+      try {
+        await zepClient.user.add({
+          user_id: userId
+        });
+        logger.info(`Created/verified user ${userId} in Zep`);
+      } catch (userError: any) {
+        // User might already exist, which is fine
+        if (!userError.message?.includes('already exists')) {
+          logger.error('Error creating user in Zep:', userError);
+          throw userError;
+        }
+      }
+      
+      // Create thread/session
+      try {
+        await zepClient.thread.create({
+          thread_id: sessionId,
+          user_id: userId
+        });
+        logger.info(`Created thread ${sessionId} for user ${userId} in Zep`);
+      } catch (threadError: any) {
+        // Thread might already exist, which is fine
+        if (!threadError.message?.includes('already exists')) {
+          logger.error('Error creating thread in Zep:', threadError);
+          throw threadError;
+        }
+      }
+      
+      const totalMs = Date.now() - startTime;
+      logger.info(`Zep initialization completed in ${totalMs}ms`);
+      
+      return reply.send({
+        ok: true,
+        userId,
+        sessionId
+      });
+    } catch (error) {
+      logger.error('Error initializing Zep:', error);
+      return reply.status(500).send({
+        error: 'ZEP_INIT_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to initialize Zep'
+      });
+    }
+  });
 };
 
 // Export ZepAdapter and instance for use in chat.ts

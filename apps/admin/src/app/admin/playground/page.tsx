@@ -35,13 +35,30 @@ interface ModelInfo {
   output_per_mtok: number;
 }
 
+interface PlaygroundUser {
+  id: string;
+  name: string;
+  label: string;
+}
+
 export default function PlaygroundPage() {
   const [message, setMessage] = useState('');
   const [useMemory, setUseMemory] = useState(true);
   const [contextMode, setContextMode] = useState<'basic' | 'summarized'>('basic');
   const [model, setModel] = useState('gpt-4o-mini');
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.');
-  const [sessionId] = useState(() => {
+  
+  // User management state
+  const [users, setUsers] = useState<PlaygroundUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [editingUserName, setEditingUserName] = useState('');
+  const [isEditingUser, setIsEditingUser] = useState(false);
+  const [userLoading, setUserLoading] = useState(false);
+  
+  // Session ID now depends on selected user
+  const [sessionId, setSessionId] = useState(() => {
     const pad = (n: number) => n.toString().padStart(2, '0');
     const now = new Date();
     const y = now.getFullYear().toString();
@@ -70,13 +87,14 @@ export default function PlaygroundPage() {
   const firstTokenTimeRef = useRef<number | null>(null);
   const initializeRef = useRef<boolean>(false);
 
-  // Fetch available models and initialize chat on mount
+  // Fetch available models, users, and initialize chat on mount
   useEffect(() => {
     // Prevent double initialization in development mode
     if (initializeRef.current) return;
     initializeRef.current = true;
 
     fetchModels();
+    fetchUsers();
     initializeChat();
 
     // Cleanup on unmount
@@ -86,6 +104,14 @@ export default function PlaygroundPage() {
       }
     };
   }, []); // Remove sessionId dependency - it's stable from useState initializer
+  
+  // Update sessionId when selected user changes
+  useEffect(() => {
+    if (selectedUserId) {
+      // Use userId as sessionId/threadId
+      setSessionId(selectedUserId);
+    }
+  }, [selectedUserId]);
 
   const initializeChat = async () => {
     try {
@@ -115,6 +141,87 @@ export default function PlaygroundPage() {
       }
     } catch (error) {
       console.error('Error initializing chat:', error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('/api/admin/users/list');
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data.users || []);
+        // Select first user if available
+        if (data.users && data.users.length > 0 && !selectedUserId) {
+          setSelectedUserId(data.users[0].id);
+          const currentUser = data.users[0];
+          setEditingUserName(currentUser.name);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    }
+  };
+
+  const createUser = async () => {
+    if (!newUserName.trim()) return;
+    
+    setUserLoading(true);
+    try {
+      const response = await fetch('/api/admin/users/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newUserName.trim() })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const newUser = data.user;
+        setUsers(prev => [...prev, newUser]);
+        setSelectedUserId(newUser.id);
+        setEditingUserName(newUser.name);
+        setNewUserName('');
+        setShowCreateUser(false);
+      } else {
+        const error = await response.json();
+        console.error('Failed to create user:', error);
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  const updateUserName = async () => {
+    if (!editingUserName.trim() || !selectedUserId) return;
+    
+    setUserLoading(true);
+    try {
+      const response = await fetch('/api/admin/users/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId: selectedUserId,
+          name: editingUserName.trim() 
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(prev => prev.map(u => 
+          u.id === selectedUserId 
+            ? { ...u, name: data.user.name, label: data.user.label }
+            : u
+        ));
+        setIsEditingUser(false);
+      } else {
+        const error = await response.json();
+        console.error('Failed to update user:', error);
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+    } finally {
+      setUserLoading(false);
     }
   };
 
@@ -338,7 +445,155 @@ export default function PlaygroundPage() {
       <div className="p-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Configuration Panel */}
-          <div>
+          <div className="space-y-6">
+            {/* User Card */}
+            <Card title="User" icon="👤">
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Select User
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedUserId}
+                      onChange={(e) => {
+                        setSelectedUserId(e.target.value);
+                        const user = users.find(u => u.id === e.target.value);
+                        if (user) {
+                          setEditingUserName(user.name);
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={isStreaming || userLoading}
+                    >
+                      {users.length === 0 && (
+                        <option value="">No users available</option>
+                      )}
+                      {users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateUser(true)}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                      disabled={isStreaming || userLoading}
+                    >
+                      + New
+                    </button>
+                  </div>
+                </div>
+
+                {/* Create New User Form */}
+                {showCreateUser && (
+                  <div className="p-3 bg-gray-50 rounded-md space-y-3">
+                    <input
+                      type="text"
+                      value={newUserName}
+                      onChange={(e) => setNewUserName(e.target.value)}
+                      placeholder="Enter user name..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={userLoading}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={createUser}
+                        className="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 text-sm"
+                        disabled={userLoading || !newUserName.trim()}
+                      >
+                        {userLoading ? 'Creating...' : 'Create'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCreateUser(false);
+                          setNewUserName('');
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 text-sm"
+                        disabled={userLoading}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Edit User Name */}
+                {selectedUserId && !showCreateUser && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      User Name
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editingUserName}
+                        onChange={(e) => setEditingUserName(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!isEditingUser || userLoading}
+                      />
+                      {!isEditingUser ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingUser(true)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                          disabled={userLoading}
+                        >
+                          Edit
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={updateUserName}
+                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                            disabled={userLoading || !editingUserName.trim()}
+                          >
+                            {userLoading ? 'Saving...' : 'Save'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingUser(false);
+                              const user = users.find(u => u.id === selectedUserId);
+                              if (user) {
+                                setEditingUserName(user.name);
+                              }
+                            }}
+                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                            disabled={userLoading}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* User ID Display */}
+                {selectedUserId && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      User ID
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedUserId}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      This ID is used as the thread ID in Zep
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
+            
             <Card title="Configuration" icon="⚙️">
               <form onSubmit={handleSubmit} className="mt-4 space-y-4">
                 <div>
