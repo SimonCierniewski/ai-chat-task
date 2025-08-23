@@ -568,7 +568,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                         role: 'memory',
                         content: contextBlock,
                         user_id: userId,
-                        start_ms: memoryStartMs,
+                        start_ms: memoryStartMs - startTime,
                         total_ms: memoryMs,
                         created_at: new Date(memoryStartMs).toISOString()
                       };
@@ -581,7 +581,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       role: 'assistant',
                       content: outputText,
                       user_id: userId,
-                      start_ms: openAIStartTime,
+                      start_ms: openAIStartTime - startTime,
                       ttft_ms: openAIMetrics?.ttftMs,
                       total_ms: openAIMetrics?.openAiMs || 0,
                       tokens_in: usageCalc?.tokens_in || 0,

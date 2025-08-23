@@ -1,4 +1,4 @@
--- Migration: 012_create_messages_table.sql
+-- Migration: 011_create_messages_table.sql
 -- Purpose: Create messages table for storing chat conversation history
 -- Author: AI Chat Task
 -- Date: 2025-01-22

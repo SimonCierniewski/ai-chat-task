@@ -16,7 +16,7 @@ import com.prototype.aichat.data.local.entities.SessionEntity
         SessionEntity::class,
         MessageEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class ChatDatabase : RoomDatabase() {

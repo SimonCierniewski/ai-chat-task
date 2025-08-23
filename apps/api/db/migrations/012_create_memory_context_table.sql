@@ -1,4 +1,4 @@
--- Migration: 013_create_memory_context_table.sql
+-- Migration: 012_create_memory_context_table.sql
 -- Purpose: Create memory_context table for caching Zep context blocks
 -- Author: AI Chat Task
 -- Date: 2025-01-22
