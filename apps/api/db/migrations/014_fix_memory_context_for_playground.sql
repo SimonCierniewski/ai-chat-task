@@ -26,14 +26,6 @@ FOREIGN KEY (user_id)
 REFERENCES auth.users(id) 
 ON DELETE CASCADE;
 
--- Add experiment_title column if it doesn't exist
-ALTER TABLE public.memory_context 
-ADD COLUMN IF NOT EXISTS experiment_title TEXT;
-
--- Rename 'name' column to 'user_name' for clarity
-ALTER TABLE public.memory_context 
-RENAME COLUMN name TO user_name;
-
 -- Create an index on user_id for performance (it's no longer the primary key)
 CREATE INDEX IF NOT EXISTS idx_memory_context_user_id 
 ON public.memory_context(user_id) 
