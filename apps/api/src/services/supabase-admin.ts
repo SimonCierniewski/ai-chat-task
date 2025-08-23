@@ -5,8 +5,8 @@ let supabaseAdmin: ReturnType<typeof createClient> | null = null;
 
 export function getSupabaseAdmin() {
   if (!supabaseAdmin) {
-    const supabaseUrl = config.auth.supabase.url;
-    const serviceRoleKey = config.auth.supabase.serviceRoleKey;
+    const supabaseUrl = config.supabase.url;
+    const serviceRoleKey = config.supabase.serviceRoleKey;
     
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error('Supabase configuration missing');

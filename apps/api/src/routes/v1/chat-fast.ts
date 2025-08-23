@@ -285,7 +285,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
           systemContent += `\n\nContext:\n${contextBlock}`;
         }
         if (pastMessages) {
-          systemContent += pastMessages;
+          systemContent += `\n\nLast messages:\n${contextBlock}`;
         }
         
         messages.push({
