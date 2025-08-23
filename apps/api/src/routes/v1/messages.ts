@@ -232,7 +232,10 @@ export const messagesRoute: FastifyPluginAsync = async (server) => {
             }
             
             const thread = threadMap.get(threadId);
-            thread.message_count++;
+            // Only count user and assistant messages, not memory or system
+            if (msg.role === 'user' || msg.role === 'assistant') {
+              thread.message_count++;
+            }
             thread.total_cost += msg.price || 0;
             thread.total_tokens_in += msg.tokens_in || 0;
             thread.total_tokens_out += msg.tokens_out || 0;

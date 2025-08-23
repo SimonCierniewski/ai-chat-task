@@ -157,13 +157,13 @@ BEGIN
     RETURN QUERY
     SELECT 
         m.thread_id,
-        COUNT(*)::BIGINT as message_count,
+        COUNT(CASE WHEN m.role IN ('user', 'assistant') THEN 1 END)::BIGINT as message_count,
         MAX(m.created_at) as last_message_at,
         SUM(m.price)::NUMERIC as total_cost,
         SUM(m.tokens_in)::BIGINT as total_tokens_in,
         SUM(m.tokens_out)::BIGINT as total_tokens_out
     FROM public.messages m
-    WHERE p_user_id IS NULL OR m.user_id = p_user_id
+    WHERE (p_user_id IS NULL OR m.user_id = p_user_id)
     GROUP BY m.thread_id
     ORDER BY MAX(m.created_at) DESC;
 END;
@@ -173,4 +173,4 @@ $$;
 GRANT EXECUTE ON FUNCTION public.get_thread_summary(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_thread_summary(UUID) TO service_role;
 
-COMMENT ON FUNCTION public.get_thread_summary IS 'Gets summary statistics for all threads/sessions';
+COMMENT ON FUNCTION public.get_thread_summary IS 'Gets summary statistics for all threads/sessions (counts only user and assistant messages)';
