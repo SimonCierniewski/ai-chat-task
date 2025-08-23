@@ -177,7 +177,8 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         model: requestedModel,
         systemPrompt,
         returnMemory = false,
-        contextMode = 'basic'
+        contextMode = 'basic',
+        testingMode = false
       } = req.body;
       const userId = req.user!.id;
       const reqId = req.id;
@@ -377,8 +378,14 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                 }, 'Fast chat: Saving telemetry error');
               }
 
-              // Step 6: Store conversation in Zep if successful and session exists
-              if (reason === 'stop' && sessionId && outputText) {
+              // Step 6: Store conversation in Zep if successful and session exists (skip in testing mode)
+              if (testingMode) {
+                logger.info({
+                  req_id: req.id,
+                  user_id: userId,
+                  session_id: sessionId
+                }, 'Testing mode enabled - skipping message storage');
+              } else if (reason === 'stop' && sessionId && outputText) {
                 try {
                   const memoryUpsertStartMs = Date.now()
                   const stored = await zepAdapter.storeConversationTurn(
@@ -447,8 +454,9 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                     }
                   }
 
-                  // Step 7: Store messages in database
-                  try {
+                  // Step 7: Store messages in database (skip in testing mode)
+                  if (!testingMode) {
+                    try {
                     const supabaseAdmin = getSupabaseAdmin();
 
                     // Store user message with startTime as created_at
@@ -512,14 +520,15 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                         user_id: userId
                       }, 'Messages stored in database');
                     }
-                  } catch (dbError: any) {
-                    // Don't fail the request if database storage fails
-                    logger.error({
-                      req_id: reqId,
-                      error: dbError.message,
-                      thread_id: sessionId
-                    }, 'Failed to store messages in database');
-                  }
+                    } catch (dbError: any) {
+                      // Don't fail the request if database storage fails
+                      logger.error({
+                        req_id: reqId,
+                        error: dbError.message,
+                        thread_id: sessionId
+                      }, 'Failed to store messages in database');
+                    }
+                  } // End of testingMode check
                 } catch (error) {
                   // Don't fail the request if Zep storage fails
                   logger.error({

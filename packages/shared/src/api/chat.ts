@@ -9,6 +9,7 @@ export interface ChatRequest {
   returnMemory?: boolean; // If true, return memory context in SSE events (for debugging/playground)
   systemPrompt?: string; // Optional custom system prompt (for playground)
   contextMode?: 'basic' | 'summarized'; // Context retrieval mode (basic = raw, summarized = processed)
+  testingMode?: boolean; // If true, don't store messages in Zep or database (for testing different responses)
 }
 
 /**
@@ -52,6 +53,11 @@ export const chatRequestSchema = {
       type: 'string',
       enum: ['basic', 'summarized'],
       description: 'Context retrieval mode (basic = raw, summarized = processed)'
+    },
+    testingMode: {
+      type: 'boolean',
+      default: false,
+      description: 'Testing mode - do not store messages in Zep or database'
     }
   },
   additionalProperties: false

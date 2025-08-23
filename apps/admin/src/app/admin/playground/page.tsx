@@ -47,6 +47,7 @@ export default function PlaygroundPage() {
   const [contextMode, setContextMode] = useState<'basic' | 'summarized'>('basic');
   const [model, setModel] = useState('gpt-4o-mini');
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.');
+  const [testingMode, setTestingMode] = useState(false);
   
   // User management state
   const [users, setUsers] = useState<PlaygroundUser[]>([]);
@@ -304,7 +305,8 @@ export default function PlaygroundPage() {
         sessionId,
         model,
         returnMemory: true, // Always request memory context in playground for debugging
-        systemPrompt: systemPrompt.trim() || undefined
+        systemPrompt: systemPrompt.trim() || undefined,
+        testingMode // Add testing mode parameter
       };
 
       // Make POST request to initiate SSE stream
@@ -666,6 +668,24 @@ export default function PlaygroundPage() {
                       </p>
                     </div>
                   )}
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={testingMode}
+                      onChange={(e) => setTestingMode(e.target.checked)}
+                      className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                      disabled={isStreaming}
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Testing Mode: Don't save messages
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 ml-6 mt-1">
+                    When enabled, messages won't be stored in Zep or the database. Use this to test different responses.
+                  </p>
                 </div>
 
                 <div>
