@@ -24,10 +24,12 @@ export async function GET(request: Request) {
     }
 
     // Get all users from memory_context where current admin is the owner
+    // Now using id as primary key for playground users
     const { data: users, error: usersError } = await supabase
       .from('memory_context')
-      .select('user_id, user_name, experiment_title')
+      .select('id, user_name, experiment_title')
       .eq('owner_id', user.id)
+      .is('user_id', null)  // Only get playground users (not real users)
       .order('experiment_title', { ascending: true });
 
     if (usersError) {
@@ -37,8 +39,8 @@ export async function GET(request: Request) {
 
     // Format users for dropdown
     const formattedUsers = (users || []).map(u => ({
-      id: u.user_id,
-      name: u.user_name || `User ${u.user_id.substring(0, 8)}`,
+      id: u.id,
+      name: u.user_name || '',
       experimentTitle: u.experiment_title || 'Untitled Experiment',
       label: u.experiment_title || 'Untitled Experiment'  // Use experiment title as label in dropdowns
     }));

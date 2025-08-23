@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { logger } from '../../utils/logger';
 import { getSupabaseAdmin } from '../../services/supabase-admin';
-import { v4 as uuidv4 } from 'uuid';
 
 interface PlaygroundInitRequest {
   experimentTitle: string;
@@ -76,28 +75,26 @@ export const playgroundInitRoute: FastifyPluginAsync = async (server) => {
       }, 'Playground user initialization request');
 
       try {
-        // Generate new user ID
-        const newUserId = uuidv4();
-
         // Create user in memory_context table
         const supabaseAdmin = getSupabaseAdmin();
-        const { error: memoryError } = await supabaseAdmin
+        const { data, error: memoryError } = await supabaseAdmin
           .from('memory_context')
           .insert({
-            user_id: newUserId,
+            // Don't set user_id for playground users
             owner_id: adminId,
             user_name: userName?.trim() || null,
             experiment_title: experimentTitle.trim(),
             context_block: '',
             metadata: {}
-          });
+          })
+          .select('id, experiment_title, user_name')
+          .single();
 
-        if (memoryError) {
+        if (memoryError || !data) {
           logger.error({
             req_id: reqId,
             adminId,
-            newUserId,
-            error: memoryError.message
+            error: memoryError?.message || 'No data returned'
           }, 'Failed to create user in memory_context');
           
           return reply.status(500).send({
@@ -113,7 +110,7 @@ export const playgroundInitRoute: FastifyPluginAsync = async (server) => {
         logger.info({
           req_id: reqId,
           adminId,
-          newUserId,
+          playgroundUserId: data.id,
           experimentTitle,
           userName
         }, 'Playground user created successfully');
@@ -121,9 +118,9 @@ export const playgroundInitRoute: FastifyPluginAsync = async (server) => {
         return reply.send({
           success: true,
           user: {
-            id: newUserId,
-            experimentTitle: experimentTitle.trim(),
-            userName: userName?.trim()
+            id: data.id,
+            experimentTitle: data.experiment_title,
+            userName: data.user_name
           }
         });
       } catch (error: any) {

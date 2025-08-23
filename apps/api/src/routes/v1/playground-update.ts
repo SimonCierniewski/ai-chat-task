@@ -94,12 +94,13 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
         }
 
         // Update user in memory_context table
+        // Use id column (not user_id) for playground users
         const { data, error: updateError } = await supabaseAdmin
           .from('memory_context')
           .update(updateData)
-          .eq('user_id', userId)
+          .eq('id', userId)
           .eq('owner_id', adminId)
-          .select('user_id, experiment_title, user_name')
+          .select('id, experiment_title, user_name')
           .single();
 
         if (updateError || !data) {
@@ -123,14 +124,14 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
         logger.info({
           req_id: reqId,
           adminId,
-          userId,
+          playgroundUserId: data.id,
           data
         }, 'Playground user updated successfully');
 
         return reply.send({
           success: true,
           user: {
-            id: data.user_id,
+            id: data.id,
             experimentTitle: data.experiment_title,
             userName: data.user_name
           }
