@@ -12,7 +12,6 @@ export interface ChatRequest {
   testingMode?: boolean; // If true, don't store messages in Zep or database (for testing different responses)
   assistantOutput?: string; // Pre-defined assistant response (skip OpenAI, used for importing conversations)
   pastMessagesCount?: number; // Number of past messages to include in context (0-10)
-  saveToZep?: boolean; // If false, don't save to Zep/DB (allows testing without altering graph)
 }
 
 /**
@@ -73,11 +72,6 @@ export const chatRequestSchema = {
       maximum: 10,
       default: 4,
       description: 'Number of past messages to include in context'
-    },
-    saveToZep: {
-      type: 'boolean',
-      default: true,
-      description: 'If false, do not save to Zep/DB (allows testing without altering graph)'
     }
   },
   additionalProperties: false

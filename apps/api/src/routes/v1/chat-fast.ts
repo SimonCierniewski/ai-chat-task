@@ -533,8 +533,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         returnMemory = false,
         contextMode = 'basic',
         testingMode = false,
-        pastMessagesCount = 4,
-        saveToZep = true
+        pastMessagesCount = 4
       } = req.body;
       const userId: string = req.user!.id;
       const reqId = req.id;
@@ -666,10 +665,10 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
 
                 if (reason === 'stop' && sessionId && outputText) {
                   if (!testingMode) {
-                    // Step 6: Store conversation in Zep if successful and session exists (skip in testing mode or if saveToZep is false)
+                    // Step 6: Store conversation in Zep if successful and session exists (skip in testing mode)
                     await storeConversationInZep(userId, sessionId, message, outputText, reqId);
 
-                    // Step 7: Store messages in database (skip in testing mode or if saveToZep is false)
+                    // Step 7: Store messages in database (skip in testing mode)
                     await storeConversationInDB(sessionId, message, userId, startTime, contextBlock, memoryStartMs, memoryMs, outputText, openAIStartTime, openAIMetrics, usageCalc, model, openAIDoneTime, reqId);
                     
                     // Step 8: Update memory context cache after successful Zep storage
@@ -680,9 +679,8 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       req_id: req.id,
                       user_id: userId,
                       session_id: sessionId,
-                      testing_mode: testingMode,
-                      save_to_zep: saveToZep
-                    }, 'Skipping message storage (testing mode or saveToZep disabled)');
+                      testing_mode: testingMode
+                    }, 'Skipping message storage (testing mode)');
                   }
                 }
               }
