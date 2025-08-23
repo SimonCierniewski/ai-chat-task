@@ -174,16 +174,13 @@ class SessionsRepository(
                 val sessions = fetchSessionsFromApi()
                 
                 // Don't clear all sessions - update existing ones and add new ones
-                // This preserves local message counts
                 for (session in sessions) {
                     val existingSession = sessionDao.getSession(session.id)
                     if (existingSession != null) {
-                        // Update existing session but keep local message count
-                        val localMessageCount = sessionDao.getMessageCount(session.id)
+                        // Update existing session with server data
+                        // Use the server's message count as it's authoritative
                         sessionDao.updateSession(
-                            SessionEntity.fromDomainModel(
-                                session.copy(messageCount = localMessageCount)
-                            )
+                            SessionEntity.fromDomainModel(session)
                         )
                     } else {
                         // Insert new session

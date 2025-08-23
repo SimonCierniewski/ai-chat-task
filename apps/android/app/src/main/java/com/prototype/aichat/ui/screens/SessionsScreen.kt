@@ -82,6 +82,11 @@ fun SessionsScreen(
     // Pull to refresh state
     val pullToRefreshState = rememberPullToRefreshState()
     
+    // Load sessions on first composition
+    LaunchedEffect(Unit) {
+        sessionsViewModel.refreshSessions()
+    }
+    
     if (pullToRefreshState.isRefreshing) {
         LaunchedEffect(true) {
             sessionsViewModel.refreshSessions()
