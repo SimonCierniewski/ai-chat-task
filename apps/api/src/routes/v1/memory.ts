@@ -1089,6 +1089,90 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
     }
   });
 
+  // POST /api/v1/memory/graph/add - Add data directly to the graph
+  fastify.post('/graph/add', {
+    schema: {
+      summary: 'Add data directly to the graph',
+      description: 'Add a message or data directly to the user\'s knowledge graph',
+      tags: ['Memory'],
+      body: Type.Object({
+        userId: Type.String({minLength: 1}),
+        type: Type.String({enum: ['message']}),
+        data: Type.String({minLength: 1, maxLength: 10000})
+      }),
+      response: {
+        200: Type.Object({
+          ok: Type.Literal(true),
+          episodeId: Type.Optional(Type.String()),
+          message: Type.String()
+        }),
+        400: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        }),
+        500: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        })
+      }
+    }
+  }, async (request: FastifyRequest<{ Body: { userId: string; type: string; data: string } }>, reply: FastifyReply) => {
+    const { userId, type, data } = request.body;
+    const reqId = request.id;
+    
+    try {
+      logger.info({
+        req_id: reqId,
+        userId,
+        type,
+        dataLength: data.length
+      }, 'Adding data directly to graph');
+      
+      // Ensure user exists in Zep
+      await zepAdapter.ensureUser(userId);
+      
+      // Add data to the graph
+      const episode = await zepAdapter.client.graph.add({
+        userId,
+        type,
+        data
+      });
+      
+      logger.info({
+        req_id: reqId,
+        userId,
+        episodeId: episode?.episodeId,
+        success: true
+      }, 'Data added to graph successfully');
+      
+      return reply.send({
+        ok: true,
+        episodeId: episode?.episodeId,
+        message: 'Data successfully added to the graph'
+      });
+      
+    } catch (error: any) {
+      logger.error({
+        req_id: reqId,
+        userId,
+        error: error.message,
+        stack: error.stack
+      }, 'Failed to add data to graph');
+      
+      if (error.statusCode === 404) {
+        return reply.status(400).send({
+          error: 'USER_NOT_FOUND',
+          message: 'User not found in Zep. Please initialize the user first.'
+        });
+      }
+      
+      return reply.status(500).send({
+        error: 'GRAPH_ADD_ERROR',
+        message: error.message || 'Failed to add data to graph'
+      });
+    }
+  });
+
   // POST /api/v1/memory/init - Initialize user and thread in Zep
   fastify.post('/init', {
     schema: {

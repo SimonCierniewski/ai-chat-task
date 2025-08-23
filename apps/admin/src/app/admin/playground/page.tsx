@@ -51,6 +51,10 @@ export default function PlaygroundPage() {
   const [testingMode, setTestingMode] = useState(false);
   const [pastMessagesCount, setPastMessagesCount] = useState(4);
   
+  // Add data to graph state
+  const [graphData, setGraphData] = useState('');
+  const [isAddingToGraph, setIsAddingToGraph] = useState(false);
+  
   // Import conversations state
   const [importText, setImportText] = useState('');
   const [importMode, setImportMode] = useState<'zep-only' | 'memory-test' | 'full-test'>('zep-only');
@@ -566,6 +570,58 @@ export default function PlaygroundPage() {
       setGraphStatus('incomplete');
     } finally {
       setIsCheckingGraph(false);
+    }
+  };
+
+  const handleAddToGraph = async () => {
+    if (!graphData.trim() || isAddingToGraph || !selectedUserId) return;
+    
+    setIsAddingToGraph(true);
+    setError(null);
+    
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Please sign in to add data to graph');
+      }
+      
+      // Format the message with "User: " prefix
+      const formattedMessage = `User: ${graphData.trim()}`;
+      
+      // Call API to add data to graph
+      const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/graph/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ 
+          userId: selectedUserId,
+          type: 'message',
+          data: formattedMessage
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      // Show success feedback
+      alert('Data successfully added to the graph');
+      
+      // Keep the text in the box after adding (as requested)
+      // setGraphData(''); // Don't clear the text
+      
+    } catch (err: any) {
+      console.error('Graph add error:', err);
+      setError(err.message || 'Failed to add data to graph');
+    } finally {
+      setIsAddingToGraph(false);
     }
   };
 
@@ -1473,6 +1529,63 @@ export default function PlaygroundPage() {
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                   <p className="text-sm text-yellow-700">
                     Please select a user from the User card above before checking graph status.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+        
+        {/* Adding data to the graph Card */}
+        <div className="mt-8">
+          <Card title="Adding data to the graph" icon="📊">
+            <div className="mt-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                For example it can add to graph preferences of user's partner, provided by her/him during app's introduction.
+              </p>
+              
+              <div>
+                <div className="relative">
+                  <textarea
+                    value={graphData}
+                    onChange={(e) => {
+                      // Limit to 10000 characters
+                      if (e.target.value.length <= 10000) {
+                        setGraphData(e.target.value);
+                      }
+                    }}
+                    placeholder="Enter data to add to the graph..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    rows={6}
+                    disabled={isAddingToGraph}
+                  />
+                  <div className="absolute bottom-2 right-2 text-xs text-gray-500">
+                    {graphData.length}/10000
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                onClick={handleAddToGraph}
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={isAddingToGraph || !graphData.trim() || !selectedUserId}
+              >
+                {isAddingToGraph ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Adding...
+                  </>
+                ) : (
+                  'Add'
+                )}
+              </button>
+              
+              {/* User selection warning */}
+              {!selectedUserId && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-700">
+                    Please select a user from the User card above before adding data to the graph.
                   </p>
                 </div>
               )}
