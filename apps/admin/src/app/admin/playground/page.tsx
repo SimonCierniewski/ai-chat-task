@@ -49,6 +49,14 @@ export default function PlaygroundPage() {
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.');
   const [testingMode, setTestingMode] = useState(false);
   
+  // Import conversations state
+  const [importText, setImportText] = useState('');
+  const [importMode, setImportMode] = useState<'zep-only' | 'memory-test' | 'full-test'>('zep-only');
+  const [enableDelay, setEnableDelay] = useState(false);
+  const [humanSpeed, setHumanSpeed] = useState(5);
+  const [isImporting, setIsImporting] = useState(false);
+  const importTextAreaRef = useRef<HTMLTextAreaElement>(null);
+  
   // User management state
   const [users, setUsers] = useState<PlaygroundUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -435,6 +443,144 @@ export default function PlaygroundPage() {
       return `${Math.round(ms)}ms`;
     }
     return `${(ms / 1000).toFixed(2)}s`;
+  };
+
+  const handleAddAssistant = () => {
+    setImportText(prev => prev + '\n\n## Assistant ##\n');
+    // Scroll to bottom of textarea
+    setTimeout(() => {
+      if (importTextAreaRef.current) {
+        importTextAreaRef.current.scrollTop = importTextAreaRef.current.scrollHeight;
+      }
+    }, 10);
+  };
+
+  const handleAddUser = () => {
+    setImportText(prev => prev + '\n\n## User ##\n');
+    // Scroll to bottom of textarea
+    setTimeout(() => {
+      if (importTextAreaRef.current) {
+        importTextAreaRef.current.scrollTop = importTextAreaRef.current.scrollHeight;
+      }
+    }, 10);
+  };
+
+  const parseConversations = (text: string) => {
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    const sections = text.split(/## (User|Assistant) ##/i).filter(s => s.trim());
+    
+    for (let i = 0; i < sections.length; i += 2) {
+      const role = sections[i].toLowerCase().trim() as 'user' | 'assistant';
+      const content = sections[i + 1]?.trim();
+      if (content) {
+        messages.push({ role, content });
+      }
+    }
+    
+    return messages;
+  };
+
+  const calculateDelay = (text: string) => {
+    if (!enableDelay) return 0;
+    // Approximate human reading/writing speed
+    // humanSpeed from 0-10, where 5 is average
+    const wordsPerMinute = 40 + (humanSpeed * 20); // 40-240 WPM
+    const words = text.split(/\s+/).length;
+    const minutes = words / wordsPerMinute;
+    return Math.max(500, Math.min(minutes * 60 * 1000, 30000)); // Between 0.5s and 30s
+  };
+
+  const handleImportConversations = async () => {
+    if (!importText.trim() || isImporting || !selectedUserId) return;
+    
+    setIsImporting(true);
+    try {
+      const messages = parseConversations(importText);
+      if (messages.length === 0) {
+        setError('No valid messages found. Use "## User ##" and "## Assistant ##" to separate messages.');
+        return;
+      }
+
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Please sign in to import conversations');
+      }
+
+      // Process messages based on import mode
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        
+        if (importMode === 'zep-only') {
+          // Just save to Zep and DB without calling OpenAI
+          await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/import`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+              sessionId: selectedUserId,
+              message: msg
+            })
+          });
+        } else if (importMode === 'memory-test') {
+          // Save messages and test memory retrieval
+          await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/import`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+              sessionId: selectedUserId,
+              message: msg,
+              testMemory: true
+            })
+          });
+        } else if (importMode === 'full-test') {
+          // Only send user messages, get real AI responses
+          if (msg.role === 'user') {
+            const requestBody = {
+              message: msg.content,
+              useMemory,
+              contextMode,
+              sessionId: selectedUserId,
+              model,
+              returnMemory: false,
+              systemPrompt: systemPrompt.trim() || undefined
+            };
+            
+            await fetch(`${publicConfig.apiBaseUrl}/api/v1/chat`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`,
+                'Accept': 'text/event-stream'
+              },
+              body: JSON.stringify(requestBody)
+            });
+          }
+        }
+        
+        // Apply delay if enabled
+        if (enableDelay && i < messages.length - 1) {
+          const delay = calculateDelay(msg.content);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+      
+      setImportText('');
+      setError(null);
+      // Show success message
+      alert(`Successfully imported ${messages.length} messages`);
+    } catch (err: any) {
+      console.error('Import error:', err);
+      setError(err.message || 'Failed to import conversations');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   return (
@@ -866,6 +1012,173 @@ export default function PlaygroundPage() {
             </Card>
 
           </div>
+        </div>
+
+        {/* Import Conversations Card - Full width at bottom */}
+        <div className="mt-8">
+          <Card title="Import Conversations" icon="📥">
+            <div className="mt-4 space-y-4">
+              {/* Import Mode Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Import Mode
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      value="zep-only"
+                      checked={importMode === 'zep-only'}
+                      onChange={(e) => setImportMode(e.target.value as any)}
+                      className="mt-1 text-blue-600 focus:ring-blue-500"
+                      disabled={isImporting}
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Generate ZEP graph only</span>
+                      <p className="text-xs text-gray-500">
+                        It only saves messages in ZEP and DB, without calling memory and OpenAI, to focus on testing when graph is completed. 
+                        Note: check if ZEP processed all data, before continuing testing.
+                      </p>
+                    </div>
+                  </label>
+                  
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      value="memory-test"
+                      checked={importMode === 'memory-test'}
+                      onChange={(e) => setImportMode(e.target.value as any)}
+                      className="mt-1 text-blue-600 focus:ring-blue-500"
+                      disabled={isImporting}
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Test memory context</span>
+                      <p className="text-xs text-gray-500">
+                        It adds user and assistant messages, but for each turn it generates memory context from ZEP. 
+                        It allows test quality and speed of generated memory context and compare it to the same conversations, 
+                        but with different parameters. Note: consider adding delays to give ZEP time to process each message.
+                      </p>
+                    </div>
+                  </label>
+                  
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      value="full-test"
+                      checked={importMode === 'full-test'}
+                      onChange={(e) => setImportMode(e.target.value as any)}
+                      className="mt-1 text-blue-600 focus:ring-blue-500"
+                      disabled={isImporting}
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Test memory and OpenAI answers</span>
+                      <p className="text-xs text-gray-500">
+                        It ignores assistant messages and only sends user messages. 
+                        It allows to test quality and speed of memory context and OpenAI answers.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Delay Parameters */}
+              <div className="p-3 bg-gray-50 rounded-md space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="enableDelay"
+                    checked={enableDelay}
+                    onChange={(e) => setEnableDelay(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    disabled={isImporting}
+                  />
+                  <label htmlFor="enableDelay" className="text-sm font-medium text-gray-700">
+                    Enable delay between messages
+                  </label>
+                </div>
+                
+                {enableDelay && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Human writing/reading speed (0-10)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value={humanSpeed}
+                      onChange={(e) => setHumanSpeed(parseFloat(e.target.value))}
+                      className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={isImporting}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      0 = very slow (40 WPM), 5 = average (140 WPM), 10 = very fast (240 WPM)
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Import Text Area */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Conversation Messages
+                </label>
+                <textarea
+                  ref={importTextAreaRef}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder="Paste or type your conversation here. Use ## User ## and ## Assistant ## to separate messages..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  rows={10}
+                  disabled={isImporting}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddUser}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-400"
+                    disabled={isImporting}
+                  >
+                    + User
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddAssistant}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-400"
+                    disabled={isImporting}
+                  >
+                    + Assistant
+                  </button>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleImportConversations}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  disabled={isImporting || !importText.trim() || !selectedUserId}
+                >
+                  {isImporting ? 'Importing...' : 'Import'}
+                </button>
+              </div>
+
+              {/* User Selection Warning */}
+              {!selectedUserId && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-700">
+                    Please select a user from the User card above before importing conversations.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
       </div>
     </>
