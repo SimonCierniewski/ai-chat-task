@@ -16,6 +16,7 @@ COMMENT ON COLUMN public.memory_context.experiment_title IS 'Title of the experi
 COMMENT ON COLUMN public.memory_context.user_name IS 'User display name to add to messages sent to Zep for better context';
 
 -- Update the get_or_create_memory_context function to include the new field
+DROP FUNCTION IF EXISTS get_or_create_memory_context(uuid);
 CREATE OR REPLACE FUNCTION public.get_or_create_memory_context(
     p_user_id UUID
 )
