@@ -27,10 +27,12 @@ export async function GET(request: Request) {
     }
 
     // Get all users from memory_context that have the current user as owner
+    // Now fetching playground users (where user_id is null)
     const { data: memoryUsers, error: memoryError } = await supabase
       .from('memory_context')
-      .select('user_id, name')
-      .eq('owner_id', user.id);
+      .select('id, user_name, experiment_title')
+      .eq('owner_id', user.id)
+      .is('user_id', null);  // Only playground users
 
     if (memoryError) {
       console.error('Error fetching memory users:', memoryError);
@@ -44,14 +46,14 @@ export async function GET(request: Request) {
     // Get aggregated metrics for each user
     const usersWithMetrics = await Promise.all(
       memoryUsers.map(async (memoryUser) => {
-        // Get all messages for this user
+        // Get all messages for this user (using the playground user's id)
         const { data: messages, error: messagesError } = await supabase
           .from('messages')
           .select('role, start_ms, ttft_ms, total_ms, tokens_in, tokens_out, price')
-          .eq('user_id', memoryUser.user_id);
+          .eq('user_id', memoryUser.id);
 
         if (messagesError) {
-          console.error(`Error fetching messages for user ${memoryUser.user_id}:`, messagesError);
+          console.error(`Error fetching messages for user ${memoryUser.id}:`, messagesError);
           return null;
         }
 
@@ -91,8 +93,8 @@ export async function GET(request: Request) {
         const totalCost = memoryMetrics.cost + openAiMetrics.cost;
 
         return {
-          userId: memoryUser.user_id,
-          name: memoryUser.name || `User ${memoryUser.user_id.substring(0, 8)}`,
+          userId: memoryUser.id,
+          name: memoryUser.experiment_title || memoryUser.user_name || `User ${memoryUser.id.substring(0, 8)}`,
           memory: memoryMetrics,
           openai: openAiMetrics,
           total: {
