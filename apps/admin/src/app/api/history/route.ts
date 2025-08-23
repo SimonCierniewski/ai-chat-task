@@ -15,11 +15,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin (you may want to verify this based on your auth setup)
+    // Check if user is admin - use user_id column
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .single();
 
     // Temporarily allow access even if not explicitly admin
@@ -51,8 +51,8 @@ export async function GET(request: Request) {
     // Get aggregated metrics for each user
     const usersWithMetrics = await Promise.all(
       memoryUsers.map(async (memoryUser) => {
-        // Get the user ID - handle both old and new schema
-        const userId = memoryUser.id || memoryUser.user_id;
+        // Get the user ID - use user_id field
+        const userId = memoryUser.user_id;
         
         // Get all messages for this user
         const { data: messages, error: messagesError } = await supabase
@@ -100,9 +100,9 @@ export async function GET(request: Request) {
         // Calculate total cost
         const totalCost = memoryMetrics.cost + openAiMetrics.cost;
 
-        // Get the user identifier and name - handle both old and new schema
-        const userIdentifier = memoryUser.id || memoryUser.user_id;
-        const userName = memoryUser.experiment_title || memoryUser.user_name || memoryUser.name || `User ${userIdentifier.substring(0, 8)}`;
+        // Get the user identifier and name
+        const userIdentifier = memoryUser.user_id;
+        const userName = memoryUser.experiment_title || memoryUser.user_name || memoryUser.name || `User ${userIdentifier ? userIdentifier.substring(0, 8) : 'Unknown'}`;
         
         return {
           userId: userIdentifier,

@@ -14,11 +14,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
+    // Check if user is admin - try user_id column instead of id
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .single();
     
     console.log('User list - Profile check:', { 
@@ -56,9 +56,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
     }
 
-    // Format users for dropdown - handle both old and new schema
+    // Format users for dropdown - use user_id as the primary identifier
     const formattedUsers = (users || []).map(u => ({
-      id: u.id || u.user_id,  // Use id if available, otherwise user_id
+      id: u.user_id,  // Use user_id as the identifier
       name: u.user_name || u.name || '',
       experimentTitle: u.experiment_title || u.name || 'Untitled Experiment',
       label: u.experiment_title || u.name || 'Untitled Experiment'  // Use experiment title as label in dropdowns

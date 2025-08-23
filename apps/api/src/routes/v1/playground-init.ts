@@ -75,19 +75,22 @@ export const playgroundInitRoute: FastifyPluginAsync = async (server) => {
       }, 'Playground user initialization request');
 
       try {
+        // Generate a simple user ID for the playground user
+        const playgroundUserId = `playground_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        
         // Create user in memory_context table
         const supabaseAdmin = getSupabaseAdmin();
         const { data, error: memoryError } = await supabaseAdmin
           .from('memory_context')
           .insert({
-            // Don't set user_id for playground users
+            user_id: playgroundUserId, // Simple text ID, not a foreign key
             owner_id: adminId,
             user_name: userName?.trim() || null,
             experiment_title: experimentTitle.trim(),
             context_block: '',
             metadata: {}
           })
-          .select('id, experiment_title, user_name')
+          .select('id, user_id, experiment_title, user_name')
           .single();
 
         if (memoryError || !data) {
@@ -110,7 +113,7 @@ export const playgroundInitRoute: FastifyPluginAsync = async (server) => {
         logger.info({
           req_id: reqId,
           adminId,
-          playgroundUserId: data.id,
+          playgroundUserId: data.user_id,
           experimentTitle,
           userName
         }, 'Playground user created successfully');
@@ -118,7 +121,7 @@ export const playgroundInitRoute: FastifyPluginAsync = async (server) => {
         return reply.send({
           success: true,
           user: {
-            id: data.id,
+            id: data.user_id, // Return user_id as the identifier
             experimentTitle: data.experiment_title,
             userName: data.user_name
           }
