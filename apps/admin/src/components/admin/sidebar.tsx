@@ -29,6 +29,12 @@ export function AdminSidebar() {
       enabled: publicConfig.features.playground 
     },
     { 
+      label: 'History', 
+      href: '/admin/history', 
+      icon: '📜',
+      enabled: true 
+    },
+    { 
       label: 'Users', 
       href: '/admin/users', 
       icon: '👥',
