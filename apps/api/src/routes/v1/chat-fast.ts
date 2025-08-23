@@ -189,12 +189,14 @@ async function loadCachedContextFromDB(
 
     const context = cachedContext[0] as MemoryContextWithStatus;
 
-    logger.info({
-      req_id: reqId,
-      user_id: userId,
-      cache_version: context.version,
-      cached: true
-    }, 'Using cached memory context');
+    if (context?.context_block) {
+      logger.info({
+        req_id: reqId,
+        user_id: userId,
+        cache_version: context.version,
+        cached: true
+      }, 'Using cached memory context');
+    }
 
     return context?.context_block;
 
@@ -670,10 +672,10 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
 
                     // Step 7: Store messages in database (skip in testing mode)
                     await storeConversationInDB(sessionId, message, userId, startTime, contextBlock, memoryStartMs, memoryMs, outputText, openAIStartTime, openAIMetrics, usageCalc, model, openAIDoneTime, reqId);
-                    
+
                     // Step 8: Update memory context cache after successful Zep storage
                     loadContextAndStoreInDB(userId, sessionId, contextMode, reqId)
-                    
+
                   } else {
                     logger.info({
                       req_id: req.id,

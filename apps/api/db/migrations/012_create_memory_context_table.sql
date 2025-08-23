@@ -168,7 +168,7 @@ GRANT EXECUTE ON FUNCTION public.get_or_create_memory_context(UUID) TO service_r
 
 COMMENT ON FUNCTION public.get_or_create_memory_context IS 'Gets existing memory context or creates a new one if it doesn''t exist';
 
--- Create function to update memory context (no expiry)
+-- Create function to update or create memory context (upsert)
 CREATE OR REPLACE FUNCTION public.update_memory_context(
     p_user_id UUID,
     p_context_block TEXT,
@@ -180,15 +180,29 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-    UPDATE public.memory_context
+    -- Use INSERT ... ON CONFLICT to handle both insert and update
+    INSERT INTO public.memory_context (
+        user_id,
+        context_block,
+        zep_parameters,
+        last_session_id,
+        expires_at
+    ) VALUES (
+        p_user_id,
+        p_context_block,
+        COALESCE(p_zep_parameters, '{}'::jsonb),
+        p_session_id,
+        NULL -- Never expires
+    )
+    ON CONFLICT (user_id) DO UPDATE
     SET 
-        context_block = p_context_block,
-        zep_parameters = COALESCE(p_zep_parameters, zep_parameters),
+        context_block = EXCLUDED.context_block,
+        zep_parameters = COALESCE(EXCLUDED.zep_parameters, memory_context.zep_parameters),
         expires_at = NULL, -- Never expires
-        last_session_id = COALESCE(p_session_id, last_session_id)
-    WHERE user_id = p_user_id;
+        last_session_id = COALESCE(EXCLUDED.last_session_id, memory_context.last_session_id),
+        updated_at = NOW();
     
-    RETURN FOUND;
+    RETURN TRUE;
 END;
 $$;
 
@@ -196,7 +210,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.update_memory_context(UUID, TEXT, JSONB, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_memory_context(UUID, TEXT, JSONB, TEXT) TO service_role;
 
-COMMENT ON FUNCTION public.update_memory_context IS 'Updates memory context for a user (never expires)';
+COMMENT ON FUNCTION public.update_memory_context IS 'Updates or creates memory context for a user (upsert with no expiry)';
 
 -- Create function to cleanup expired contexts (for scheduled jobs)
 CREATE OR REPLACE FUNCTION public.cleanup_expired_memory_contexts()
