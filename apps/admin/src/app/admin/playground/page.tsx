@@ -1803,7 +1803,96 @@ export default function PlaygroundPage() {
 
           {/* Response Panel */}
           <div className="space-y-6">
-            {/* Configuration Card */}
+            {/* Memory Context - At the top */}
+            <Card title="Memory Context" icon="🧠">
+              <div className="mt-4 space-y-3">
+                {memoryContext && memoryContext.results ? (
+                  <>
+                    <div className="text-sm text-gray-600">
+                      Retrieved in {memoryContext.memoryMs}ms
+                    </div>
+                    <div className="max-h-60 overflow-y-auto">
+                      <div className="p-3 bg-gray-50 rounded-md border border-gray-200">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                          {memoryContext.results}
+                        </pre>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-gray-400 italic text-center py-8">
+                    {useMemory ? (
+                      isStreaming ? 'Retrieving memory context...' : 'No memory context retrieved'
+                    ) : (
+                      'Memory retrieval is disabled'
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Response Card - Below Memory Context */}
+            <Card title="Response" icon="💬" className="mt-4">
+              <div className="mt-4 min-h-[400px] p-4 bg-gray-50 rounded-md">
+                {error ? (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-red-700">{error}</p>
+                  </div>
+                ) : response ? (
+                  <div className="text-gray-700 whitespace-pre-wrap">{response}</div>
+                ) : (
+                  <div className="text-gray-400 italic">
+                    {isStreaming ? 'Waiting for response...' : 'Response will appear here...'}
+                  </div>
+                )}
+              </div>
+              {/* OpenAI Processing Times */}
+              {timing && (timing.ttft_ms !== undefined || timing.openai_ms !== undefined) && (
+                <div className="mt-2 px-4 py-2 bg-blue-50 rounded-md">
+                  <div className="flex items-center gap-4 text-sm text-blue-700">
+                    {timing.ttft_ms !== undefined && (
+                      <>
+                        <span className="font-medium">TTFT:</span>
+                        <span>{formatTiming(timing.ttft_ms)}</span>
+                      </>
+                    )}
+                    {timing.openai_ms !== undefined && (
+                      <>
+                        <span className="font-medium">OpenAI Processing:</span>
+                        <span>{formatTiming(timing.openai_ms)}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Usage Stats */}
+              {usage && (
+                <div className="mt-4 grid grid-cols-3 gap-4">
+                  <div className="p-3 bg-blue-50 rounded-md">
+                    <p className="text-xs text-blue-600 font-medium">Input Tokens</p>
+                    <p className="text-lg font-bold text-blue-900">{usage.tokens_in.toLocaleString()}</p>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded-md">
+                    <p className="text-xs text-green-600 font-medium">Output Tokens</p>
+                    <p className="text-lg font-bold text-green-900">{usage.tokens_out.toLocaleString()}</p>
+                  </div>
+                  <div className="p-3 bg-yellow-50 rounded-md">
+                    <p className="text-xs text-yellow-600 font-medium">Cost</p>
+                    <p className="text-lg font-bold text-yellow-900">{formatCost(usage.cost_usd)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Model Info */}
+              {usage && (
+                <div className="mt-2 text-xs text-gray-500 text-center">
+                  Model: {usage.model}
+                </div>
+              )}
+            </Card>
+
+            {/* Configuration Card - Moved below Response */}
             <Card title="Configuration" icon="⚙️">
               <div className="mt-4 space-y-4">
                 <div>
@@ -1875,7 +1964,7 @@ export default function PlaygroundPage() {
               </div>
             </Card>
 
-            {/* System Prompt Card */}
+            {/* System Prompt Card - At the bottom */}
             <Card title="System Prompt" icon="🤖">
               <div className="mt-4">
                 <textarea
@@ -1890,95 +1979,6 @@ export default function PlaygroundPage() {
                   This prompt sets the behavior and context for the AI assistant.
                 </p>
               </div>
-            </Card>
-
-            {/* Memory Context */}
-            <Card title="Memory Context" icon="🧠">
-              <div className="mt-4 space-y-3">
-                {memoryContext && memoryContext.results ? (
-                  <>
-                    <div className="text-sm text-gray-600">
-                      Retrieved in {memoryContext.memoryMs}ms
-                    </div>
-                    <div className="max-h-60 overflow-y-auto">
-                      <div className="p-3 bg-gray-50 rounded-md border border-gray-200">
-                        <pre className="text-sm text-gray-700 whitespace-pre-wrap">
-                          {memoryContext.results}
-                        </pre>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-sm text-gray-400 italic text-center py-8">
-                    {useMemory ? (
-                      isStreaming ? 'Retrieving memory context...' : 'No memory context retrieved'
-                    ) : (
-                      'Memory retrieval is disabled'
-                    )}
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* Response Card */}
-            <Card title="Response" icon="💬" className="mt-4">
-              <div className="mt-4 min-h-[400px] p-4 bg-gray-50 rounded-md">
-                {error ? (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                    <p className="text-red-700">{error}</p>
-                  </div>
-                ) : response ? (
-                  <div className="text-gray-700 whitespace-pre-wrap">{response}</div>
-                ) : (
-                  <div className="text-gray-400 italic">
-                    {isStreaming ? 'Waiting for response...' : 'Response will appear here...'}
-                  </div>
-                )}
-              </div>
-              {/* OpenAI Processing Times */}
-              {timing && (timing.ttft_ms !== undefined || timing.openai_ms !== undefined) && (
-                <div className="mt-2 px-4 py-2 bg-blue-50 rounded-md">
-                  <div className="flex items-center gap-4 text-sm text-blue-700">
-                    {timing.ttft_ms !== undefined && (
-                      <>
-                        <span className="font-medium">TTFT:</span>
-                        <span>{formatTiming(timing.ttft_ms)}</span>
-                      </>
-                    )}
-                    {timing.openai_ms !== undefined && (
-                      <>
-                        <span className="font-medium">OpenAI Processing:</span>
-                        <span>{formatTiming(timing.openai_ms)}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Usage Stats */}
-              {usage && (
-                <div className="mt-4 grid grid-cols-3 gap-4">
-                  <div className="p-3 bg-blue-50 rounded-md">
-                    <p className="text-xs text-blue-600 font-medium">Input Tokens</p>
-                    <p className="text-lg font-bold text-blue-900">{usage.tokens_in.toLocaleString()}</p>
-                  </div>
-                  <div className="p-3 bg-green-50 rounded-md">
-                    <p className="text-xs text-green-600 font-medium">Output Tokens</p>
-                    <p className="text-lg font-bold text-green-900">{usage.tokens_out.toLocaleString()}</p>
-                  </div>
-                  <div className="p-3 bg-yellow-50 rounded-md">
-                    <p className="text-xs text-yellow-600 font-medium">Cost</p>
-                    <p className="text-lg font-bold text-yellow-900">{formatCost(usage.cost_usd)}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Model Info */}
-              {usage && (
-                <div className="mt-2 text-xs text-gray-500 text-center">
-                  Model: {usage.model}
-                </div>
-              )}
             </Card>
 
           </div>
