@@ -40,12 +40,14 @@ class SessionsRepository(
     private val CACHE_TTL = TimeUnit.MINUTES.toMillis(5)
     
     /**
-     * Get all sessions with caching
+     * Get all sessions with caching - filters out empty sessions
      */
     fun getAllSessions(): Flow<List<ChatSession>> {
         return sessionDao.getAllSessions()
             .map { entities ->
-                entities.map { it.toDomainModel() }
+                entities
+                    .filter { it.messageCount > 0 } // Filter out empty sessions
+                    .map { it.toDomainModel() }
             }
             .onStart {
                 // Don't auto-refresh here, let the UI control when to refresh
@@ -114,10 +116,11 @@ class SessionsRepository(
                 MessageEntity.fromDomainModel(message, maxOrder + 1)
             )
             
-            // Update session timestamp and count
+            // Update session timestamp and count with actual count from DB
+            val actualCount = sessionDao.getMessageCount(message.sessionId)
             sessionDao.updateSessionStats(
                 sessionId = message.sessionId,
-                count = sessionDao.getMessageCount(message.sessionId),
+                count = actualCount,
                 lastMessageAt = message.timestamp
             )
         }
@@ -129,6 +132,15 @@ class SessionsRepository(
     suspend fun updateSessionTitle(sessionId: String, title: String) {
         withContext(Dispatchers.IO) {
             sessionDao.updateSessionTitle(sessionId, title)
+        }
+    }
+    
+    /**
+     * Update session
+     */
+    suspend fun updateSession(session: ChatSession) {
+        withContext(Dispatchers.IO) {
+            sessionDao.updateSession(SessionEntity.fromDomainModel(session))
         }
     }
     
@@ -161,14 +173,22 @@ class SessionsRepository(
             try {
                 val sessions = fetchSessionsFromApi()
                 
-                // Clear old sessions first to ensure fresh data
-                sessionDao.clearAllSessions()
-                
-                // Insert new sessions
-                if (sessions.isNotEmpty()) {
-                    sessionDao.insertSessions(
-                        sessions.map { SessionEntity.fromDomainModel(it) }
-                    )
+                // Don't clear all sessions - update existing ones and add new ones
+                // This preserves local message counts
+                for (session in sessions) {
+                    val existingSession = sessionDao.getSession(session.id)
+                    if (existingSession != null) {
+                        // Update existing session but keep local message count
+                        val localMessageCount = sessionDao.getMessageCount(session.id)
+                        sessionDao.updateSession(
+                            SessionEntity.fromDomainModel(
+                                session.copy(messageCount = localMessageCount)
+                            )
+                        )
+                    } else {
+                        // Insert new session
+                        sessionDao.insertSession(SessionEntity.fromDomainModel(session))
+                    }
                 }
             } catch (e: Exception) {
                 // Handle error - cache remains valid

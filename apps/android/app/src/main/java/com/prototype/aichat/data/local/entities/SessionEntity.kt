@@ -19,6 +19,7 @@ data class SessionEntity(
     val userId: String,
     val title: String?,
     val createdAt: Long,
+    val updatedAt: Long,
     val lastMessageAt: Long?,
     val messageCount: Int,
     val lastSyncedAt: Long = System.currentTimeMillis()
@@ -32,6 +33,7 @@ data class SessionEntity(
             userId = userId,
             title = title,
             createdAt = createdAt,
+            updatedAt = updatedAt,
             lastMessageAt = lastMessageAt,
             messageCount = messageCount
         )
@@ -47,6 +49,7 @@ data class SessionEntity(
                 userId = session.userId,
                 title = session.title,
                 createdAt = session.createdAt,
+                updatedAt = session.updatedAt,
                 lastMessageAt = session.lastMessageAt,
                 messageCount = session.messageCount
             )

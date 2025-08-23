@@ -28,7 +28,12 @@ enum class MessageRole {
 @Serializable
 data class MessageMetadata(
     val model: String? = null,
-    val durationMs: Long? = null
+    val durationMs: Long? = null,
+    val tokensIn: Int? = null,
+    val tokensOut: Int? = null,
+    val cost: Double? = null,
+    val ttftMs: Long? = null,
+    val totalMs: Long? = null
 )
 
 @Serializable
@@ -36,6 +41,7 @@ data class ChatSession(
     val id: String = SessionIdGenerator.generate(),
     val userId: String,
     val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
     val lastMessageAt: Long? = null,
     val title: String? = null,
     val messageCount: Int = 0

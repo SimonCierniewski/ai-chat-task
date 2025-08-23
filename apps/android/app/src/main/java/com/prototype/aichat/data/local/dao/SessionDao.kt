@@ -74,6 +74,24 @@ interface SessionDao {
     @Query("SELECT MAX(timestamp) FROM messages WHERE sessionId = :sessionId")
     suspend fun getLastMessageTime(sessionId: String): Long?
     
+    @Query("SELECT MAX(sequenceNumber) FROM messages WHERE sessionId = :sessionId")
+    suspend fun getMaxMessageOrder(sessionId: String): Int?
+    
+    @Query("UPDATE sessions SET title = :title WHERE id = :sessionId")
+    suspend fun updateSessionTitle(sessionId: String, title: String)
+    
+    @Query("SELECT EXISTS(SELECT 1 FROM sessions WHERE id = :sessionId)")
+    suspend fun sessionExists(sessionId: String): Boolean
+    
+    @Query("SELECT * FROM sessions ORDER BY lastMessageAt DESC LIMIT 1")
+    suspend fun getMostRecentSession(): SessionEntity?
+    
+    @Query("SELECT MIN(lastSyncedAt) FROM sessions")
+    suspend fun getLastSyncTime(): Long?
+    
+    @Query("DELETE FROM sessions WHERE id = :sessionId")
+    suspend fun deleteSession(sessionId: String)
+    
     // Combined operations
     
     @Transaction
