@@ -52,6 +52,26 @@ fun MessageBubbleWithUsage(
 }
 
 /**
+ * Message bubble with streaming indicator
+ */
+@Composable
+fun MessageBubbleWithStreaming(
+    message: ChatMessage,
+    isStreaming: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        MessageBubble(
+            message = message
+        )
+        // Show streaming cursor if this message is being streamed
+        if (isStreaming && message.role == MessageRole.ASSISTANT) {
+            StreamingCursor()
+        }
+    }
+}
+
+/**
  * Single message bubble
  */
 @Composable
@@ -131,6 +151,33 @@ fun MessageBubble(
     }
 }
 
+
+/**
+ * Simple streaming cursor (blinking underscore)
+ */
+@Composable
+fun StreamingCursor(
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition()
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(500),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+    
+    Text(
+        text = "▌",
+        modifier = modifier
+            .alpha(alpha)
+            .padding(start = 2.dp),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.primary
+    )
+}
 
 /**
  * Streaming indicator with animated dots

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -68,8 +69,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.prototype.aichat.BuildConfig
 import com.prototype.aichat.domain.models.ChatMessage
+import com.prototype.aichat.domain.models.MessageRole
 import com.prototype.aichat.domain.models.StreamingState
 import com.prototype.aichat.ui.components.MessageBubbleWithUsage
+import com.prototype.aichat.ui.components.MessageBubbleWithStreaming
 import com.prototype.aichat.ui.components.StreamingIndicator
 import com.prototype.aichat.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
@@ -309,11 +312,18 @@ fun MessageList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(
+        itemsIndexed(
             items = messages,
-            key = { it.id }
-        ) { message ->
-            MessageBubbleWithUsage(message = message)
+            key = { _, message -> message.id },
+            contentType = { _, message -> message.role }
+        ) { index, message ->
+            val isLastAssistantMessage = index == messages.lastIndex && 
+                message.role == MessageRole.ASSISTANT && 
+                isStreaming
+            MessageBubbleWithStreaming(
+                message = message, 
+                isStreaming = isLastAssistantMessage
+            )
         }
         
         // Streaming indicator
