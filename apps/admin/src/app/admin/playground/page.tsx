@@ -76,6 +76,13 @@ export default function PlaygroundPage() {
   const [ontologyRelations, setOntologyRelations] = useState('{\n  "KNOWS": {\n    "description": "Personal acquaintance",\n    "source_types": ["Person"],\n    "target_types": ["Person"]\n  },\n  "WORKS_AT": {\n    "description": "Employment relationship",\n    "source_types": ["Person"],\n    "target_types": ["Organization"]\n  },\n  "LOCATED_IN": {\n    "description": "Physical presence in a location",\n    "source_types": ["Person", "Organization"],\n    "target_types": ["Location"]\n  }\n}');
   const [isUpdatingOntology, setIsUpdatingOntology] = useState(false);
   
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchNodeLabels, setSearchNodeLabels] = useState('');
+  const [searchEdgeTypes, setSearchEdgeTypes] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<string | null>(null);
+  
   // Add data to graph state
   const [graphData, setGraphData] = useState('');
   const [isAddingToGraph, setIsAddingToGraph] = useState(false);
@@ -677,6 +684,134 @@ export default function PlaygroundPage() {
     }
   };
 
+  const handleSearch = async () => {
+    // Validate that a query-based context mode is selected
+    if (!['node_search', 'edge_search', 'node_edge_search', 'bfs'].includes(contextMode)) {
+      alert('Please select a query-based context mode (Node Search, Edge Search, Node + Edge Search, or BFS) before searching.');
+      return;
+    }
+    
+    if (!searchQuery.trim() || isSearching || !selectedUserId) return;
+    
+    setIsSearching(true);
+    setSearchResults(null);
+    setError(null);
+    
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Please sign in to search');
+      }
+      
+      // Build search filters
+      const searchFilters: any = {};
+      if (searchNodeLabels.trim()) {
+        searchFilters.node_labels = searchNodeLabels.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      if (searchEdgeTypes.trim()) {
+        searchFilters.edge_types = searchEdgeTypes.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      
+      // Build graph search params with filters
+      const graphSearchParamsWithFilters = {
+        ...graphSearchParams,
+        search_filters: Object.keys(searchFilters).length > 0 ? searchFilters : undefined
+      };
+      
+      // Create request body for search
+      const requestBody: any = {
+        message: searchQuery.trim(),
+        useMemory: true,
+        contextMode,
+        sessionId: selectedUserId,
+        model: model,
+        returnMemory: true,
+        testingMode: true, // Don't save to Zep
+        assistantOutput: '-', // Skip OpenAI
+        graphSearchParams: graphSearchParamsWithFilters
+      };
+      
+      // Make the search request
+      const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'Accept': 'text/event-stream'
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      }
+      
+      // Process SSE stream to get memory context
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEvent: string | null = null;
+      let memoryContext: string | undefined;
+      
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.trim() === '') {
+              currentEvent = null;
+              continue;
+            }
+            
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              
+              if (data === '[DONE]') continue;
+              
+              try {
+                const parsed = JSON.parse(data);
+                
+                if (currentEvent === 'memory') {
+                  memoryContext = parsed.results;
+                  break;
+                }
+              } catch (e) {
+                console.error('Failed to parse SSE data:', e);
+              }
+            }
+          }
+          
+          if (memoryContext) break;
+        }
+        
+        reader.cancel();
+      }
+      
+      if (memoryContext) {
+        setSearchResults(memoryContext);
+      } else {
+        setSearchResults('No results found for your search query.');
+      }
+      
+    } catch (err: any) {
+      console.error('Search error:', err);
+      setError(err.message || 'Search failed');
+      setSearchResults(`Error: ${err.message || 'Search failed'}`);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const handleUpdateOntology = async () => {
     if (!selectedUserId || isUpdatingOntology) return;
     
@@ -1134,41 +1269,133 @@ export default function PlaygroundPage() {
               </div>
             </Card>
             
-            <Card title="Configuration" icon="⚙️">
+            {/* Message Card */}
+            <Card title="Message" icon="💬">
               <form onSubmit={handleSubmit} className="mt-4 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Model
-                  </label>
-                  <select
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
+                  <textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Type your message here..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={4}
                     disabled={isStreaming}
-                  >
-                    {models.map((m) => (
-                      <option key={m.model} value={m.model}>
-                        {m.display_name || m.model}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={isStreaming || !message.trim()}
+                  className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isStreaming ? 'Streaming...' : 'Send Message'}
+                </button>
+              </form>
+            </Card>
+            
+            {/* Search Card */}
+            <Card title="Search" icon="🔍">
+              <div className="mt-4 space-y-4">
+                <p className="text-xs text-gray-500">
+                  Search is based on Context mode selected in Context Mode card (based on message query)
+                </p>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Query
+                  </label>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Enter search query..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isSearching}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Search Filters
+                  </label>
+                  <div className="ml-4 space-y-2">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">
+                        Node Labels (comma-separated)
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={useMemory}
-                        onChange={(e) => setUseMemory(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        disabled={isStreaming}
+                        type="text"
+                        value={searchNodeLabels}
+                        onChange={(e) => setSearchNodeLabels(e.target.value)}
+                        placeholder="e.g., Person, Organization"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={isSearching}
                       />
-                      <span className="text-sm font-medium text-gray-700">
-                        Use Memory Context
-                      </span>
-                    </label>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">
+                        Edge Types (comma-separated)
+                      </label>
+                      <input
+                        type="text"
+                        value={searchEdgeTypes}
+                        onChange={(e) => setSearchEdgeTypes(e.target.value)}
+                        placeholder="e.g., KNOWS, WORKS_AT"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={isSearching}
+                      />
+                    </div>
                   </div>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleSearch}
+                  disabled={isSearching || !searchQuery.trim() || !selectedUserId}
+                  className="w-full py-2 px-4 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSearching ? 'Searching...' : 'Search'}
+                </button>
+                
+                {/* Search Results */}
+                {searchResults && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-md">
+                    <div className="text-sm font-medium text-gray-700 mb-2">Search Results:</div>
+                    <div className="max-h-60 overflow-y-auto">
+                      <pre className="text-xs text-gray-600 whitespace-pre-wrap">
+                        {searchResults}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+                
+                {/* User/Mode Warning */}
+                {!selectedUserId && (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-700">
+                      Please select a user from the User card above before searching.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
+            
+            {/* Context Mode Card */}
+            <Card title="Context Mode" icon="🧠">
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={useMemory}
+                      onChange={(e) => setUseMemory(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      disabled={isStreaming}
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Use Memory Context
+                    </span>
+                  </label>
+                </div>
 
                   {useMemory && (
                     <div className="ml-6 space-y-3">
@@ -1468,6 +1695,28 @@ export default function PlaygroundPage() {
                       )}
                     </div>
                   )}
+              </div>
+            </Card>
+            
+            {/* Configuration Card */}
+            <Card title="Configuration" icon="⚙️">
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Model
+                  </label>
+                  <select
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isStreaming}
+                  >
+                    {models.map((m) => (
+                      <option key={m.model} value={m.model}>
+                        {m.display_name || m.model}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -1519,28 +1768,7 @@ export default function PlaygroundPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Message
-                  </label>
-                  <textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Type your message here..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows={4}
-                    disabled={isStreaming}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isStreaming || !message.trim()}
-                  className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isStreaming ? 'Streaming...' : 'Send Message'}
-                </button>
-              </form>
+              </div>
             </Card>
 
             {/* Performance Metrics */}
