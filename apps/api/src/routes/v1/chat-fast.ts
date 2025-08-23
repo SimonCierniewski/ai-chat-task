@@ -178,7 +178,9 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         systemPrompt,
         returnMemory = false,
         contextMode = 'basic',
-        testingMode = false
+        testingMode = false,
+        pastMessagesCount = 4,
+        saveToZep = true
       } = req.body;
       const userId = req.user!.id;
       const reqId = req.id;
@@ -235,25 +237,61 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         }
         const memoryMs = Date.now() - memoryStartMs;
 
-        // Step 3: Build prompt (no complex assembly, just concatenation)
+        // Step 3: Load past messages if requested
+        let pastMessages = '';
+        if (pastMessagesCount > 0 && sessionId) {
+          try {
+            const supabaseAdmin = getSupabaseAdmin();
+            const { data: messages, error } = await supabaseAdmin
+              .from('messages')
+              .select('role, content, created_at')
+              .eq('thread_id', sessionId)
+              .eq('user_id', userId)
+              .in('role', ['user', 'assistant'])
+              .order('created_at', { ascending: false })
+              .limit(pastMessagesCount * 2); // Get both user and assistant messages
+            
+            if (!error && messages && messages.length > 0) {
+              // Reverse to get chronological order
+              const orderedMessages = messages.reverse();
+              pastMessages = '\n\nPrevious conversation:\n' + 
+                orderedMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
+              
+              logger.info({
+                req_id: reqId,
+                loaded_messages: orderedMessages.length,
+                session_id: sessionId
+              }, 'Loaded past messages for context');
+            }
+          } catch (error) {
+            logger.warn({
+              req_id: reqId,
+              error,
+              session_id: sessionId
+            }, 'Failed to load past messages');
+          }
+        }
+
+        // Step 4: Build prompt (no complex assembly, just concatenation)
         const messages: any[] = [];
 
         // System prompt
         const finalSystemPrompt = systemPrompt ||
           'You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.';
 
-        // Add context if available
+        // Add context and past messages if available
+        let systemContent = finalSystemPrompt;
         if (contextBlock) {
-          messages.push({
-            role: 'system',
-            content: `${finalSystemPrompt}\n\nContext:\n${contextBlock}`
-          });
-        } else {
-          messages.push({
-            role: 'system',
-            content: finalSystemPrompt
-          });
+          systemContent += `\n\nContext:\n${contextBlock}`;
         }
+        if (pastMessages) {
+          systemContent += pastMessages;
+        }
+        
+        messages.push({
+          role: 'system',
+          content: systemContent
+        });
 
         // Add user message
         messages.push({
@@ -428,13 +466,15 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                 }, 'Fast chat: Saving telemetry error');
               }
 
-              // Step 6: Store conversation in Zep if successful and session exists (skip in testing mode)
-              if (testingMode) {
+              // Step 6: Store conversation in Zep if successful and session exists (skip in testing mode or if saveToZep is false)
+              if (testingMode || !saveToZep) {
                 logger.info({
                   req_id: req.id,
                   user_id: userId,
-                  session_id: sessionId
-                }, 'Testing mode enabled - skipping message storage');
+                  session_id: sessionId,
+                  testing_mode: testingMode,
+                  save_to_zep: saveToZep
+                }, 'Skipping message storage (testing mode or saveToZep disabled)');
               } else if (reason === 'stop' && sessionId && outputText) {
                 try {
                   const memoryUpsertStartMs = Date.now()
@@ -504,8 +544,8 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                     }
                   }
 
-                  // Step 7: Store messages in database (skip in testing mode)
-                  if (!testingMode) {
+                  // Step 7: Store messages in database (skip in testing mode or if saveToZep is false)
+                  if (!testingMode && saveToZep) {
                     try {
                     const supabaseAdmin = getSupabaseAdmin();
 

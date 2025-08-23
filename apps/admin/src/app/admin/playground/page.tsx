@@ -48,6 +48,8 @@ export default function PlaygroundPage() {
   const [model, setModel] = useState('gpt-4o-mini');
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.');
   const [testingMode, setTestingMode] = useState(false);
+  const [pastMessagesCount, setPastMessagesCount] = useState(4);
+  const [saveToZep, setSaveToZep] = useState(true);
   
   // Import conversations state
   const [importText, setImportText] = useState('');
@@ -320,7 +322,9 @@ export default function PlaygroundPage() {
         model,
         returnMemory: true, // Always request memory context in playground for debugging
         systemPrompt: systemPrompt.trim() || undefined,
-        testingMode // Add testing mode parameter
+        testingMode, // Add testing mode parameter
+        pastMessagesCount,
+        saveToZep
       };
 
       // Make POST request to initiate SSE stream
@@ -946,6 +950,43 @@ export default function PlaygroundPage() {
                       </p>
                     </div>
                   )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Number of past messages added to context
+                  </label>
+                  <select
+                    value={pastMessagesCount}
+                    onChange={(e) => setPastMessagesCount(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isStreaming}
+                  >
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                      <option key={num} value={num}>{num}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Load this many previous messages from the conversation history
+                  </p>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={saveToZep}
+                      onChange={(e) => setSaveToZep(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      disabled={isStreaming}
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Save to ZEP
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 ml-6 mt-1">
+                    Disabling it allows to test different parameters, without altering the ZEP graph
+                  </p>
                 </div>
 
                 <div>
