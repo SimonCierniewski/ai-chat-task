@@ -55,6 +55,7 @@ export default function PlaygroundPage() {
   const [enableDelay, setEnableDelay] = useState(false);
   const [humanSpeed, setHumanSpeed] = useState(5);
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const importTextAreaRef = useRef<HTMLTextAreaElement>(null);
   
   // User management state
@@ -467,33 +468,46 @@ export default function PlaygroundPage() {
 
   const parseConversations = (text: string) => {
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-    const sections = text.split(/## (User|Assistant) ##/i).filter(s => s.trim());
     
-    for (let i = 0; i < sections.length; i += 2) {
-      const role = sections[i].toLowerCase().trim() as 'user' | 'assistant';
-      const content = sections[i + 1]?.trim();
-      if (content) {
-        messages.push({ role, content });
+    // Split by headers and keep them
+    const parts = text.split(/(##\s*(User|Assistant)\s*##)/i);
+    
+    for (let i = 1; i < parts.length; i += 2) {
+      const headerMatch = parts[i].match(/##\s*(User|Assistant)\s*##/i);
+      if (headerMatch && parts[i + 1]) {
+        const role = headerMatch[1].toLowerCase() === 'user' ? 'user' : 'assistant';
+        const content = parts[i + 1].trim();
+        if (content) {
+          messages.push({ role, content });
+        }
       }
     }
     
     return messages;
   };
 
-  const calculateDelay = (text: string) => {
+  const calculateDelay = (userChars: number, assistantChars: number) => {
     if (!enableDelay) return 0;
-    // Approximate human reading/writing speed
+    
     // humanSpeed from 0-10, where 5 is average
-    const wordsPerMinute = 40 + (humanSpeed * 20); // 40-240 WPM
-    const words = text.split(/\s+/).length;
-    const minutes = words / wordsPerMinute;
-    return Math.max(500, Math.min(minutes * 60 * 1000, 30000)); // Between 0.5s and 30s
+    // Average typing speed: 40 chars/sec at speed 5
+    // Average reading speed: 60 chars/sec at speed 5
+    const typingCharsPerSec = 20 + (humanSpeed * 8); // 20-100 chars/sec
+    const readingCharsPerSec = 30 + (humanSpeed * 12); // 30-150 chars/sec
+    
+    const typingTime = (userChars / typingCharsPerSec) * 1000; // ms
+    const readingTime = (assistantChars / readingCharsPerSec) * 1000; // ms
+    
+    const totalDelay = typingTime + readingTime;
+    return Math.max(500, Math.min(totalDelay, 30000)); // Between 0.5s and 30s
   };
 
   const handleImportConversations = async () => {
     if (!importText.trim() || isImporting || !selectedUserId) return;
     
     setIsImporting(true);
+    setImportProgress({ current: 0, total: 0 });
+    
     try {
       const messages = parseConversations(importText);
       if (messages.length === 0) {
@@ -508,78 +522,143 @@ export default function PlaygroundPage() {
         throw new Error('Please sign in to import conversations');
       }
 
+      setImportProgress({ current: 0, total: messages.length });
+      
       // Process messages based on import mode
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
+        setImportProgress({ current: i + 1, total: messages.length });
+        
+        // Update the message text field to show current message
+        setMessage(msg.content);
+        
+        // Prepare request body based on import mode
+        let requestBody: any = {
+          message: msg.content,
+          sessionId: selectedUserId,
+          model,
+          systemPrompt: systemPrompt.trim() || undefined
+        };
         
         if (importMode === 'zep-only') {
-          // Just save to Zep and DB without calling OpenAI
-          await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/import`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify({
-              sessionId: selectedUserId,
-              message: msg
-            })
-          });
+          // Generate ZEP graph only - no memory, no OpenAI
+          requestBody.useMemory = false;
+          requestBody.returnMemory = false;
+          if (msg.role === 'assistant') {
+            requestBody.assistantOutput = msg.content; // Skip OpenAI for assistant messages
+          }
         } else if (importMode === 'memory-test') {
-          // Save messages and test memory retrieval
-          await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/import`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify({
-              sessionId: selectedUserId,
-              message: msg,
-              testMemory: true
-            })
-          });
+          // Test memory context - with memory, skip OpenAI
+          requestBody.useMemory = true;
+          requestBody.contextMode = contextMode;
+          requestBody.returnMemory = true;
+          if (msg.role === 'assistant') {
+            requestBody.assistantOutput = msg.content; // Skip OpenAI for assistant messages
+          }
         } else if (importMode === 'full-test') {
-          // Only send user messages, get real AI responses
-          if (msg.role === 'user') {
-            const requestBody = {
-              message: msg.content,
-              useMemory,
-              contextMode,
-              sessionId: selectedUserId,
-              model,
-              returnMemory: false,
-              systemPrompt: systemPrompt.trim() || undefined
-            };
-            
-            await fetch(`${publicConfig.apiBaseUrl}/api/v1/chat`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`,
-                'Accept': 'text/event-stream'
-              },
-              body: JSON.stringify(requestBody)
-            });
+          // Test memory and OpenAI answers - only for user messages
+          if (msg.role === 'assistant') {
+            // Skip assistant messages in full test mode
+            continue;
+          }
+          requestBody.useMemory = true;
+          requestBody.contextMode = contextMode;
+          requestBody.returnMemory = true;
+        }
+        
+        // Send the request using the standard chat endpoint
+        const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'Accept': 'text/event-stream'
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+          throw new Error(errorData.error || `Request failed with status ${response.status}`);
+        }
+
+        // Process SSE stream
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEvent: string | null = null;
+        let fullResponse = '';
+        
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.trim() === '') {
+                currentEvent = null;
+                continue;
+              }
+              
+              if (line.startsWith('event: ')) {
+                currentEvent = line.slice(7).trim();
+              } else if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+
+                if (data === '[DONE]') {
+                  continue;
+                }
+
+                try {
+                  const parsed = JSON.parse(data);
+                  
+                  // Update UI based on event type
+                  if (currentEvent === 'memory') {
+                    setMemoryContext(parsed as MemoryData);
+                  } else if (currentEvent === 'token' || (!currentEvent && parsed.text !== undefined)) {
+                    fullResponse += parsed.text;
+                    setResponse(fullResponse);
+                  } else if (currentEvent === 'usage' || (!currentEvent && parsed.tokens_in !== undefined)) {
+                    setUsage(parsed as UsageData);
+                  }
+                } catch (e) {
+                  console.error('Failed to parse SSE data:', e);
+                }
+              }
+            }
           }
         }
         
         // Apply delay if enabled
         if (enableDelay && i < messages.length - 1) {
-          const delay = calculateDelay(msg.content);
+          const nextMsg = messages[i + 1];
+          const userChars = msg.role === 'user' ? msg.content.length : 0;
+          const assistantChars = msg.role === 'assistant' ? msg.content.length : (fullResponse?.length || 0);
+          const delay = calculateDelay(userChars, assistantChars);
           await new Promise(resolve => setTimeout(resolve, delay));
+        } else if (importMode === 'zep-only') {
+          // Small delay for ZEP-only mode to avoid overwhelming the API
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
       
       setImportText('');
       setError(null);
+      setImportProgress({ current: 0, total: 0 });
+      
       // Show success message
       alert(`Successfully imported ${messages.length} messages`);
     } catch (err: any) {
       console.error('Import error:', err);
       setError(err.message || 'Failed to import conversations');
+      setImportProgress({ current: 0, total: 0 });
     } finally {
       setIsImporting(false);
+      setMessage(''); // Clear the message field
     }
   };
 
@@ -1017,6 +1096,16 @@ export default function PlaygroundPage() {
         {/* Import Conversations Card - Full width at bottom */}
         <div className="mt-8">
           <Card title="Import Conversations" icon="📥">
+            {/* Progress indicator */}
+            {isImporting && (
+              <div className="absolute top-4 right-4 flex items-center gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <span className="text-sm text-gray-600">
+                  {importProgress.current}/{importProgress.total}
+                </span>
+              </div>
+            )}
+            
             <div className="mt-4 space-y-4">
               {/* Import Mode Selection */}
               <div>

@@ -10,6 +10,7 @@ export interface ChatRequest {
   systemPrompt?: string; // Optional custom system prompt (for playground)
   contextMode?: 'basic' | 'summarized'; // Context retrieval mode (basic = raw, summarized = processed)
   testingMode?: boolean; // If true, don't store messages in Zep or database (for testing different responses)
+  assistantOutput?: string; // Pre-defined assistant response (skip OpenAI, used for importing conversations)
 }
 
 /**
@@ -58,6 +59,11 @@ export const chatRequestSchema = {
       type: 'boolean',
       default: false,
       description: 'Testing mode - do not store messages in Zep or database'
+    },
+    assistantOutput: {
+      type: 'string',
+      maxLength: 10000,
+      description: 'Pre-defined assistant response (skip OpenAI, used for importing conversations)'
     }
   },
   additionalProperties: false

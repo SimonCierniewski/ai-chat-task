@@ -261,7 +261,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
           content: message
         });
 
-        // Step 4: Start OpenAI streaming IMMEDIATELY
+        // Step 4: Check if we should skip OpenAI (assistantOutput provided)
         let ttftMs: number | undefined;
         let totalMs: number | undefined;
         let outputText = '';
@@ -269,19 +269,69 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         let usageCalc: any = null;
         const openAIStartTime = Date.now();
         let openAIDoneTime: number | undefined;
+        let openAIMetrics: any = null;
 
-        // Log that we're starting
-        logger.info({
-          req_id: reqId,
-          userId,
-          model,
-          hasContext: !!contextBlock,
-          memoryMs: memoryMs,
-          prepTime: openAIStartTime - startTime
-        }, 'Fast chat: Starting OpenAI stream');
+        // If assistantOutput is provided, use it instead of calling OpenAI
+        if (req.body.assistantOutput) {
+          outputText = req.body.assistantOutput;
+          ttftMs = Date.now() - startTime;
+          totalMs = ttftMs + 10;
+          openAIDoneTime = Date.now();
+          
+          logger.info({
+            req_id: reqId,
+            userId,
+            usingAssistantOutput: true,
+            outputLength: outputText.length
+          }, 'Fast chat: Using provided assistant output');
 
-        // Start streaming with minimal setup
-        const openAIMetrics = await openAIProvider.streamCompletion({
+          // Send the pre-defined output
+          stream.sendEvent(ChatEventType.TOKEN, { text: outputText });
+          
+          // Estimate usage
+          usageCalc = await usageService.estimateUsage(
+            messages.map((m: any) => m.content).join('\n'),
+            outputText,
+            model
+          );
+          
+          stream.sendEvent(ChatEventType.USAGE, {
+            tokens_in: usageCalc.tokens_in,
+            tokens_out: usageCalc.tokens_out,
+            cost_usd: usageCalc.cost_usd,
+            model
+          });
+          
+          if (returnMemory) {
+            const memoryData: MemoryEventData = {
+              results: contextBlock,
+              memoryMs: memoryMs
+            };
+            stream.sendEvent(ChatEventType.MEMORY, memoryData);
+          }
+          
+          stream.sendEvent(ChatEventType.DONE, {
+            finish_reason: 'stop',
+            ttft_ms: ttftMs,
+            openai_ms: 0
+          });
+          
+          stream.close();
+          
+        } else {
+          // Normal OpenAI streaming path
+          // Log that we're starting
+          logger.info({
+            req_id: reqId,
+            userId,
+            model,
+            hasContext: !!contextBlock,
+            memoryMs: memoryMs,
+            prepTime: openAIStartTime - startTime
+          }, 'Fast chat: Starting OpenAI stream');
+
+          // Start streaming with minimal setup
+          openAIMetrics = await openAIProvider.streamCompletion({
           message,
           model,
           messages,
@@ -588,7 +638,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
             }
           }
         });
-
+        } // End of else block (normal OpenAI path)
       } catch (error: any) {
         logger.error({
           req_id: reqId,
