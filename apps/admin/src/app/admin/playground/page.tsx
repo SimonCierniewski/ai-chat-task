@@ -591,7 +591,7 @@ export default function PlaygroundPage() {
       const formattedMessage = `User: ${graphData.trim()}`;
       
       // Call API to add data to graph
-      const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/graph/add`, {
+      const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/upsert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

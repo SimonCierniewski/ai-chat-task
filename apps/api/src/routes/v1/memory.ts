@@ -657,110 +657,6 @@ function emitZepTelemetry(
 // Route Handlers
 // ============================================================================
 
-/**
- * POST /api/v1/memory/upsert
- * Store facts/edges in user's Zep collection
- */
-async function upsertMemoryHandler(
-  req: FastifyRequest<{ Body: MemoryUpsertRequest }>,
-  reply: FastifyReply
-) {
-  const startTime = Date.now();
-  const authReq = req as FastifyRequest & { user: { id: string; role: string } };
-
-  try {
-    // Validate request body
-    const validation = validateUpsertRequest(req.body);
-    if (!validation.valid) {
-      return reply.status(400).send({
-        error: 'VALIDATION_ERROR',
-        message: 'Invalid request body',
-        details: validation.errors
-      });
-    }
-
-    const {facts, sessionId} = req.body;
-    const userId = authReq.user.id;
-
-    logger.info('Memory upsert request', {
-      req_id: req.id,
-      user_id: userId,
-      session_id: sessionId,
-      fact_count: facts.length
-    });
-
-    // Measure Zep operation time
-    const zapStartTime = Date.now();
-
-    try {
-      const result = await zepAdapter.upsertFacts(userId, facts, sessionId);
-      const zepMs = Date.now() - zapStartTime;
-      const totalMs = Date.now() - startTime;
-
-      // Emit successful telemetry
-      emitZepTelemetry(authReq, 'zep_upsert', {
-        session_id: sessionId,
-        edge_count: facts.length,
-        zep_ms: zepMs,
-        total_ms: totalMs,
-        success: true
-      });
-
-      const response: MemoryUpsertResponse = {
-        ok: true,
-        upserted: result.upserted,
-        session_id: sessionId,
-        timing: {
-          zep_ms: zepMs,
-          total_ms: totalMs
-        }
-      };
-
-      return reply.status(200).send(response);
-
-    } catch (zepError) {
-      const zepMs = Date.now() - zapStartTime;
-      const mappedError = mapZepError(zepError);
-
-      // Emit error telemetry
-      emitZepTelemetry(authReq, 'zep_error', {
-        session_id: sessionId,
-        operation: 'upsert',
-        edge_count: facts.length,
-        zep_ms: zepMs,
-        error_status: mappedError.status,
-        error_message: mappedError.message,
-        original_error: zepError.message
-      });
-
-      logger.error('Zep upsert error', {
-        req_id: req.id,
-        user_id: userId,
-        error: zepError.message,
-        zep_ms: zepMs
-      });
-
-      return reply.status(mappedError.status).send({
-        error: 'ZEP_ERROR',
-        message: mappedError.message
-      });
-    }
-
-  } catch (error) {
-    const totalMs = Date.now() - startTime;
-
-    logger.error('Memory upsert handler error', {
-      req_id: req.id,
-      error: error.message,
-      total_ms: totalMs
-    });
-
-    return reply.status(500).send({
-      error: 'INTERNAL_ERROR',
-      message: 'Failed to process memory upsert request'
-    });
-  }
-}
 
 /**
  * GET /api/v1/memory/search
@@ -906,35 +802,6 @@ async function searchMemoryHandler(
 export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // All memory routes require authentication
   fastify.addHook('preHandler', requireAuth);
-
-  // POST /api/v1/memory/upsert - Store facts/edges
-  fastify.post('/upsert', {
-    schema: {
-      summary: 'Store knowledge graph facts',
-      description: 'Store facts and relationships in user memory',
-      tags: ['Memory'],
-      body: upsertRequestSchema,
-      response: {
-        200: Type.Object({
-          ok: Type.Literal(true),
-          upserted: Type.Integer({minimum: 0}),
-          session_id: Type.Optional(Type.String()),
-          timing: Type.Object({
-            zep_ms: Type.Number(),
-            total_ms: Type.Number()
-          })
-        }),
-        400: Type.Object({
-          error: Type.String(),
-          message: Type.String()
-        }),
-        502: Type.Object({
-          error: Type.String(),
-          message: Type.String()
-        })
-      }
-    }
-  }, upsertMemoryHandler);
 
   // GET /api/v1/memory/search - Search memory
   fastify.get('/search', {
@@ -1089,8 +956,8 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
     }
   });
 
-  // POST /api/v1/memory/graph/add - Add data directly to the graph
-  fastify.post('/graph/add', {
+  // POST /api/v1/memory/upsert - Add data directly to the graph
+  fastify.post('/upsert', {
     schema: {
       summary: 'Add data directly to the graph',
       description: 'Add a message or data directly to the user\'s knowledge graph',
@@ -1119,6 +986,9 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
   }, async (request: FastifyRequest<{ Body: { userId: string; type: string; data: string } }>, reply: FastifyReply) => {
     const { userId, type, data } = request.body;
     const reqId = request.id;
+    const startTime = Date.now();
+    const authReq = request as FastifyRequest & { user: { id: string; role: string } };
+    let zapStartTime = Date.now();
     
     try {
       logger.info({
@@ -1131,6 +1001,9 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       // Ensure user exists in Zep
       await zepAdapter.ensureUser(userId);
       
+      // Measure Zep operation time
+      zapStartTime = Date.now();
+      
       // Add data to the graph
       const episode = await zepAdapter.client.graph.add({
         userId,
@@ -1138,11 +1011,27 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         data
       });
       
+      const zepMs = Date.now() - zapStartTime;
+      const totalMs = Date.now() - startTime;
+      
+      // Emit successful telemetry
+      emitZepTelemetry(authReq, 'zep_upsert', {
+        session_id: null,
+        data_length: data.length,
+        type: type,
+        episode_id: episode?.episodeId,
+        zep_ms: zepMs,
+        total_ms: totalMs,
+        success: true
+      });
+      
       logger.info({
         req_id: reqId,
         userId,
         episodeId: episode?.episodeId,
-        success: true
+        success: true,
+        zep_ms: zepMs,
+        total_ms: totalMs
       }, 'Data added to graph successfully');
       
       return reply.send({
@@ -1152,11 +1041,30 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       });
       
     } catch (error: any) {
+      const zepMs = Date.now() - zapStartTime;
+      const totalMs = Date.now() - startTime;
+      const mappedError = mapZepError(error);
+      
+      // Emit error telemetry
+      emitZepTelemetry(authReq, 'zep_error', {
+        session_id: null,
+        operation: 'upsert',
+        data_length: data.length,
+        type: type,
+        zep_ms: zepMs,
+        total_ms: totalMs,
+        error_status: mappedError.status,
+        error_message: mappedError.message,
+        original_error: error.message
+      });
+      
       logger.error({
         req_id: reqId,
         userId,
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
+        zep_ms: zepMs,
+        total_ms: totalMs
       }, 'Failed to add data to graph');
       
       if (error.statusCode === 404) {
@@ -1166,9 +1074,9 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         });
       }
       
-      return reply.status(500).send({
+      return reply.status(mappedError.status).send({
         error: 'GRAPH_ADD_ERROR',
-        message: error.message || 'Failed to add data to graph'
+        message: mappedError.message || 'Failed to add data to graph'
       });
     }
   });
