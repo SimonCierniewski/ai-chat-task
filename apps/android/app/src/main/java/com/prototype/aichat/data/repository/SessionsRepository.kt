@@ -18,6 +18,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import com.prototype.aichat.data.api.models.ThreadsResponse
+import com.prototype.aichat.data.api.models.DatabaseMessagesResponse
 
 /**
  * Repository for managing sessions with caching and API sync
@@ -79,64 +81,75 @@ class SessionsRepository(
      */
     suspend fun createSession(userId: String, title: String? = null): ChatSession {
         return withContext(Dispatchers.IO) {
+            val sessionId = generateSessionId()
             val session = ChatSession(
+                id = sessionId,
                 userId = userId,
-                title = title ?: "Session ${System.currentTimeMillis()}"
+                title = title ?: "New Chat",
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis(),
+                messageCount = 0
             )
             
-            // Save to local database
+            // Save locally first
             sessionDao.insertSession(SessionEntity.fromDomainModel(session))
             
-            // Create on server (if API available)
-            try {
-                createSessionOnServer(session)
-            } catch (e: Exception) {
-                // Continue with local session if server fails
-            }
+            // Try to sync with server (fire and forget)
+            createSessionOnServer(session)
             
             session
         }
     }
     
     /**
-     * Update session (title, etc.)
-     */
-    suspend fun updateSession(session: ChatSession) {
-        withContext(Dispatchers.IO) {
-            sessionDao.updateSession(SessionEntity.fromDomainModel(session))
-        }
-    }
-    
-    /**
-     * Delete a session
-     */
-    suspend fun deleteSession(sessionId: String) {
-        withContext(Dispatchers.IO) {
-            sessionDao.getSession(sessionId)?.let {
-                sessionDao.deleteSession(it)
-            }
-        }
-    }
-    
-    /**
-     * Add message to session
+     * Add a message to a session
      */
     suspend fun addMessage(message: ChatMessage) {
         withContext(Dispatchers.IO) {
-            // Get current message count for sequence number
-            val count = sessionDao.getMessageCount(message.sessionId)
+            // Get current max order for this session
+            val maxOrder = sessionDao.getMaxMessageOrder(message.sessionId) ?: -1
             
-            // Insert message
+            // Insert message with next order
             sessionDao.insertMessage(
-                MessageEntity.fromDomainModel(message, count)
+                MessageEntity.fromDomainModel(message, maxOrder + 1)
             )
             
-            // Update session stats
+            // Update session timestamp and count
             sessionDao.updateSessionStats(
                 sessionId = message.sessionId,
-                count = count + 1,
+                count = sessionDao.getMessageCount(message.sessionId),
                 lastMessageAt = message.timestamp
             )
+        }
+    }
+    
+    /**
+     * Update session title
+     */
+    suspend fun updateSessionTitle(sessionId: String, title: String) {
+        withContext(Dispatchers.IO) {
+            sessionDao.updateSessionTitle(sessionId, title)
+        }
+    }
+    
+    /**
+     * Delete a session and all its messages
+     */
+    suspend fun deleteSession(sessionId: String) {
+        withContext(Dispatchers.IO) {
+            sessionDao.deleteSession(sessionId)
+        }
+    }
+    
+    /**
+     * Check if cache needs refresh
+     */
+    suspend fun shouldRefreshSessions(): Boolean {
+        return withContext(Dispatchers.IO) {
+            val lastSync = sessionDao.getLastSyncTime()
+            val now = System.currentTimeMillis()
+            
+            lastSync == null || (now - lastSync) > CACHE_TTL
         }
     }
     
@@ -168,51 +181,54 @@ class SessionsRepository(
      * Refresh specific session messages
      */
     suspend fun refreshSessionMessages(sessionId: String) {
-        withContext(Dispatchers.IO) {
-            fetchSessionMessagesFromApi(sessionId)
-        }
+        fetchSessionMessagesFromApi(sessionId)
     }
     
     /**
-     * Check if cache is stale and refresh if needed
+     * Generate a unique session ID
      */
-    private suspend fun checkAndRefreshCache() {
-        withContext(Dispatchers.IO) {
-            val sessions = sessionDao.getAllSessions().first()
-            
-            if (sessions.isEmpty()) {
-                // No cache, fetch from server
-                refreshSessions()
-            } else {
-                // Check if cache is stale
-                val oldestSync = sessions.minOf { it.lastSyncedAt }
-                if (System.currentTimeMillis() - oldestSync > CACHE_TTL) {
-                    try {
-                        refreshSessions()
-                    } catch (e: Exception) {
-                        // Use stale cache if refresh fails
-                    }
-                }
-            }
+    private fun generateSessionId(): String {
+        val timestamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val random = (1000..9999).random()
+        return "session-$timestamp-$random"
+    }
+    
+    /**
+     * Check if a session exists locally
+     */
+    suspend fun sessionExists(sessionId: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            sessionDao.sessionExists(sessionId)
         }
     }
     
     /**
-     * Fetch sessions from API
+     * Get the most recent session
+     */
+    suspend fun getMostRecentSession(): ChatSession? {
+        return withContext(Dispatchers.IO) {
+            sessionDao.getMostRecentSession()?.toDomainModel()
+        }
+    }
+    
+    /**
+     * Fetch sessions from API (now using database)
      */
     private suspend fun fetchSessionsFromApi(): List<ChatSession> {
         return withContext(Dispatchers.IO) {
             try {
-                val url = "${AppConfig.API_BASE_URL}/api/v1/sessions"
+                val url = "${AppConfig.API_BASE_URL}/api/v1/messages/threads"
                 val request = apiClient.buildGetRequest(url)
-                val response: SessionsResponse = apiClient.executeRequest(request)
+                val response: ThreadsResponse = 
+                    apiClient.executeRequest(request)
                 
                 // Get userId from current auth session
                 val userId = SupabaseAuthClient.getUserId() 
                     ?: throw Exception("User not authenticated")
                 
                 // Convert API models to domain models
-                response.sessions.map { it.toDomainModel(userId) }
+                response.threads.map { it.toDomainModel(userId) }
             } catch (e: Exception) {
                 // Propagate the error so UI can handle it
                 throw e
@@ -221,17 +237,18 @@ class SessionsRepository(
     }
     
     /**
-     * Fetch session messages from API (via Zep proxy)
+     * Fetch session messages from API (now using database)
      */
     private suspend fun fetchSessionMessagesFromApi(sessionId: String) {
         withContext(Dispatchers.IO) {
             try {
-                val url = "${AppConfig.API_BASE_URL}/api/v1/sessions/$sessionId/messages"
+                val url = "${AppConfig.API_BASE_URL}/api/v1/messages/$sessionId"
                 val request = apiClient.buildGetRequest(url)
-                val response: MessagesResponse = apiClient.executeRequest(request)
+                val response: DatabaseMessagesResponse = 
+                    apiClient.executeRequest(request)
                 
                 // Convert API models to domain models
-                val messages = response.messages.map { it.toDomainModel(sessionId) }
+                val messages = response.messages.map { it.toDomainModel() }
                 
                 // Update local cache
                 val messageEntities = messages.mapIndexed { index, message ->
@@ -298,87 +315,8 @@ class SessionsRepository(
 }
 
 /**
- * API response models
+ * API request models
  */
-@Serializable
-private data class SessionsResponse(
-    val sessions: List<SessionApiModel>,
-    val total: Int
-)
-
-@Serializable
-private data class SessionApiModel(
-    val id: String,
-    val createdAt: String,
-    val lastMessageAt: String? = null,
-    val messageCount: Int = 0,
-    val title: String? = null
-) {
-    fun toDomainModel(userId: String): ChatSession {
-        return ChatSession(
-            id = id,
-            userId = userId,
-            createdAt = parseIsoDate(createdAt),
-            lastMessageAt = lastMessageAt?.let { parseIsoDate(it) },
-            messageCount = messageCount,
-            title = title
-        )
-    }
-    
-    private fun parseIsoDate(dateString: String): Long {
-        return try {
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
-                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                .parse(dateString.replace("Z", "").split(".")[0])?.time 
-                ?: System.currentTimeMillis()
-        } catch (e: Exception) {
-            System.currentTimeMillis()
-        }
-    }
-}
-
-@Serializable
-private data class MessagesResponse(
-    val messages: List<MessageApiModel>,
-    val sessionId: String
-)
-
-@Serializable
-private data class MessageApiModel(
-    val id: String,
-    val content: String,
-    val role: String,
-    val timestamp: String,
-    val metadata: MessageMetadata? = null
-) {
-    fun toDomainModel(sessionId: String): ChatMessage {
-        return ChatMessage(
-            id = id,
-            sessionId = sessionId,
-            content = content,
-            role = when(role.lowercase()) {
-                "user" -> MessageRole.USER
-                "assistant" -> MessageRole.ASSISTANT
-                "system" -> MessageRole.SYSTEM
-                else -> MessageRole.USER
-            },
-            timestamp = parseIsoDate(timestamp),
-            metadata = metadata
-        )
-    }
-    
-    private fun parseIsoDate(dateString: String): Long {
-        return try {
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
-                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                .parse(dateString.replace("Z", "").split(".")[0])?.time 
-                ?: System.currentTimeMillis()
-        } catch (e: Exception) {
-            System.currentTimeMillis()
-        }
-    }
-}
-
 @Serializable
 private data class CreateSessionRequest(
     val userId: String,
