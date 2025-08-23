@@ -6,10 +6,6 @@ import { Card } from '@/components/ui/card';
 import { publicConfig } from '../../../../lib/config';
 import { createClient } from '@/lib/supabase/client';
 
-interface StreamToken {
-  text: string;
-}
-
 interface UsageData {
   tokens_in: number;
   tokens_out: number;
@@ -668,7 +664,7 @@ export default function PlaygroundPage() {
         throw new Error(errorData.error || `Request failed with status ${response.status}`);
       }
       
-      const result = await response.json();
+      await response.json();
       
       // Show success feedback
       alert('Data successfully added to the graph');
@@ -714,9 +710,29 @@ export default function PlaygroundPage() {
         searchFilters.edge_types = searchEdgeTypes.split(',').map(s => s.trim()).filter(Boolean);
       }
       
+      // Build graph search params for search
+      const searchGraphParams = {
+        nodes: {
+          limit: nodeSearchLimit,
+          reranker: nodeSearchReranker,
+          ...(nodeSearchReranker === 'mmr' && { mmrLambda }),
+          ...(nodeSearchReranker === 'node_distance' && centerNodeUuid && { centerNodeUuid })
+        },
+        edges: {
+          limit: edgeSearchLimit,
+          reranker: edgeSearchReranker,
+          minFactRating,
+          ...(edgeSearchReranker === 'mmr' && { mmrLambda }),
+          ...(edgeSearchReranker === 'node_distance' && centerNodeUuid && { centerNodeUuid })
+        },
+        episodes: {
+          limit: episodeSearchLimit
+        }
+      };
+      
       // Build graph search params with filters
       const graphSearchParamsWithFilters = {
-        ...graphSearchParams,
+        ...searchGraphParams,
         search_filters: Object.keys(searchFilters).length > 0 ? searchFilters : undefined
       };
       
@@ -854,7 +870,7 @@ export default function PlaygroundPage() {
         throw new Error(errorData.error || `Request failed with status ${response.status}`);
       }
       
-      const result = await response.json();
+      await response.json();
       
       // Show success feedback
       alert('Graph ontology updated successfully');
@@ -905,7 +921,7 @@ export default function PlaygroundPage() {
         throw new Error(errorData.error || `Request failed with status ${response.status}`);
       }
       
-      const result = await response.json();
+      await response.json();
       
       // Show success feedback
       alert('Fact ratings updated successfully');
@@ -1051,7 +1067,6 @@ export default function PlaygroundPage() {
         
         // Apply delay if enabled
         if (enableDelay && i < messages.length - 1) {
-          const nextMsg = messages[i + 1];
           const userChars = msg.role === 'user' ? msg.content.length : 0;
           const assistantChars = msg.role === 'assistant' ? msg.content.length : (fullResponse?.length || 0);
           const delay = calculateDelay(userChars, assistantChars);
@@ -1303,14 +1318,24 @@ export default function PlaygroundPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Query
                   </label>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Enter search query..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={isSearching}
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        if (e.target.value.length <= 400) {
+                          setSearchQuery(e.target.value);
+                        }
+                      }}
+                      placeholder="Enter search query..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={isSearching}
+                      maxLength={400}
+                    />
+                    <div className="absolute bottom-2 right-2 text-xs text-gray-500">
+                      {searchQuery.length}/400
+                    </div>
+                  </div>
                 </div>
                 
                 <div>
@@ -1698,6 +1723,31 @@ export default function PlaygroundPage() {
               </div>
             </Card>
             
+
+            {/* Performance Metrics */}
+            {timing && (
+              <Card title="Performance" icon="⚡" className="mt-4">
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  {timing.ttft_ms !== undefined && (
+                    <div className="p-3 bg-purple-50 rounded-md">
+                      <p className="text-xs text-purple-600 font-medium">Time to First Token</p>
+                      <p className="text-lg font-bold text-purple-900">{formatTiming(timing.ttft_ms)}</p>
+                    </div>
+                  )}
+                  {timing.total_ms !== undefined && (
+                    <div className="p-3 bg-indigo-50 rounded-md">
+                      <p className="text-xs text-indigo-600 font-medium">Total Duration</p>
+                      <p className="text-lg font-bold text-indigo-900">{formatTiming(timing.total_ms)}</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+          </div>
+
+          {/* Response Panel */}
+          <div className="space-y-6">
             {/* Configuration Card */}
             <Card title="Configuration" icon="⚙️">
               <div className="mt-4 space-y-4">
@@ -1767,32 +1817,11 @@ export default function PlaygroundPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 font-mono text-sm"
                   />
                 </div>
-
               </div>
             </Card>
 
-            {/* Performance Metrics */}
-            {timing && (
-              <Card title="Performance" icon="⚡" className="mt-4">
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  {timing.ttft_ms !== undefined && (
-                    <div className="p-3 bg-purple-50 rounded-md">
-                      <p className="text-xs text-purple-600 font-medium">Time to First Token</p>
-                      <p className="text-lg font-bold text-purple-900">{formatTiming(timing.ttft_ms)}</p>
-                    </div>
-                  )}
-                  {timing.total_ms !== undefined && (
-                    <div className="p-3 bg-indigo-50 rounded-md">
-                      <p className="text-xs text-indigo-600 font-medium">Total Duration</p>
-                      <p className="text-lg font-bold text-indigo-900">{formatTiming(timing.total_ms)}</p>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            )}
-
             {/* System Prompt Card */}
-            <Card title="System Prompt" icon="🤖" className="mt-4">
+            <Card title="System Prompt" icon="🤖">
               <div className="mt-4">
                 <textarea
                   value={systemPrompt}
@@ -1808,22 +1837,7 @@ export default function PlaygroundPage() {
               </div>
             </Card>
 
-            {/* API Endpoint Info */}
-            <Card title="API Endpoint" icon="🔗" className="mt-4">
-              <div className="mt-4 p-3 bg-gray-50 rounded-md">
-                <code className="text-sm text-gray-700">
-                  POST {publicConfig.apiBaseUrl}/api/v1/chat
-                </code>
-              </div>
-              <div className="mt-2 text-xs text-gray-500">
-                SSE Content-Type: text/event-stream
-              </div>
-            </Card>
-          </div>
-
-          {/* Response Panel */}
-          <div>
-            {/* Memory Context - Moved to top of right column */}
+            {/* Memory Context */}
             <Card title="Memory Context" icon="🧠">
               <div className="mt-4 space-y-3">
                 {memoryContext && memoryContext.results ? (
@@ -1915,9 +1929,12 @@ export default function PlaygroundPage() {
           </div>
         </div>
 
-        {/* Import Conversations Card - Full width at bottom */}
-        <div className="mt-8">
-          <Card title="Import Conversations" icon="📥">
+        {/* Bottom Section - Two Column Layout */}
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column */}
+          <div className="space-y-8">
+            {/* Import Conversations Card */}
+            <Card title="Import Conversations" icon="📥">
             {/* Progress indicator */}
             {isImporting && (
               <div className="absolute top-4 right-4 flex items-center gap-2">
@@ -2089,16 +2106,111 @@ export default function PlaygroundPage() {
                 </div>
               )}
             </div>
-          </Card>
-        </div>
+            </Card>
 
-        {/* Check Graph Build Completion Card */}
-        <div className="mt-8">
-          <Card title="Check Graph Build Completion" icon="🔍">
-            <div className="mt-4 space-y-4">
-              <p className="text-sm text-gray-600">
-                Check if Zep has finished processing and building the knowledge graph for the selected user.
-              </p>
+            {/* Fact Ratings Card */}
+            <Card title="Fact Ratings" icon="⭐">
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Instruction
+                  </label>
+                  <textarea
+                    value={factRatingInstruction}
+                    onChange={(e) => setFactRatingInstruction(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    rows={3}
+                    disabled={isUpdatingFactRatings}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Rate the facts by poignancy. Highly poignant facts have a significant emotional impact or relevance to the user. Facts with low poignancy are minimally relevant or of little emotional significance.
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    High
+                  </label>
+                  <input
+                    type="text"
+                    value={factRatingHigh}
+                    onChange={(e) => setFactRatingHigh(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isUpdatingFactRatings}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    The user received news of a family member's serious illness.
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Medium
+                  </label>
+                  <input
+                    type="text"
+                    value={factRatingMedium}
+                    onChange={(e) => setFactRatingMedium(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isUpdatingFactRatings}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    The user completed a challenging marathon.
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Low
+                  </label>
+                  <input
+                    type="text"
+                    value={factRatingLow}
+                    onChange={(e) => setFactRatingLow(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isUpdatingFactRatings}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    The user bought a new brand of toothpaste.
+                  </p>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleUpdateFactRatings}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={isUpdatingFactRatings || !selectedUserId}
+                >
+                  {isUpdatingFactRatings ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Updating...
+                    </>
+                  ) : (
+                    'Update'
+                  )}
+                </button>
+                
+                {/* User selection warning */}
+                {!selectedUserId && (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-700">
+                      Please select a user from the User card above before updating fact ratings.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+          
+          {/* Right Column */}
+          <div className="space-y-8">
+            {/* Check Graph Build Completion Card */}
+            <Card title="Check Graph Build Completion" icon="🔍">
+              <div className="mt-4 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Check if Zep has finished processing and building the knowledge graph for the selected user.
+                </p>
               
               {/* Check button */}
               <div className="flex items-center gap-4">
@@ -2180,13 +2292,11 @@ export default function PlaygroundPage() {
                   </p>
                 </div>
               )}
-            </div>
-          </Card>
-        </div>
-        
-        {/* Adding data to the graph Card */}
-        <div className="mt-8">
-          <Card title="Adding data to the graph" icon="📊">
+              </div>
+            </Card>
+            
+            {/* Adding data to the graph Card */}
+            <Card title="Adding data to the graph" icon="📊">
             <div className="mt-4 space-y-4">
               <p className="text-sm text-gray-600">
                 For example it can add to graph preferences of user's partner, provided by her/him during app's introduction.
@@ -2237,110 +2347,12 @@ export default function PlaygroundPage() {
                   </p>
                 </div>
               )}
-            </div>
-          </Card>
-        </div>
-        
-        {/* Fact Ratings Card */}
-        <div className="mt-8">
-          <Card title="Fact Ratings" icon="⭐">
-            <div className="mt-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Instruction
-                </label>
-                <textarea
-                  value={factRatingInstruction}
-                  onChange={(e) => setFactRatingInstruction(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                  rows={3}
-                  disabled={isUpdatingFactRatings}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Rate the facts by poignancy. Highly poignant facts have a significant emotional impact or relevance to the user. Facts with low poignancy are minimally relevant or of little emotional significance.
-                </p>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  High
-                </label>
-                <input
-                  type="text"
-                  value={factRatingHigh}
-                  onChange={(e) => setFactRatingHigh(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={isUpdatingFactRatings}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  The user received news of a family member's serious illness.
-                </p>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Medium
-                </label>
-                <input
-                  type="text"
-                  value={factRatingMedium}
-                  onChange={(e) => setFactRatingMedium(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={isUpdatingFactRatings}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  The user completed a challenging marathon.
-                </p>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Low
-                </label>
-                <input
-                  type="text"
-                  value={factRatingLow}
-                  onChange={(e) => setFactRatingLow(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={isUpdatingFactRatings}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  The user bought a new brand of toothpaste.
-                </p>
-              </div>
-              
-              <button
-                type="button"
-                onClick={handleUpdateFactRatings}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-                disabled={isUpdatingFactRatings || !selectedUserId}
-              >
-                {isUpdatingFactRatings ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Updating...
-                  </>
-                ) : (
-                  'Update'
-                )}
-              </button>
-              
-              {/* User selection warning */}
-              {!selectedUserId && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                  <p className="text-sm text-yellow-700">
-                    Please select a user from the User card above before updating fact ratings.
-                  </p>
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-        
-        {/* Ontology Card */}
-        <div className="mt-8">
-          <Card title="Ontology" icon="🔗">
-            <div className="mt-4 space-y-4">
+            </Card>
+            
+            {/* Ontology Card */}
+            <Card title="Ontology" icon="🔗">
+              <div className="mt-4 space-y-4">
               <p className="text-sm text-gray-600">
                 Define custom entity and relation types for your knowledge graph. This sets the ontology for graph extraction and organization.
               </p>
@@ -2403,6 +2415,21 @@ export default function PlaygroundPage() {
                   </p>
                 </div>
               )}
+              </div>
+            </Card>
+          </div>
+        </div>
+        
+        {/* API Endpoint Info - Full width at the very bottom */}
+        <div className="mt-8">
+          <Card title="API Endpoint" icon="🔗">
+            <div className="mt-4 p-3 bg-gray-50 rounded-md">
+              <code className="text-sm text-gray-700">
+                POST {publicConfig.apiBaseUrl}/api/v1/chat
+              </code>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              SSE Content-Type: text/event-stream
             </div>
           </Card>
         </div>
