@@ -368,7 +368,6 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                   // Step 7: Store messages in database
                   try {
                     const supabaseAdmin = getSupabaseAdmin();
-                    const startMs = startTime;
                     
                     // Store user message
                     const userMessage: UserMessage = {
@@ -378,15 +377,23 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                       user_id: userId
                     };
                     
+                    // Store user message
+                    const memoryContext: MemoryMessage = {
+                      thread_id: sessionId,
+                      role: 'memory',
+                      content: contextBlock,
+                      user_id: userId
+                    };
+                    
                     // Store assistant message with metrics
                     const assistantMessage: AssistantMessage = {
                       thread_id: sessionId,
                       role: 'assistant',
                       content: outputText,
                       user_id: userId,
-                      start_ms: startMs,
+                      start_ms: openAIStartTime,
                       ttft_ms: openAIMetrics?.ttftMs,
-                      total_ms: totalMs || 0,
+                      total_ms: openAIMetrics?.openAiMs || 0,
                       tokens_in: usageCalc?.tokens_in || 0,
                       tokens_out: usageCalc?.tokens_out || 0,
                       price: usageCalc?.cost_usd || 0,
@@ -396,7 +403,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                     // Insert both messages
                     const { error: insertError } = await supabaseAdmin
                       .from('messages')
-                      .insert([userMessage, assistantMessage]);
+                      .insert([userMessage, memoryContext, assistantMessage]);
                     
                     if (insertError) {
                       logger.warn({
