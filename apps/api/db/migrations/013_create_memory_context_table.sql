@@ -14,6 +14,9 @@ CREATE TABLE public.memory_context (
     -- Optional owner_id for shared contexts (future feature)
     owner_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     
+    -- User display name for identification in History view
+    name TEXT,
+    
     -- The actual context block from Zep (can be large text)
     context_block TEXT,
     
@@ -46,6 +49,7 @@ CREATE INDEX idx_memory_context_owner_id ON public.memory_context(owner_id) WHER
 COMMENT ON TABLE public.memory_context IS 'Caches Zep memory context blocks for users to reduce API calls';
 COMMENT ON COLUMN public.memory_context.user_id IS 'Primary key - the user this context belongs to';
 COMMENT ON COLUMN public.memory_context.owner_id IS 'Optional owner for shared contexts (future feature)';
+COMMENT ON COLUMN public.memory_context.name IS 'User display name for identification in History view';
 COMMENT ON COLUMN public.memory_context.context_block IS 'The cached context block from Zep';
 COMMENT ON COLUMN public.memory_context.zep_parameters IS 'Parameters used to fetch this context from Zep';
 COMMENT ON COLUMN public.memory_context.created_at IS 'When this record was first created';
