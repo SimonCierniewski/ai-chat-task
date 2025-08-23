@@ -318,6 +318,121 @@ class ZepAdapter {
     }
   }
 
+  /**
+   * Build custom context using graph search for query-based context modes
+   */
+  async buildCustomContext(
+    userId: string, 
+    sessionId: string, 
+    query: string,
+    contextMode: 'node_search' | 'edge_search' | 'node_edge_search' | 'bfs',
+    graphSearchParams?: any
+  ): Promise<string | undefined> {
+    try {
+      const searchQuery = query.substring(0, 400); // Limit query to 400 chars
+      let contextParts: string[] = [];
+      
+      // For BFS mode, get recent episodes to seed the search
+      let bfsNodeUuids: string[] | undefined;
+      if (contextMode === 'bfs') {
+        try {
+          const episodeLimit = graphSearchParams?.episodes?.limit || 10;
+          const episodes = await this.client.graph.episode.getByGroup(userId, {
+            limit: episodeLimit
+          });
+          
+          if (episodes && episodes.length > 0) {
+            // Extract node UUIDs from episodes for BFS
+            bfsNodeUuids = episodes.map((ep: any) => ep.uuid).filter((id: any) => id);
+          }
+        } catch (error) {
+          logger.warn('Failed to get episodes for BFS', { error, userId });
+        }
+      }
+
+      // Build search options based on context mode
+      const searchOptions: any = {
+        limit: 30, // Default limit
+        reranker: 'cross_encoder' // Default reranker
+      };
+
+      // Search nodes if needed
+      if (['node_search', 'node_edge_search', 'bfs'].includes(contextMode)) {
+        const nodeParams = graphSearchParams?.nodes || {};
+        const nodeSearchOptions = {
+          ...searchOptions,
+          limit: nodeParams.limit || 10,
+          reranker: nodeParams.reranker || 'cross_encoder',
+          scope: 'nodes' as const,
+          ...(nodeParams.mmrLambda !== undefined && { mmr_lambda: nodeParams.mmrLambda }),
+          ...(nodeParams.centerNodeUuid && { center_node_uuid: nodeParams.centerNodeUuid }),
+          ...(bfsNodeUuids && { bfs_origin_node_uuids: bfsNodeUuids })
+        };
+
+        try {
+          const nodeResults = await this.client.graph.search(userId, searchQuery, nodeSearchOptions);
+          
+          if (nodeResults?.nodes && nodeResults.nodes.length > 0) {
+            const nodeContext = nodeResults.nodes
+              .map((node: any) => `Entity: ${node.name || node.id}`)
+              .join('\n');
+            
+            if (nodeContext) {
+              contextParts.push('## Relevant Entities\n' + nodeContext);
+            }
+          }
+        } catch (error) {
+          logger.warn('Failed to search nodes', { error, userId, contextMode });
+        }
+      }
+
+      // Search edges if needed  
+      if (['edge_search', 'node_edge_search'].includes(contextMode)) {
+        const edgeParams = graphSearchParams?.edges || {};
+        const edgeSearchOptions = {
+          ...searchOptions,
+          limit: edgeParams.limit || 10,
+          reranker: edgeParams.reranker || 'cross_encoder',
+          scope: 'edges' as const,
+          ...(edgeParams.minFactRating !== undefined && { min_fact_rating: edgeParams.minFactRating }),
+          ...(edgeParams.mmrLambda !== undefined && { mmr_lambda: edgeParams.mmrLambda }),
+          ...(edgeParams.centerNodeUuid && { center_node_uuid: edgeParams.centerNodeUuid })
+        };
+
+        try {
+          const edgeResults = await this.client.graph.search(userId, searchQuery, edgeSearchOptions);
+          
+          if (edgeResults?.edges && edgeResults.edges.length > 0) {
+            const edgeContext = edgeResults.edges
+              .map((edge: any) => edge.fact || `${edge.source} ${edge.type} ${edge.target}`)
+              .join('\n');
+            
+            if (edgeContext) {
+              contextParts.push('## Relevant Facts\n' + edgeContext);
+            }
+          }
+        } catch (error) {
+          logger.warn('Failed to search edges', { error, userId, contextMode });
+        }
+      }
+
+      // Combine all context parts
+      if (contextParts.length > 0) {
+        return contextParts.join('\n\n');
+      }
+
+      return undefined;
+    } catch (error: any) {
+      logger.error('Failed to build custom context', {
+        userId,
+        sessionId,
+        contextMode,
+        error: error.message
+      });
+      return undefined;
+    }
+  }
+
   async upsertFacts(
     userId: string,
     edges: CreateGraphEdge[],

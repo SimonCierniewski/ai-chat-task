@@ -1,6 +1,28 @@
 /**
  * POST /api/v1/chat request body
  */
+/**
+ * Graph search parameters for advanced context retrieval
+ */
+export interface GraphSearchParams {
+  nodes?: {
+    limit?: number;
+    reranker?: 'cross_encoder' | 'rrf' | 'mmr' | 'episode_mentions' | 'node_distance';
+    mmrLambda?: number; // For mmr reranker (0.0-1.0)
+    centerNodeUuid?: string; // For node_distance reranker
+  };
+  edges?: {
+    limit?: number;
+    reranker?: 'cross_encoder' | 'rrf' | 'mmr' | 'episode_mentions' | 'node_distance';
+    minFactRating?: number; // 0.0-1.0
+    mmrLambda?: number; // For mmr reranker (0.0-1.0)
+    centerNodeUuid?: string; // For node_distance reranker
+  };
+  episodes?: {
+    limit?: number;
+  };
+}
+
 export interface ChatRequest {
   message: string;
   useMemory?: boolean;
@@ -8,10 +30,11 @@ export interface ChatRequest {
   model?: string;
   returnMemory?: boolean; // If true, return memory context in SSE events (for debugging/playground)
   systemPrompt?: string; // Optional custom system prompt (for playground)
-  contextMode?: 'basic' | 'summarized'; // Context retrieval mode (basic = raw, summarized = processed)
+  contextMode?: 'basic' | 'summarized' | 'node_search' | 'edge_search' | 'node_edge_search' | 'bfs'; // Context retrieval mode
   testingMode?: boolean; // If true, don't store messages in Zep or database (for testing different responses)
   assistantOutput?: string; // Pre-defined assistant response (skip OpenAI, used for importing conversations)
   pastMessagesCount?: number; // Number of past messages to include in context (0-10)
+  graphSearchParams?: GraphSearchParams; // Advanced graph search parameters for query-based context modes
 }
 
 /**
@@ -53,8 +76,43 @@ export const chatRequestSchema = {
     },
     contextMode: {
       type: 'string',
-      enum: ['basic', 'summarized'],
-      description: 'Context retrieval mode (basic = raw, summarized = processed)'
+      enum: ['basic', 'summarized', 'node_search', 'edge_search', 'node_edge_search', 'bfs'],
+      description: 'Context retrieval mode'
+    },
+    graphSearchParams: {
+      type: 'object',
+      properties: {
+        nodes: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', minimum: 1, maximum: 30 },
+            reranker: { type: 'string', enum: ['cross_encoder', 'rrf', 'mmr', 'episode_mentions', 'node_distance'] },
+            mmrLambda: { type: 'number', minimum: 0, maximum: 1 },
+            centerNodeUuid: { type: 'string' }
+          },
+          additionalProperties: false
+        },
+        edges: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', minimum: 1, maximum: 30 },
+            reranker: { type: 'string', enum: ['cross_encoder', 'rrf', 'mmr', 'episode_mentions', 'node_distance'] },
+            minFactRating: { type: 'number', minimum: 0, maximum: 1 },
+            mmrLambda: { type: 'number', minimum: 0, maximum: 1 },
+            centerNodeUuid: { type: 'string' }
+          },
+          additionalProperties: false
+        },
+        episodes: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', minimum: 1, maximum: 30 }
+          },
+          additionalProperties: false
+        }
+      },
+      additionalProperties: false,
+      description: 'Advanced graph search parameters for query-based context modes'
     },
     testingMode: {
       type: 'boolean',

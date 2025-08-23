@@ -456,7 +456,7 @@ async function storeConversationInDB(sessionId: string, message: string, userId:
   }
 }
 
-async function loadContextAndStoreInDB(userId: string, sessionId: string, contextMode: 'basic' | 'summarized', reqId: string) {
+async function loadContextAndStoreInDB(userId: string, sessionId: string, contextMode: string, reqId: string) {
   try {
     // Fetch fresh context from Zep
     const freshContext = await zepAdapter.getContextBlock(userId, sessionId, contextMode);
@@ -561,7 +561,8 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         returnMemory = false,
         contextMode = 'basic',
         testingMode = false,
-        pastMessagesCount = 4
+        pastMessagesCount = 4,
+        graphSearchParams
       } = req.body;
       const userId: string = req.user!.id;
       const reqId = req.id;
@@ -579,13 +580,24 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         let contextFromCache = false;
 
         if (useMemory) {
-          // Try to get context from DB cache first
-          contextBlock = await loadCachedContextFromDB(userId, reqId);
+          // For query-based context modes, always build fresh context (no cache)
+          if (['node_search', 'edge_search', 'node_edge_search', 'bfs'].includes(contextMode)) {
+            contextBlock = await zepAdapter.buildCustomContext(
+              userId, 
+              sessionId!!, 
+              message, // Use the user's message as the query
+              contextMode as any,
+              graphSearchParams
+            );
+          } else {
+            // For basic/summarized modes, try cache first
+            contextBlock = await loadCachedContextFromDB(userId, reqId);
 
-          // If no valid cache, fetch from Zep
-          if (!contextBlock) {
-            contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode);
-            contextFromCache = true;
+            // If no valid cache, fetch from Zep
+            if (!contextBlock) {
+              contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode as 'basic' | 'summarized');
+              contextFromCache = true;
+            }
           }
         }
         const memoryMs = Date.now() - memoryStartMs;

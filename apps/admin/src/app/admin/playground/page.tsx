@@ -45,11 +45,21 @@ interface PlaygroundUser {
 export default function PlaygroundPage() {
   const [message, setMessage] = useState('');
   const [useMemory, setUseMemory] = useState(true);
-  const [contextMode, setContextMode] = useState<'basic' | 'summarized'>('basic');
+  const [contextMode, setContextMode] = useState<'basic' | 'summarized' | 'node_search' | 'edge_search' | 'node_edge_search' | 'bfs'>('basic');
   const [model, setModel] = useState('gpt-4o-mini');
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.');
   const [testingMode, setTestingMode] = useState(false);
   const [pastMessagesCount, setPastMessagesCount] = useState(4);
+  
+  // Graph search parameters
+  const [nodeSearchLimit, setNodeSearchLimit] = useState(10);
+  const [nodeSearchReranker, setNodeSearchReranker] = useState<'cross_encoder' | 'rrf' | 'mmr' | 'episode_mentions' | 'node_distance'>('cross_encoder');
+  const [edgeSearchLimit, setEdgeSearchLimit] = useState(10);
+  const [edgeSearchReranker, setEdgeSearchReranker] = useState<'cross_encoder' | 'rrf' | 'mmr' | 'episode_mentions' | 'node_distance'>('cross_encoder');
+  const [minFactRating, setMinFactRating] = useState(0.0);
+  const [episodeSearchLimit, setEpisodeSearchLimit] = useState(10);
+  const [mmrLambda, setMmrLambda] = useState(0.5);
+  const [centerNodeUuid, setCenterNodeUuid] = useState('');
   
   // Add data to graph state
   const [graphData, setGraphData] = useState('');
@@ -327,7 +337,7 @@ export default function PlaygroundPage() {
       }
 
       // Create request body
-      const requestBody = {
+      const requestBody: any = {
         message: message.trim(),
         useMemory,
         contextMode,
@@ -338,6 +348,28 @@ export default function PlaygroundPage() {
         testingMode, // Add testing mode parameter
         pastMessagesCount
       };
+      
+      // Add graph search parameters if using query-based context modes
+      if (['node_search', 'edge_search', 'node_edge_search', 'bfs'].includes(contextMode)) {
+        requestBody.graphSearchParams = {
+          nodes: {
+            limit: nodeSearchLimit,
+            reranker: nodeSearchReranker,
+            ...(nodeSearchReranker === 'mmr' && { mmrLambda }),
+            ...(nodeSearchReranker === 'node_distance' && centerNodeUuid && { centerNodeUuid })
+          },
+          edges: {
+            limit: edgeSearchLimit,
+            reranker: edgeSearchReranker,
+            minFactRating,
+            ...(edgeSearchReranker === 'mmr' && { mmrLambda }),
+            ...(edgeSearchReranker === 'node_distance' && centerNodeUuid && { centerNodeUuid })
+          },
+          episodes: {
+            limit: episodeSearchLimit
+          }
+        };
+      }
 
       // Make POST request to initiate SSE stream
       const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/chat`, {
@@ -1013,39 +1045,281 @@ export default function PlaygroundPage() {
                   </div>
 
                   {useMemory && (
-                    <div className="ml-6 space-y-2">
+                    <div className="ml-6 space-y-3">
                       <label className="block text-sm font-medium text-gray-700">
                         Context Mode
                       </label>
-                      <div className="flex space-x-4">
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="contextMode"
-                            value="basic"
-                            checked={contextMode === 'basic'}
-                            onChange={(e) => setContextMode(e.target.value as 'basic' | 'summarized')}
-                            className="text-blue-600 focus:ring-blue-500"
-                            disabled={isStreaming}
-                          />
-                          <span className="text-sm text-gray-700">Basic</span>
-                        </label>
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="contextMode"
-                            value="summarized"
-                            checked={contextMode === 'summarized'}
-                            onChange={(e) => setContextMode(e.target.value as 'basic' | 'summarized')}
-                            className="text-blue-600 focus:ring-blue-500"
-                            disabled={isStreaming}
-                          />
-                          <span className="text-sm text-gray-700">Summarized</span>
-                        </label>
+                      
+                      {/* Generic context modes */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2">Generic (faster: can be conducted after calling LLM, cached and waiting for user's next message)</p>
+                        <div className="flex space-x-4">
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="contextMode"
+                              value="basic"
+                              checked={contextMode === 'basic'}
+                              onChange={(e) => setContextMode(e.target.value as any)}
+                              className="text-blue-600 focus:ring-blue-500"
+                              disabled={isStreaming}
+                            />
+                            <span className="text-sm text-gray-700">Basic</span>
+                          </label>
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="contextMode"
+                              value="summarized"
+                              checked={contextMode === 'summarized'}
+                              onChange={(e) => setContextMode(e.target.value as any)}
+                              className="text-blue-600 focus:ring-blue-500"
+                              disabled={isStreaming}
+                            />
+                            <span className="text-sm text-gray-700">Summarized</span>
+                          </label>
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-500">
-                        Basic: Raw context as stored. Summarized: AI-processed summary.
-                      </p>
+                      
+                      {/* Query-based context modes */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2">Based on message query (slower: have to be conducted before calling LLM)</p>
+                        <div className="space-y-2">
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="contextMode"
+                              value="node_search"
+                              checked={contextMode === 'node_search'}
+                              onChange={(e) => setContextMode(e.target.value as any)}
+                              className="text-blue-600 focus:ring-blue-500"
+                              disabled={isStreaming}
+                            />
+                            <span className="text-sm text-gray-700">Node Search</span>
+                          </label>
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="contextMode"
+                              value="edge_search"
+                              checked={contextMode === 'edge_search'}
+                              onChange={(e) => setContextMode(e.target.value as any)}
+                              className="text-blue-600 focus:ring-blue-500"
+                              disabled={isStreaming}
+                            />
+                            <span className="text-sm text-gray-700">Edge Search</span>
+                          </label>
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="contextMode"
+                              value="node_edge_search"
+                              checked={contextMode === 'node_edge_search'}
+                              onChange={(e) => setContextMode(e.target.value as any)}
+                              className="text-blue-600 focus:ring-blue-500"
+                              disabled={isStreaming}
+                            />
+                            <span className="text-sm text-gray-700">Node + Edge Search</span>
+                          </label>
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="contextMode"
+                              value="bfs"
+                              checked={contextMode === 'bfs'}
+                              onChange={(e) => setContextMode(e.target.value as any)}
+                              className="text-blue-600 focus:ring-blue-500"
+                              disabled={isStreaming}
+                            />
+                            <span className="text-sm text-gray-700">Breadth-First Search (BFS)</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Graph Search Parameters - shown for query-based context modes */}
+                  {useMemory && ['node_search', 'edge_search', 'node_edge_search', 'bfs'].includes(contextMode) && (
+                    <div className="p-3 bg-gray-50 rounded-md space-y-4 mt-3">
+                      <div className="text-sm font-medium text-gray-700">Graph Search Parameters</div>
+                      
+                      {/* Nodes parameters */}
+                      {['node_search', 'node_edge_search', 'bfs'].includes(contextMode) && (
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-gray-600">Nodes:</div>
+                          <div className="ml-4 space-y-2">
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Limit (1-30)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="30"
+                                value={nodeSearchLimit}
+                                onChange={(e) => setNodeSearchLimit(parseInt(e.target.value) || 10)}
+                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled={isStreaming}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">
+                                Reranker
+                                <a href="https://help.getzep.com/searching-the-graph#rerankers" 
+                                   target="_blank" 
+                                   rel="noopener noreferrer"
+                                   className="ml-1 text-blue-500 hover:text-blue-700">
+                                  ℹ️
+                                </a>
+                              </label>
+                              <select
+                                value={nodeSearchReranker}
+                                onChange={(e) => setNodeSearchReranker(e.target.value as any)}
+                                className="w-40 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled={isStreaming}
+                              >
+                                <option value="cross_encoder">cross_encoder</option>
+                                <option value="rrf">rrf</option>
+                                <option value="mmr">mmr</option>
+                                <option value="episode_mentions">episode_mentions</option>
+                                <option value="node_distance">node_distance</option>
+                              </select>
+                            </div>
+                            {nodeSearchReranker === 'mmr' && (
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">MMR Lambda (0.0-1.0)</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="1"
+                                  step="0.1"
+                                  value={mmrLambda}
+                                  onChange={(e) => setMmrLambda(parseFloat(e.target.value) || 0.5)}
+                                  className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  disabled={isStreaming}
+                                />
+                              </div>
+                            )}
+                            {nodeSearchReranker === 'node_distance' && (
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">Center Node UUID</label>
+                                <input
+                                  type="text"
+                                  value={centerNodeUuid}
+                                  onChange={(e) => setCenterNodeUuid(e.target.value)}
+                                  placeholder="Enter node UUID..."
+                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  disabled={isStreaming}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Edges parameters */}
+                      {['edge_search', 'node_edge_search'].includes(contextMode) && (
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-gray-600">Edges:</div>
+                          <div className="ml-4 space-y-2">
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Limit (1-30)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="30"
+                                value={edgeSearchLimit}
+                                onChange={(e) => setEdgeSearchLimit(parseInt(e.target.value) || 10)}
+                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled={isStreaming}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">
+                                Reranker
+                                <a href="https://help.getzep.com/searching-the-graph#rerankers" 
+                                   target="_blank" 
+                                   rel="noopener noreferrer"
+                                   className="ml-1 text-blue-500 hover:text-blue-700">
+                                  ℹ️
+                                </a>
+                              </label>
+                              <select
+                                value={edgeSearchReranker}
+                                onChange={(e) => setEdgeSearchReranker(e.target.value as any)}
+                                className="w-40 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled={isStreaming}
+                              >
+                                <option value="cross_encoder">cross_encoder</option>
+                                <option value="rrf">rrf</option>
+                                <option value="mmr">mmr</option>
+                                <option value="episode_mentions">episode_mentions</option>
+                                <option value="node_distance">node_distance</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Min Fact Rating (0.0-1.0)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={minFactRating}
+                                onChange={(e) => setMinFactRating(parseFloat(e.target.value) || 0.0)}
+                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled={isStreaming}
+                              />
+                            </div>
+                            {edgeSearchReranker === 'mmr' && (
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">MMR Lambda (0.0-1.0)</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="1"
+                                  step="0.1"
+                                  value={mmrLambda}
+                                  onChange={(e) => setMmrLambda(parseFloat(e.target.value) || 0.5)}
+                                  className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  disabled={isStreaming}
+                                />
+                              </div>
+                            )}
+                            {edgeSearchReranker === 'node_distance' && (
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">Center Node UUID</label>
+                                <input
+                                  type="text"
+                                  value={centerNodeUuid}
+                                  onChange={(e) => setCenterNodeUuid(e.target.value)}
+                                  placeholder="Enter node UUID..."
+                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  disabled={isStreaming}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Episodes parameters */}
+                      {['bfs'].includes(contextMode) && (
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-gray-600">Episodes:</div>
+                          <div className="ml-4 space-y-2">
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Limit (1-30)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="30"
+                                value={episodeSearchLimit}
+                                onChange={(e) => setEpisodeSearchLimit(parseInt(e.target.value) || 10)}
+                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled={isStreaming}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
