@@ -53,16 +53,3 @@ export interface UpdateMemoryContextRequest {
   zep_parameters?: ZepParameters;
   session_id?: string;
 }
-
-/**
- * Check if memory context needs refresh
- * Returns true only if context doesn't exist or doesn't have content
- */
-export function needsRefresh(context: MemoryContext | null): boolean {
-  if (!context) {
-    return true;
-  }
-  
-  // Only needs refresh if there's no content
-  return !context.context_block;
-}

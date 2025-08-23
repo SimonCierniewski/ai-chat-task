@@ -107,17 +107,14 @@ export class TelemetryService {
    * Log Zep search event
    */
   async logZepSearch(
-    userId: string,
-    sessionId: string | undefined,
-    zepMs: number,
-    resultsLength: number
-  ): Promise<void> {
+    userId: string, sessionId: string | undefined, zepMs: number, resultsLength: number, contextFromCache: boolean  ): Promise<void> {
     await this.logEvent(
       userId,
       'zep_search',
       {
         zep_ms: zepMs,
         results_length: resultsLength,
+        context_from_cache: contextFromCache,
       },
       sessionId
     );

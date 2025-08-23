@@ -7,7 +7,14 @@
  * 3. Handles telemetry and memory storage AFTER streaming starts
  */
 
-import {FastifyPluginAsync, FastifyReply} from 'fastify';
+import {
+  FastifyBaseLogger,
+  FastifyPluginAsync,
+  FastifyReply,
+  FastifyRequest,
+  FastifySchema,
+  FastifyTypeProviderDefault
+} from 'fastify';
 import {
   ChatRequest,
   ChatEventType,
@@ -26,6 +33,7 @@ import {TelemetryService} from '../../services/telemetry-service';
 import {zepAdapter} from './memory';
 import {config} from '../../config';
 import {getSupabaseAdmin} from '../../services/supabase-admin';
+import {IncomingMessage, ServerResponse} from "node:http";
 
 // Initialize services
 const openAIProvider = new OpenAIProvider();
@@ -161,6 +169,342 @@ class SSEStream {
   }
 }
 
+async function loadCachedContextFromDB(
+  userId: String,
+  reqId: String
+): Promise<string | undefined> {
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const {data: cachedContext, error} = await supabaseAdmin
+      .rpc('get_or_create_memory_context', {
+        p_user_id: userId
+      });
+
+    if (error) {
+      logger.error({
+        req_id: reqId,
+        error: error
+      }, 'Failed to check memory context cache');
+    }
+
+    const context = cachedContext[0] as MemoryContextWithStatus;
+
+    logger.info({
+      req_id: reqId,
+      user_id: userId,
+      cache_version: context.version,
+      cached: true
+    }, 'Using cached memory context');
+
+    return context?.context_block;
+
+  } catch (cacheError) {
+    logger.error({
+      req_id: reqId,
+      error: cacheError
+    }, 'Failed to check memory context cache');
+    return undefined;
+  }
+}
+
+async function loadPastMessages(sessionId: string, userId: string, pastMessagesCount: number, reqId: string): Promise<string> {
+  let pastMessages = '';
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const {data: messages, error} = await supabaseAdmin
+      .from('messages')
+      .select('role, content, created_at')
+      .eq('thread_id', sessionId)
+      .eq('user_id', userId)
+      .in('role', ['user', 'assistant'])
+      .order('created_at', {ascending: false})
+      .limit(pastMessagesCount * 2); // Get both user and assistant messages
+
+    if (!error && messages && messages.length > 0) {
+      // Reverse to get chronological order
+      const orderedMessages = messages.reverse();
+      pastMessages = '\n\nPrevious conversation:\n' +
+        orderedMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
+
+      logger.info({
+        req_id: reqId,
+        loaded_messages: orderedMessages.length,
+        session_id: sessionId
+      }, 'Loaded past messages for context');
+    }
+
+  } catch (error) {
+    logger.error({
+      req_id: reqId,
+      error,
+      session_id: sessionId
+    }, 'Failed to load past messages');
+  }
+
+  return pastMessages;
+}
+
+function buildPrompt(systemPrompt: string | undefined, contextBlock: string | undefined, pastMessages: string, message: string) {
+  // System prompt
+  const finalSystemPrompt = systemPrompt ||
+    'You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.';
+
+  // Add context and past messages if available
+  let systemContent = finalSystemPrompt;
+  if (contextBlock) {
+    systemContent += `\n\nContext:\n${contextBlock}`;
+  }
+  if (pastMessages) {
+    systemContent += `\n\nLast messages:\n${contextBlock}`;
+  }
+
+  const messages: any[] = [];
+  messages.push({
+    role: 'system',
+    content: systemContent
+  });
+
+  // Add user message
+  messages.push({
+    role: 'user',
+    content: message
+  });
+  return messages;
+}
+
+async function simulateStreamFromOpenAI(stream: SSEStream, userId: string, reqId: string, body: ChatRequest, messages: any[], contextBlock: string | undefined, returnMemory: boolean, usageCalc: any, model: string, memoryMs: number)
+  : Promise<string> {
+  let outputText = body.assistantOutput!!;
+
+  logger.info({
+    req_id: reqId,
+    userId,
+    usingAssistantOutput: true,
+    outputLength: outputText?.length
+  }, 'Fast chat: Using provided assistant output');
+
+  // Send the pre-defined output
+  stream.sendEvent(ChatEventType.TOKEN, {text: outputText});
+
+  // Estimate usage
+  usageCalc = await usageService.estimateUsage(
+    messages.map((m: any) => m.content).join('\n'),
+    outputText,
+    model
+  );
+
+  stream.sendEvent(ChatEventType.USAGE, {
+    tokens_in: usageCalc.tokens_in,
+    tokens_out: usageCalc.tokens_out,
+    cost_usd: usageCalc.cost_usd,
+    model
+  });
+
+  if (returnMemory) {
+    const memoryData: MemoryEventData = {
+      results: contextBlock,
+      memoryMs: memoryMs
+    };
+    stream.sendEvent(ChatEventType.MEMORY, memoryData);
+  }
+
+  stream.sendEvent(ChatEventType.DONE, {
+    finish_reason: 'stop',
+    ttft_ms: 0,
+    openai_ms: 0
+  });
+
+  stream.close();
+
+  return outputText;
+}
+
+async function storeConversationInZep(userId: string, sessionId: string, message: string, outputText: string, reqId: string) {
+  try {
+    const memoryUpsertStartMs = Date.now()
+    const stored = await zepAdapter.storeConversationTurn(
+      userId,
+      sessionId,
+      message,
+      outputText
+    );
+
+    if (stored) {
+      logger.info({
+        req_id: reqId,
+        user_id: userId,
+        session_id: sessionId
+      }, 'Conversation stored in Zep');
+      const memoryUpsertMs = Date.now() - memoryUpsertStartMs;
+
+      await telemetryService.logZepUpsert(
+        userId,
+        sessionId,
+        memoryUpsertMs,
+        stored
+      )
+    }
+  } catch (error) {
+    // Don't fail the request if Zep storage fails
+    logger.error({
+      req_id: reqId,
+      error: error instanceof Error ? error.message : String(error)
+    }, 'Failed to store conversation in Zep');
+  }
+}
+
+async function storeConversationInDB(sessionId: string, message: string, userId: string, startTime: number, contextBlock: string | undefined, memoryStartMs: number, memoryMs: number, outputText: string, openAIStartTime: number, openAIMetrics: any, usageCalc: any, model: string, openAIDoneTime: number, reqId: string) {
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+
+    // Store user message with startTime as created_at
+    const userMessage: UserMessage = {
+      thread_id: sessionId,
+      role: 'user',
+      content: message,
+      user_id: userId,
+      created_at: new Date(startTime).toISOString()
+    };
+
+    // Build messages array
+    const messagesToInsert: any[] = [userMessage];
+
+    // Store memory context if available
+    if (contextBlock) {
+      const memoryContextMessage: MemoryMessage = {
+        thread_id: sessionId,
+        role: 'memory',
+        content: contextBlock,
+        user_id: userId,
+        start_ms: memoryStartMs - startTime,
+        total_ms: memoryMs,
+        created_at: new Date(memoryStartMs).toISOString()
+      };
+      messagesToInsert.push(memoryContextMessage);
+    }
+
+    // Store assistant message with metrics
+    const assistantMessage: AssistantMessage = {
+      thread_id: sessionId,
+      role: 'assistant',
+      content: outputText,
+      user_id: userId,
+      start_ms: openAIStartTime - startTime,
+      ttft_ms: openAIMetrics?.ttftMs,
+      total_ms: openAIMetrics?.openAiMs || 0,
+      tokens_in: usageCalc?.tokens_in || 0,
+      tokens_out: usageCalc?.tokens_out || 0,
+      price: usageCalc?.cost_usd || 0,
+      model: model,
+      created_at: new Date(openAIDoneTime).toISOString()
+    };
+    messagesToInsert.push(assistantMessage);
+
+    // Insert all messages
+    const {error: insertError} = await supabaseAdmin
+      .from('messages')
+      .insert(messagesToInsert);
+
+    if (insertError) {
+      logger.warn({
+        req_id: reqId,
+        error: insertError.message,
+        thread_id: sessionId
+      }, 'Failed to store messages in database');
+    } else {
+      logger.info({
+        req_id: reqId,
+        thread_id: sessionId,
+        user_id: userId
+      }, 'Messages stored in database');
+    }
+  } catch (dbError: any) {
+    // Don't fail the request if database storage fails
+    logger.error({
+      req_id: reqId,
+      error: dbError.message,
+      thread_id: sessionId
+    }, 'Failed to store messages in database');
+  }
+}
+
+async function loadContextAndStoreInDB(userId: string, sessionId: string, contextMode: 'basic' | 'summarized', reqId: string) {
+  try {
+    // Fetch fresh context from Zep
+    const freshContext = await zepAdapter.getContextBlock(userId, sessionId, contextMode);
+
+    if (freshContext) {
+      // Store in database cache
+      const supabaseAdmin = getSupabaseAdmin();
+      const {error: updateError} = await supabaseAdmin
+        .rpc('update_memory_context', {
+          p_user_id: userId,
+          p_context_block: freshContext,
+          p_zep_parameters: {mode: contextMode},
+          p_session_id: sessionId
+        });
+
+      if (updateError) {
+        logger.warn({
+          req_id: reqId,
+          user_id: userId,
+          error: updateError.message
+        }, 'Failed to update memory context cache');
+      } else {
+        logger.info({
+          req_id: reqId,
+          user_id: userId,
+          session_id: sessionId,
+          context_length: freshContext.length
+        }, 'Memory context cache updated');
+      }
+    }
+  } catch (cacheUpdateError) {
+    // Don't fail if cache update fails
+    logger.warn({
+      req_id: reqId,
+      user_id: userId,
+      error: cacheUpdateError
+    }, 'Failed to refresh memory context cache');
+  }
+}
+
+async function sendTelemetryEvents(userId: string, sessionId: string | undefined, totalMs: number, message: string, usageCalc: any, model: string, openAIMetrics: any, hasProviderUsage: boolean, contextBlock: string | undefined, memoryMs: number, reqId: string, contextFromCache: boolean) {
+  try {
+    // Log telemetry
+    await telemetryService.logMessageSent(userId, sessionId, totalMs!!, message.length);
+
+    if (usageCalc) {
+      await telemetryService.logOpenAICall(userId, sessionId || '', {
+        model,
+        tokens_in: usageCalc.tokens_in,
+        tokens_out: usageCalc.tokens_out,
+        cost_usd: usageCalc.cost_usd,
+        ttft_ms: openAIMetrics?.ttftMs,
+        openai_ms: openAIMetrics?.openAiMs,
+        has_provider_usage: hasProviderUsage
+      });
+    }
+
+    if (contextBlock) {
+      await telemetryService.logZepSearch(
+        userId,
+        sessionId,
+        memoryMs,
+        contextBlock?.length,
+        contextFromCache
+      )
+    }
+
+  } catch (error: any) {
+    logger.error({
+      req_id: reqId,
+      error: error.message,
+      stack: error.stack
+    }, 'Fast chat: Saving telemetry error');
+  }
+}
+
 export const chatFastRoute: FastifyPluginAsync = async (server) => {
   server.post<{
     Body: ChatRequest;
@@ -192,7 +536,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         pastMessagesCount = 4,
         saveToZep = true
       } = req.body;
-      const userId = req.user!.id;
+      const userId: string = req.user!.id;
       const reqId = req.id;
 
       // Initialize SSE stream
@@ -208,41 +552,13 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         let contextFromCache = false;
 
         if (useMemory) {
-          const supabaseAdmin = getSupabaseAdmin();
-
           // Try to get context from DB cache first
-          try {
-            const {data: cachedContext, error} = await supabaseAdmin
-              .rpc('get_or_create_memory_context', {
-                p_user_id: userId
-              });
-
-            if (!error && cachedContext && cachedContext.length > 0) {
-              const context = cachedContext[0] as MemoryContextWithStatus;
-
-              // Check if we can use the cached context
-              if (!needsRefresh(context)) {
-                contextBlock = context.context_block;
-                contextFromCache = true;
-                logger.info({
-                  req_id: req.id,
-                  user_id: userId,
-                  cache_version: context.version,
-                  cached: true
-                }, 'Using cached memory context');
-              }
-            }
-          } catch (cacheError) {
-            logger.warn({
-              req_id: req.id,
-              error: cacheError
-            }, 'Failed to check memory context cache');
-          }
+          contextBlock = await loadCachedContextFromDB(userId, reqId);
 
           // If no valid cache, fetch from Zep
           if (!contextBlock) {
             contextBlock = await zepAdapter.getContextBlock(userId, sessionId!!, contextMode);
-            contextFromCache = false;
+            contextFromCache = true;
           }
         }
         const memoryMs = Date.now() - memoryStartMs;
@@ -250,64 +566,11 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         // Step 3: Load past messages if requested
         let pastMessages = '';
         if (pastMessagesCount > 0 && sessionId) {
-          try {
-            const supabaseAdmin = getSupabaseAdmin();
-            const {data: messages, error} = await supabaseAdmin
-              .from('messages')
-              .select('role, content, created_at')
-              .eq('thread_id', sessionId)
-              .eq('user_id', userId)
-              .in('role', ['user', 'assistant'])
-              .order('created_at', {ascending: false})
-              .limit(pastMessagesCount * 2); // Get both user and assistant messages
-
-            if (!error && messages && messages.length > 0) {
-              // Reverse to get chronological order
-              const orderedMessages = messages.reverse();
-              pastMessages = '\n\nPrevious conversation:\n' +
-                orderedMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
-
-              logger.info({
-                req_id: reqId,
-                loaded_messages: orderedMessages.length,
-                session_id: sessionId
-              }, 'Loaded past messages for context');
-            }
-          } catch (error) {
-            logger.warn({
-              req_id: reqId,
-              error,
-              session_id: sessionId
-            }, 'Failed to load past messages');
-          }
+          pastMessages = await loadPastMessages(sessionId, userId, pastMessagesCount, reqId);
         }
 
         // Step 4: Build prompt (no complex assembly, just concatenation)
-        const messages: any[] = [];
-
-        // System prompt
-        const finalSystemPrompt = systemPrompt ||
-          'You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.';
-
-        // Add context and past messages if available
-        let systemContent = finalSystemPrompt;
-        if (contextBlock) {
-          systemContent += `\n\nContext:\n${contextBlock}`;
-        }
-        if (pastMessages) {
-          systemContent += `\n\nLast messages:\n${contextBlock}`;
-        }
-
-        messages.push({
-          role: 'system',
-          content: systemContent
-        });
-
-        // Add user message
-        messages.push({
-          role: 'user',
-          content: message
-        });
+        const messages = buildPrompt(systemPrompt, contextBlock, pastMessages, message);
 
         // Step 4: Check if we should skip OpenAI (assistantOutput provided)
         let ttftMs: number | undefined;
@@ -321,50 +584,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
 
         // If assistantOutput is provided, use it instead of calling OpenAI
         if (req.body.assistantOutput) {
-          outputText = req.body.assistantOutput;
-          ttftMs = Date.now() - startTime;
-          totalMs = ttftMs + 10;
-          openAIDoneTime = Date.now();
-
-          logger.info({
-            req_id: reqId,
-            userId,
-            usingAssistantOutput: true,
-            outputLength: outputText.length
-          }, 'Fast chat: Using provided assistant output');
-
-          // Send the pre-defined output
-          stream.sendEvent(ChatEventType.TOKEN, {text: outputText});
-
-          // Estimate usage
-          usageCalc = await usageService.estimateUsage(
-            messages.map((m: any) => m.content).join('\n'),
-            outputText,
-            model
-          );
-
-          stream.sendEvent(ChatEventType.USAGE, {
-            tokens_in: usageCalc.tokens_in,
-            tokens_out: usageCalc.tokens_out,
-            cost_usd: usageCalc.cost_usd,
-            model
-          });
-
-          if (returnMemory) {
-            const memoryData: MemoryEventData = {
-              results: contextBlock,
-              memoryMs: memoryMs
-            };
-            stream.sendEvent(ChatEventType.MEMORY, memoryData);
-          }
-
-          stream.sendEvent(ChatEventType.DONE, {
-            finish_reason: 'stop',
-            ttft_ms: ttftMs,
-            openai_ms: 0
-          });
-
-          stream.close();
+          outputText = await simulateStreamFromOpenAI(stream, userId, reqId, req.body, messages, contextBlock, returnMemory, usageCalc, model, memoryMs)
 
         } else {
           // Normal OpenAI streaming path
@@ -442,199 +662,27 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
 
                 // Step 5: Handle telemetry and memory AFTER streaming (non-blocking)
                 // This happens after the response is sent to the client
-                try {
+                await sendTelemetryEvents(userId, sessionId, totalMs, message, usageCalc, model, openAIMetrics, hasProviderUsage, contextBlock, memoryMs, reqId, contextFromCache);
 
-                  // Log telemetry
-                  await telemetryService.logMessageSent(userId, sessionId, totalMs!!, message.length);
-
-                  if (usageCalc) {
-                    await telemetryService.logOpenAICall(userId, sessionId || '', {
-                      model,
-                      tokens_in: usageCalc.tokens_in,
-                      tokens_out: usageCalc.tokens_out,
-                      cost_usd: usageCalc.cost_usd,
-                      ttft_ms: openAIMetrics?.ttftMs,
-                      openai_ms: openAIMetrics?.openAiMs,
-                      has_provider_usage: hasProviderUsage
-                    });
-                  }
-
-                  if (contextBlock) {
-                    await telemetryService.logZepSearch(
-                      userId,
-                      sessionId,
-                      memoryMs,
-                      contextBlock?.length
-                    )
-                  }
-
-                } catch (error: any) {
-                  logger.error({
-                    req_id: reqId,
-                    error: error.message,
-                    stack: error.stack
-                  }, 'Fast chat: Saving telemetry error');
-                }
-
-                // Step 6: Store conversation in Zep if successful and session exists (skip in testing mode or if saveToZep is false)
-                if (testingMode || !saveToZep) {
-                  logger.info({
-                    req_id: req.id,
-                    user_id: userId,
-                    session_id: sessionId,
-                    testing_mode: testingMode,
-                    save_to_zep: saveToZep
-                  }, 'Skipping message storage (testing mode or saveToZep disabled)');
-                } else if (reason === 'stop' && sessionId && outputText) {
-                  try {
-                    const memoryUpsertStartMs = Date.now()
-                    const stored = await zepAdapter.storeConversationTurn(
-                      userId,
-                      sessionId,
-                      message,
-                      outputText
-                    );
-
-                    if (stored) {
-                      logger.info({
-                        req_id: req.id,
-                        user_id: userId,
-                        session_id: sessionId
-                      }, 'Conversation stored in Zep');
-                      const memoryUpsertMs = Date.now() - memoryUpsertStartMs;
-
-                      await telemetryService.logZepUpsert(
-                        userId,
-                        sessionId,
-                        memoryUpsertMs,
-                        stored
-                      )
-                    }
+                if (reason === 'stop' && sessionId && outputText) {
+                  if (!testingMode) {
+                    // Step 6: Store conversation in Zep if successful and session exists (skip in testing mode or if saveToZep is false)
+                    await storeConversationInZep(userId, sessionId, message, outputText, reqId);
 
                     // Step 7: Store messages in database (skip in testing mode or if saveToZep is false)
-                    if (!testingMode && saveToZep) {
-                      try {
-                        const supabaseAdmin = getSupabaseAdmin();
-
-                        // Store user message with startTime as created_at
-                        const userMessage: UserMessage = {
-                          thread_id: sessionId,
-                          role: 'user',
-                          content: message,
-                          user_id: userId,
-                          created_at: new Date(startTime).toISOString()
-                        };
-
-                        // Build messages array
-                        const messagesToInsert: any[] = [userMessage];
-
-                        // Store memory context if available
-                        if (contextBlock) {
-                          const memoryContextMessage: MemoryMessage = {
-                            thread_id: sessionId,
-                            role: 'memory',
-                            content: contextBlock,
-                            user_id: userId,
-                            start_ms: memoryStartMs - startTime,
-                            total_ms: memoryMs,
-                            created_at: new Date(memoryStartMs).toISOString()
-                          };
-                          messagesToInsert.push(memoryContextMessage);
-                        }
-
-                        // Store assistant message with metrics
-                        const assistantMessage: AssistantMessage = {
-                          thread_id: sessionId,
-                          role: 'assistant',
-                          content: outputText,
-                          user_id: userId,
-                          start_ms: openAIStartTime - startTime,
-                          ttft_ms: openAIMetrics?.ttftMs,
-                          total_ms: openAIMetrics?.openAiMs || 0,
-                          tokens_in: usageCalc?.tokens_in || 0,
-                          tokens_out: usageCalc?.tokens_out || 0,
-                          price: usageCalc?.cost_usd || 0,
-                          model: model,
-                          created_at: new Date(openAIDoneTime).toISOString()
-                        };
-                        messagesToInsert.push(assistantMessage);
-
-                        // Insert all messages
-                        const {error: insertError} = await supabaseAdmin
-                          .from('messages')
-                          .insert(messagesToInsert);
-
-                        if (insertError) {
-                          logger.warn({
-                            req_id: reqId,
-                            error: insertError.message,
-                            thread_id: sessionId
-                          }, 'Failed to store messages in database');
-                        } else {
-                          logger.info({
-                            req_id: reqId,
-                            thread_id: sessionId,
-                            user_id: userId
-                          }, 'Messages stored in database');
-                        }
-                      } catch (dbError: any) {
-                        // Don't fail the request if database storage fails
-                        logger.error({
-                          req_id: reqId,
-                          error: dbError.message,
-                          thread_id: sessionId
-                        }, 'Failed to store messages in database');
-                      }
-                    } // End of testingMode check
-
-
+                    await storeConversationInDB(sessionId, message, userId, startTime, contextBlock, memoryStartMs, memoryMs, outputText, openAIStartTime, openAIMetrics, usageCalc, model, openAIDoneTime, reqId);
+                    
                     // Step 8: Update memory context cache after successful Zep storage
-                    try {
-                      // Fetch fresh context from Zep
-                      const freshContext = await zepAdapter.getContextBlock(userId, sessionId, contextMode);
-
-                      if (freshContext) {
-                        // Store in database cache
-                        const supabaseAdmin = getSupabaseAdmin();
-                        const {error: updateError} = await supabaseAdmin
-                          .rpc('update_memory_context', {
-                            p_user_id: userId,
-                            p_context_block: freshContext,
-                            p_zep_parameters: {mode: contextMode},
-                            p_session_id: sessionId
-                          });
-
-                        if (updateError) {
-                          logger.warn({
-                            req_id: req.id,
-                            user_id: userId,
-                            error: updateError.message
-                          }, 'Failed to update memory context cache');
-                        } else {
-                          logger.info({
-                            req_id: req.id,
-                            user_id: userId,
-                            session_id: sessionId,
-                            context_length: freshContext.length
-                          }, 'Memory context cache updated');
-                        }
-                      }
-                    } catch (cacheUpdateError) {
-                      // Don't fail if cache update fails
-                      logger.warn({
-                        req_id: req.id,
-                        user_id: userId,
-                        error: cacheUpdateError
-                      }, 'Failed to refresh memory context cache');
-                    }
-
-
-                  } catch (error) {
-                    // Don't fail the request if Zep storage fails
-                    logger.error({
+                    loadContextAndStoreInDB(userId, sessionId, contextMode, reqId)
+                    
+                  } else {
+                    logger.info({
                       req_id: req.id,
-                      error: error instanceof Error ? error.message : String(error)
-                    }, 'Failed to store conversation in Zep');
+                      user_id: userId,
+                      session_id: sessionId,
+                      testing_mode: testingMode,
+                      save_to_zep: saveToZep
+                    }, 'Skipping message storage (testing mode or saveToZep disabled)');
                   }
                 }
               }
