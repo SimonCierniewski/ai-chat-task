@@ -215,32 +215,62 @@ export default function PlaygroundPage() {
   };
 
   const createUser = async () => {
-    if (!newUserName.trim() || !newExperimentTitle.trim()) return;
+    if (!newExperimentTitle.trim()) return;
+    
+    console.log('Creating user with:', { 
+      experimentTitle: newExperimentTitle.trim(),
+      userName: newUserName.trim() || undefined 
+    });
     
     setUserLoading(true);
     try {
-      const response = await fetch('/api/admin/users/init', {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        console.error('No access token available');
+        alert('Please sign in again');
+        return;
+      }
+      
+      console.log('Got token:', session.access_token ? 'yes' : 'no');
+      const url = `${publicConfig.apiBaseUrl}/api/v1/playground/init`;
+      console.log('Calling:', url);
+      
+      const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({ 
-          name: newUserName.trim(),
-          experimentTitle: newExperimentTitle.trim()
+          experimentTitle: newExperimentTitle.trim(),
+          userName: newUserName.trim() || undefined
         })
       });
       
+      console.log('Response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Response data:', data);
         const newUser = data.user;
-        setUsers(prev => [...prev, newUser]);
+        setUsers(prev => [...prev, {
+          id: newUser.id,
+          name: newUser.userName || '',
+          experimentTitle: newUser.experimentTitle,
+          label: newUser.experimentTitle
+        }]);
         setSelectedUserId(newUser.id);
-        setEditingUserName(newUser.name);
+        setEditingUserName(newUser.userName || '');
         setEditingExperimentTitle(newUser.experimentTitle);
         setNewUserName('');
         setNewExperimentTitle('');
         setShowCreateUser(false);
       } else {
         const error = await response.json();
-        console.error('Failed to create user:', error);
+        console.error('Failed to create user:', response.status, error);
+        alert(`Failed to create user: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating user:', error);
@@ -250,17 +280,29 @@ export default function PlaygroundPage() {
   };
 
   const updateUserName = async () => {
-    if (!editingUserName.trim() || !editingExperimentTitle.trim() || !selectedUserId) return;
+    if (!editingExperimentTitle.trim() || !selectedUserId) return;
     
     setUserLoading(true);
     try {
-      const response = await fetch('/api/admin/users/update', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        console.error('No access token available');
+        alert('Please sign in again');
+        return;
+      }
+      
+      const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/playground/update`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({ 
           userId: selectedUserId,
-          name: editingUserName.trim(),
-          experimentTitle: editingExperimentTitle.trim()
+          experimentTitle: editingExperimentTitle.trim(),
+          userName: editingUserName.trim() || undefined
         })
       });
       
@@ -268,7 +310,7 @@ export default function PlaygroundPage() {
         const data = await response.json();
         setUsers(prev => prev.map(u => 
           u.id === selectedUserId 
-            ? { ...u, name: data.user.name, experimentTitle: data.user.experimentTitle, label: data.user.label }
+            ? { ...u, name: data.user.userName || '', experimentTitle: data.user.experimentTitle, label: data.user.experimentTitle }
             : u
         ));
         setIsEditingUser(false);
@@ -1148,31 +1190,38 @@ export default function PlaygroundPage() {
                 {/* Create New User Form */}
                 {showCreateUser && (
                   <div className="p-3 bg-gray-50 rounded-md space-y-3">
-                    <input
-                      type="text"
-                      value={newUserName}
-                      onChange={(e) => setNewUserName(e.target.value)}
-                      placeholder="Enter user name..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={userLoading}
-                    />
-                    <p className="text-xs text-gray-500 -mt-1">
-                      This user's name will be added to messages sent to Zep, which apparently should improve memory context.
-                    </p>
-                    <input
-                      type="text"
-                      value={newExperimentTitle}
-                      onChange={(e) => setNewExperimentTitle(e.target.value)}
-                      placeholder="Enter experiment title..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={userLoading}
-                    />
+                    <div>
+                      <input
+                        type="text"
+                        value={newExperimentTitle}
+                        onChange={(e) => setNewExperimentTitle(e.target.value)}
+                        placeholder="Enter experiment title... (required)"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={userLoading}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        This title will identify the experiment in the dropdown and history.
+                      </p>
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        value={newUserName}
+                        onChange={(e) => setNewUserName(e.target.value)}
+                        placeholder="Enter user name... (optional)"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={userLoading}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Optional: This user's name will be added to messages sent to Zep, which apparently should improve memory context.
+                      </p>
+                    </div>
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={createUser}
                         className="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 text-sm"
-                        disabled={userLoading || !newUserName.trim() || !newExperimentTitle.trim()}
+                        disabled={userLoading || !newExperimentTitle.trim()}
                       >
                         {userLoading ? 'Creating...' : 'Create'}
                       </button>
@@ -1197,13 +1246,13 @@ export default function PlaygroundPage() {
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        User Name
+                        Experiment Title
                       </label>
                       <div className="flex gap-2">
                         <input
                           type="text"
-                          value={editingUserName}
-                          onChange={(e) => setEditingUserName(e.target.value)}
+                          value={editingExperimentTitle}
+                          onChange={(e) => setEditingExperimentTitle(e.target.value)}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           disabled={!isEditingUser || userLoading}
                         />
@@ -1222,7 +1271,7 @@ export default function PlaygroundPage() {
                               type="button"
                               onClick={updateUserName}
                               className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
-                              disabled={userLoading || !editingUserName.trim() || !editingExperimentTitle.trim()}
+                              disabled={userLoading || !editingExperimentTitle.trim()}
                             >
                               {userLoading ? 'Saving...' : 'Save'}
                             </button>
@@ -1245,21 +1294,25 @@ export default function PlaygroundPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        This user's name will be added to messages sent to Zep, which apparently should improve memory context.
+                        This title identifies the experiment in the dropdown and history.
                       </p>
                     </div>
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Experiment Title
+                        User Name (Optional)
                       </label>
                       <input
                         type="text"
-                        value={editingExperimentTitle}
-                        onChange={(e) => setEditingExperimentTitle(e.target.value)}
+                        value={editingUserName}
+                        onChange={(e) => setEditingUserName(e.target.value)}
+                        placeholder="Optional"
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         disabled={!isEditingUser || userLoading}
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Optional: This user's name will be added to messages sent to Zep, which apparently should improve memory context.
+                      </p>
                     </div>
                   </>
                 )}

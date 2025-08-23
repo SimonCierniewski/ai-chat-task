@@ -6,6 +6,8 @@ import { memoryRoutes } from './memory';
 import { messagesRoute } from './messages';
 import { sessionsRoutes } from './sessions';
 import { adminRoutes } from './admin';
+import { playgroundInitRoute } from './playground-init';
+import { playgroundUpdateRoute } from './playground-update';
 import { requireAuth, requireAdmin } from '../../utils/guards';
 
 export const v1Routes: FastifyPluginAsync = async (server) => {
@@ -58,5 +60,7 @@ export const v1Routes: FastifyPluginAsync = async (server) => {
   await server.register(async (adminOnlyRoutes) => {
     adminOnlyRoutes.addHook('preHandler', requireAdmin);
     await adminOnlyRoutes.register(adminRoutes, { prefix: '/admin' });
+    await adminOnlyRoutes.register(playgroundInitRoute);
+    await adminOnlyRoutes.register(playgroundUpdateRoute);
   });
 };
