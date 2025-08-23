@@ -1,12 +1,12 @@
 -- Seed data for testing History tab
 -- This creates sample data in memory_context and messages tables
 
--- First, insert a test user in memory_context with the admin as owner
--- Replace 'ADMIN_USER_ID' with your actual admin user ID from auth.users table
--- Replace 'TEST_USER_ID' with a test user ID
-
--- Example: Get your admin user ID first
+-- IMPORTANT: First get your admin user ID by running:
 -- SELECT id, email FROM auth.users WHERE email = 'your-admin-email@example.com';
+-- Then replace 'ADMIN_USER_ID' below with your actual admin user ID
+
+-- Example admin ID (replace this):
+-- SET @admin_id = 'YOUR_ACTUAL_ADMIN_USER_ID';
 
 -- Insert sample memory_context record
 INSERT INTO public.memory_context (user_id, owner_id, name, context_block, metadata)

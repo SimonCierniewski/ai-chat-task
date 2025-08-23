@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { AdminHeader } from '@/components/admin/header';
+import { ChevronRight } from 'lucide-react';
 
 interface MemoryMetrics {
   totalMs: number;
@@ -30,6 +32,7 @@ interface UserHistory {
 }
 
 export default function HistoryPage() {
+  const router = useRouter();
   const [users, setUsers] = useState<UserHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,12 +104,20 @@ export default function HistoryPage() {
       {!loading && !error && users.length > 0 && (
         <div className="space-y-4">
           {users.map((user) => (
-            <Card key={user.userId} className="p-6">
+            <Card 
+              key={user.userId} 
+              className="p-6 hover:shadow-lg transition-shadow cursor-pointer relative"
+              onClick={() => router.push(`/admin/history/${user.userId}`)}
+            >
+              <div className="absolute top-6 right-6">
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </div>
               <div className="space-y-4">
                 {/* User Header */}
                 <div className="border-b pb-3">
                   <h3 className="text-lg font-semibold">{user.name}</h3>
                   <p className="text-sm text-gray-500">ID: {user.userId}</p>
+                  <p className="text-xs text-blue-600 mt-1">Click to view chat history</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
