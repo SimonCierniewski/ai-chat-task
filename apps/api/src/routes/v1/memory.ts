@@ -491,6 +491,68 @@ class ZepAdapter {
   }
 
   /**
+   * Set graph ontology for a user
+   */
+  async setOntology(
+    userId: string,
+    entities: Record<string, any>,
+    relations: Record<string, any>
+  ): Promise<boolean> {
+    try {
+      // Transform the entities and relations into Zep format
+      const formattedEntities: Record<string, any> = {};
+      const formattedRelations: Record<string, any> = {};
+      
+      // Format entities
+      for (const [name, config] of Object.entries(entities)) {
+        formattedEntities[name] = config;
+      }
+      
+      // Format relations with source/target constraints
+      for (const [name, config] of Object.entries(relations)) {
+        const relationConfig: any = config;
+        const constraints: any[] = [];
+        
+        // Add source/target type constraints if specified
+        if (relationConfig.source_types || relationConfig.target_types) {
+          constraints.push({
+            source: relationConfig.source_types || null,
+            target: relationConfig.target_types || null
+          });
+        }
+        
+        formattedRelations[name] = [
+          {
+            description: relationConfig.description
+          },
+          constraints.length > 0 ? constraints : undefined
+        ].filter(Boolean);
+      }
+      
+      // Set ontology for the specific user
+      await this.client.graph.setOntology({
+        entities: formattedEntities,
+        relations: formattedRelations,
+        user_ids: [userId]
+      });
+      
+      logger.info('Set graph ontology for user', {
+        userId,
+        entityCount: Object.keys(entities).length,
+        relationCount: Object.keys(relations).length
+      });
+      
+      return true;
+    } catch (error: any) {
+      logger.error('Failed to set graph ontology', {
+        userId,
+        error: error.message
+      });
+      return false;
+    }
+  }
+
+  /**
    * Update user fact rating instructions
    */
   async updateFactRatingInstructions(
@@ -1239,6 +1301,88 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       return reply.status(mappedError.status).send({
         error: 'GRAPH_ADD_ERROR',
         message: mappedError.message || 'Failed to add data to graph'
+      });
+    }
+  });
+
+  // PUT /api/v1/memory/ontology - Update graph ontology
+  fastify.put('/ontology', {
+    schema: {
+      summary: 'Update graph ontology',
+      description: 'Set custom entity and relation types for the knowledge graph',
+      tags: ['Memory'],
+      body: Type.Object({
+        userId: Type.String({minLength: 1}),
+        entities: Type.Object({}, {additionalProperties: true}),
+        relations: Type.Object({}, {additionalProperties: true})
+      }),
+      response: {
+        200: Type.Object({
+          ok: Type.Literal(true),
+          message: Type.String()
+        }),
+        400: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        }),
+        500: Type.Object({
+          error: Type.String(),
+          message: Type.String()
+        })
+      }
+    }
+  }, async (request: FastifyRequest<{ Body: { userId: string; entities: Record<string, any>; relations: Record<string, any> } }>, reply: FastifyReply) => {
+    const { userId, entities, relations } = request.body;
+    const reqId = request.id;
+    const startTime = Date.now();
+    
+    try {
+      // Ensure user is initialized
+      await zepAdapter.ensureUser(userId);
+      
+      // Set ontology
+      const success = await zepAdapter.setOntology(userId, entities, relations);
+      
+      if (!success) {
+        throw new Error('Failed to set graph ontology');
+      }
+      
+      const totalMs = Date.now() - startTime;
+      
+      logger.info({
+        req_id: reqId,
+        userId,
+        entityCount: Object.keys(entities).length,
+        relationCount: Object.keys(relations).length,
+        total_ms: totalMs
+      }, 'Graph ontology updated');
+      
+      return reply.send({
+        ok: true,
+        message: 'Graph ontology updated successfully'
+      });
+      
+    } catch (error: any) {
+      const totalMs = Date.now() - startTime;
+      
+      logger.error({
+        req_id: reqId,
+        userId,
+        error: error.message,
+        stack: error.stack,
+        total_ms: totalMs
+      }, 'Failed to update graph ontology');
+      
+      if (error.statusCode === 404) {
+        return reply.status(400).send({
+          error: 'USER_NOT_FOUND',
+          message: 'User not found. Please initialize the user first.'
+        });
+      }
+      
+      return reply.status(500).send({
+        error: 'ONTOLOGY_UPDATE_ERROR',
+        message: error.message || 'Failed to update graph ontology'
       });
     }
   });

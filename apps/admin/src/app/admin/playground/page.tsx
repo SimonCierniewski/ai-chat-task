@@ -71,6 +71,11 @@ export default function PlaygroundPage() {
   const [factRatingLow, setFactRatingLow] = useState('The user bought a new brand of toothpaste.');
   const [isUpdatingFactRatings, setIsUpdatingFactRatings] = useState(false);
   
+  // Ontology state
+  const [ontologyEntities, setOntologyEntities] = useState('{\n  "Person": {\n    "description": "A human being"\n  },\n  "Organization": {\n    "description": "A company, institution, or group"\n  },\n  "Location": {\n    "description": "A geographical place"\n  }\n}');
+  const [ontologyRelations, setOntologyRelations] = useState('{\n  "KNOWS": {\n    "description": "Personal acquaintance",\n    "source_types": ["Person"],\n    "target_types": ["Person"]\n  },\n  "WORKS_AT": {\n    "description": "Employment relationship",\n    "source_types": ["Person"],\n    "target_types": ["Organization"]\n  },\n  "LOCATED_IN": {\n    "description": "Physical presence in a location",\n    "source_types": ["Person", "Organization"],\n    "target_types": ["Location"]\n  }\n}');
+  const [isUpdatingOntology, setIsUpdatingOntology] = useState(false);
+  
   // Add data to graph state
   const [graphData, setGraphData] = useState('');
   const [isAddingToGraph, setIsAddingToGraph] = useState(false);
@@ -669,6 +674,62 @@ export default function PlaygroundPage() {
       setError(err.message || 'Failed to add data to graph');
     } finally {
       setIsAddingToGraph(false);
+    }
+  };
+
+  const handleUpdateOntology = async () => {
+    if (!selectedUserId || isUpdatingOntology) return;
+    
+    setIsUpdatingOntology(true);
+    setError(null);
+    
+    try {
+      // Parse and validate JSON
+      let entities, relations;
+      try {
+        entities = JSON.parse(ontologyEntities);
+        relations = JSON.parse(ontologyRelations);
+      } catch (err) {
+        throw new Error('Invalid JSON format. Please check your entity and relation definitions.');
+      }
+      
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Please sign in to update ontology');
+      }
+      
+      // Call API to update ontology
+      const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/memory/ontology`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          userId: selectedUserId,
+          entities,
+          relations
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      // Show success feedback
+      alert('Graph ontology updated successfully');
+      
+    } catch (err: any) {
+      console.error('Ontology update error:', err);
+      setError(err.message || 'Failed to update ontology');
+      alert(err.message || 'Failed to update ontology');
+    } finally {
+      setIsUpdatingOntology(false);
     }
   };
 
@@ -2041,6 +2102,76 @@ export default function PlaygroundPage() {
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                   <p className="text-sm text-yellow-700">
                     Please select a user from the User card above before updating fact ratings.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+        
+        {/* Ontology Card */}
+        <div className="mt-8">
+          <Card title="Ontology" icon="🔗">
+            <div className="mt-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                Define custom entity and relation types for your knowledge graph. This sets the ontology for graph extraction and organization.
+              </p>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Entity Types (JSON)
+                </label>
+                <textarea
+                  value={ontologyEntities}
+                  onChange={(e) => setOntologyEntities(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+                  rows={8}
+                  disabled={isUpdatingOntology}
+                  placeholder='{\n  "EntityType": {\n    "description": "Description of the entity type"\n  }\n}'
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Define entity types as JSON. Each key is an entity type name with a description.
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Relation Types (JSON)
+                </label>
+                <textarea
+                  value={ontologyRelations}
+                  onChange={(e) => setOntologyRelations(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+                  rows={10}
+                  disabled={isUpdatingOntology}
+                  placeholder='{\n  "RELATION_TYPE": {\n    "description": "Description",\n    "source_types": ["EntityType1"],\n    "target_types": ["EntityType2"]\n  }\n}'
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Define relation types as JSON. Each relation can specify allowed source and target entity types.
+                </p>
+              </div>
+              
+              <button
+                type="button"
+                onClick={handleUpdateOntology}
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={isUpdatingOntology || !selectedUserId}
+              >
+                {isUpdatingOntology ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Updating...
+                  </>
+                ) : (
+                  'Update'
+                )}
+              </button>
+              
+              {/* User selection warning */}
+              {!selectedUserId && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-700">
+                    Please select a user from the User card above before updating ontology.
                   </p>
                 </div>
               )}
