@@ -24,10 +24,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { name } = await request.json();
+    const { name, experimentTitle } = await request.json();
     
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    }
+
+    if (!experimentTitle || typeof experimentTitle !== 'string' || experimentTitle.trim().length === 0) {
+      return NextResponse.json({ error: 'Experiment title is required' }, { status: 400 });
     }
 
     // Generate new user ID
@@ -39,7 +43,8 @@ export async function POST(request: Request) {
       .insert({
         user_id: newUserId,
         owner_id: user.id,
-        name: name.trim(),
+        user_name: name.trim(),
+        experiment_title: experimentTitle.trim(),
         context_block: '',
         metadata: {}
       });
@@ -49,41 +54,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
     }
 
-    // Call the API /init endpoint to create user and thread in Zep
-    // Using the internal API endpoint
-    const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
-    
-    try {
-      const initResponse = await fetch(`${apiUrl}/api/v1/memory/init`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // We need to pass an admin token or service role for this internal call
-          // For now, we'll use a simplified approach
-        },
-        body: JSON.stringify({
-          userId: newUserId,
-          sessionId: newUserId // Using userId as sessionId/threadId
-        })
-      });
-
-      if (!initResponse.ok) {
-        const errorData = await initResponse.text();
-        console.error('Error initializing Zep:', errorData);
-        // Don't fail the whole operation if Zep init fails
-        // The user is already created in memory_context
-      }
-    } catch (zepError) {
-      console.error('Error calling Zep init:', zepError);
-      // Continue anyway - user is created in database
-    }
+    // Note: Zep user and thread will be created automatically when first message is sent
+    // This is handled by the chat endpoint which has proper authentication
 
     return NextResponse.json({
       success: true,
       user: {
         id: newUserId,
         name: name.trim(),
-        label: `${name.trim()} (${newUserId.substring(0, 8)}...)`
+        experimentTitle: experimentTitle.trim(),
+        label: experimentTitle.trim()  // Use experiment title as label in dropdowns
       }
     });
   } catch (error) {

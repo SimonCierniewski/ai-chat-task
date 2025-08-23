@@ -23,7 +23,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { userId, name } = await request.json();
+    const { userId, name, experimentTitle } = await request.json();
     
     if (!userId || typeof userId !== 'string') {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -31,6 +31,10 @@ export async function PUT(request: Request) {
     
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    }
+
+    if (!experimentTitle || typeof experimentTitle !== 'string' || experimentTitle.trim().length === 0) {
+      return NextResponse.json({ error: 'Experiment title is required' }, { status: 400 });
     }
 
     // Verify the user belongs to this admin
@@ -45,16 +49,19 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'User not found or access denied' }, { status: 404 });
     }
 
-    // Update the user's name
+    // Update the user's name and experiment title
     const { error: updateError } = await supabase
       .from('memory_context')
-      .update({ name: name.trim() })
+      .update({ 
+        user_name: name.trim(),
+        experiment_title: experimentTitle.trim()
+      })
       .eq('user_id', userId)
       .eq('owner_id', user.id);
 
     if (updateError) {
-      console.error('Error updating user name:', updateError);
-      return NextResponse.json({ error: 'Failed to update user name' }, { status: 500 });
+      console.error('Error updating user:', updateError);
+      return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -62,7 +69,8 @@ export async function PUT(request: Request) {
       user: {
         id: userId,
         name: name.trim(),
-        label: `${name.trim()} (${userId.substring(0, 8)}...)`
+        experimentTitle: experimentTitle.trim(),
+        label: experimentTitle.trim()  // Use experiment title as label in dropdowns
       }
     });
   } catch (error) {

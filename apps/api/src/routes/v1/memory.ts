@@ -174,6 +174,7 @@ class ZepAdapter {
           await this.client.user.add({
             userId,
             email,
+            firstName: email?.split('@')[0], // Use email prefix as firstName if not provided
             metadata: {
               created_at: new Date().toISOString(),
               source: 'signup_hook',
@@ -234,7 +235,7 @@ class ZepAdapter {
    * Ensure user exists in Zep (create if not exists)
    * @returns true if user exists or was created
    */
-  async ensureUser(userId: string, email?: string): Promise<boolean> {
+  async ensureUser(userId: string, email?: string, firstName?: string): Promise<boolean> {
     try {
       // Try to get the user first
       try {
@@ -246,11 +247,12 @@ class ZepAdapter {
           await this.client.user.add({
             userId,
             email,
+            firstName, // Add first name if provided
             metadata: {
               created_at: new Date().toISOString()
             }
           });
-          logger.info('Created new Zep user', {userId});
+          logger.info('Created new Zep user', {userId, firstName});
           return true;
         }
         throw error; // Re-throw other errors
@@ -527,7 +529,8 @@ class ZepAdapter {
     userId: string,
     sessionId: string,
     userMessage: string,
-    assistantMessage: string
+    assistantMessage: string,
+    userName?: string
   ): Promise<boolean> {
     
     try {
@@ -535,17 +538,20 @@ class ZepAdapter {
         userId,
         sessionId,
         userMessageLength: userMessage.length,
-        assistantMessageLength: assistantMessage.length
+        assistantMessageLength: assistantMessage.length,
+        userName
       }, 'Starting to store conversation turn');
 
       const messages: Message[] = [
         {
           content: userMessage,
           role: "user",
+          ...(userName && { name: userName }) // Only add name if userName is provided
         },
         {
           content: assistantMessage,
           role: "assistant",
+          ...(userName && { name: "AI Assistant" }) // Only add assistant name if userName exists
         }
       ];
 

@@ -321,14 +321,40 @@ async function simulateStreamFromOpenAI(stream: SSEStream, userId: string, reqId
   return outputText;
 }
 
+async function loadUserNameFromDB(userId: string, reqId: string): Promise<string | undefined> {
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const {data: context, error} = await supabaseAdmin
+      .from('memory_context')
+      .select('user_name')
+      .eq('user_id', userId)
+      .single();
+
+    if (!error && context?.user_name) {
+      return context.user_name;
+    }
+  } catch (error) {
+    logger.error({
+      req_id: reqId,
+      error
+    }, 'Failed to load user name from DB');
+  }
+  return undefined;
+}
+
 async function storeConversationInZep(userId: string, sessionId: string, message: string, outputText: string, reqId: string) {
   try {
     const memoryUpsertStartMs = Date.now()
+    
+    // Load user name from DB
+    const userName = await loadUserNameFromDB(userId, reqId);
+    
     const stored = await zepAdapter.storeConversationTurn(
       userId,
       sessionId,
       message,
-      outputText
+      outputText,
+      userName  // Pass user name to Zep adapter
     );
 
     if (stored) {

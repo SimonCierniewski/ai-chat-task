@@ -38,6 +38,7 @@ interface ModelInfo {
 interface PlaygroundUser {
   id: string;
   name: string;
+  experimentTitle: string;
   label: string;
 }
 
@@ -69,7 +70,9 @@ export default function PlaygroundPage() {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [newUserName, setNewUserName] = useState('');
+  const [newExperimentTitle, setNewExperimentTitle] = useState('');
   const [editingUserName, setEditingUserName] = useState('');
+  const [editingExperimentTitle, setEditingExperimentTitle] = useState('');
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [userLoading, setUserLoading] = useState(false);
   
@@ -171,6 +174,7 @@ export default function PlaygroundPage() {
           setSelectedUserId(data.users[0].id);
           const currentUser = data.users[0];
           setEditingUserName(currentUser.name);
+          setEditingExperimentTitle(currentUser.experimentTitle);
         }
       }
     } catch (error) {
@@ -179,14 +183,17 @@ export default function PlaygroundPage() {
   };
 
   const createUser = async () => {
-    if (!newUserName.trim()) return;
+    if (!newUserName.trim() || !newExperimentTitle.trim()) return;
     
     setUserLoading(true);
     try {
       const response = await fetch('/api/admin/users/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newUserName.trim() })
+        body: JSON.stringify({ 
+          name: newUserName.trim(),
+          experimentTitle: newExperimentTitle.trim()
+        })
       });
       
       if (response.ok) {
@@ -195,7 +202,9 @@ export default function PlaygroundPage() {
         setUsers(prev => [...prev, newUser]);
         setSelectedUserId(newUser.id);
         setEditingUserName(newUser.name);
+        setEditingExperimentTitle(newUser.experimentTitle);
         setNewUserName('');
+        setNewExperimentTitle('');
         setShowCreateUser(false);
       } else {
         const error = await response.json();
@@ -209,7 +218,7 @@ export default function PlaygroundPage() {
   };
 
   const updateUserName = async () => {
-    if (!editingUserName.trim() || !selectedUserId) return;
+    if (!editingUserName.trim() || !editingExperimentTitle.trim() || !selectedUserId) return;
     
     setUserLoading(true);
     try {
@@ -218,7 +227,8 @@ export default function PlaygroundPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           userId: selectedUserId,
-          name: editingUserName.trim() 
+          name: editingUserName.trim(),
+          experimentTitle: editingExperimentTitle.trim()
         })
       });
       
@@ -226,7 +236,7 @@ export default function PlaygroundPage() {
         const data = await response.json();
         setUsers(prev => prev.map(u => 
           u.id === selectedUserId 
-            ? { ...u, name: data.user.name, label: data.user.label }
+            ? { ...u, name: data.user.name, experimentTitle: data.user.experimentTitle, label: data.user.label }
             : u
         ));
         setIsEditingUser(false);
@@ -745,6 +755,7 @@ export default function PlaygroundPage() {
                         const user = users.find(u => u.id === e.target.value);
                         if (user) {
                           setEditingUserName(user.name);
+                          setEditingExperimentTitle(user.experimentTitle);
                         }
                       }}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -781,12 +792,23 @@ export default function PlaygroundPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       disabled={userLoading}
                     />
+                    <p className="text-xs text-gray-500 -mt-1">
+                      This user's name will be added to messages sent to Zep, which apparently should improve memory context.
+                    </p>
+                    <input
+                      type="text"
+                      value={newExperimentTitle}
+                      onChange={(e) => setNewExperimentTitle(e.target.value)}
+                      placeholder="Enter experiment title..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={userLoading}
+                    />
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={createUser}
                         className="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 text-sm"
-                        disabled={userLoading || !newUserName.trim()}
+                        disabled={userLoading || !newUserName.trim() || !newExperimentTitle.trim()}
                       >
                         {userLoading ? 'Creating...' : 'Create'}
                       </button>
@@ -795,6 +817,7 @@ export default function PlaygroundPage() {
                         onClick={() => {
                           setShowCreateUser(false);
                           setNewUserName('');
+                          setNewExperimentTitle('');
                         }}
                         className="flex-1 px-3 py-1.5 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 text-sm"
                         disabled={userLoading}
@@ -805,57 +828,76 @@ export default function PlaygroundPage() {
                   </div>
                 )}
 
-                {/* Edit User Name */}
+                {/* Edit User Name and Experiment Title */}
                 {selectedUserId && !showCreateUser && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      User Name
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={editingUserName}
-                        onChange={(e) => setEditingUserName(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={!isEditingUser || userLoading}
-                      />
-                      {!isEditingUser ? (
-                        <button
-                          type="button"
-                          onClick={() => setIsEditingUser(true)}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                          disabled={userLoading}
-                        >
-                          Edit
-                        </button>
-                      ) : (
-                        <>
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        User Name
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={editingUserName}
+                          onChange={(e) => setEditingUserName(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={!isEditingUser || userLoading}
+                        />
+                        {!isEditingUser ? (
                           <button
                             type="button"
-                            onClick={updateUserName}
-                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
-                            disabled={userLoading || !editingUserName.trim()}
-                          >
-                            {userLoading ? 'Saving...' : 'Save'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsEditingUser(false);
-                              const user = users.find(u => u.id === selectedUserId);
-                              if (user) {
-                                setEditingUserName(user.name);
-                              }
-                            }}
-                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                            onClick={() => setIsEditingUser(true)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                             disabled={userLoading}
                           >
-                            Cancel
+                            Edit
                           </button>
-                        </>
-                      )}
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={updateUserName}
+                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                              disabled={userLoading || !editingUserName.trim() || !editingExperimentTitle.trim()}
+                            >
+                              {userLoading ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsEditingUser(false);
+                                const user = users.find(u => u.id === selectedUserId);
+                                if (user) {
+                                  setEditingUserName(user.name);
+                                  setEditingExperimentTitle(user.experimentTitle);
+                                }
+                              }}
+                              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                              disabled={userLoading}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        This user's name will be added to messages sent to Zep, which apparently should improve memory context.
+                      </p>
                     </div>
-                  </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Experiment Title
+                      </label>
+                      <input
+                        type="text"
+                        value={editingExperimentTitle}
+                        onChange={(e) => setEditingExperimentTitle(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!isEditingUser || userLoading}
+                      />
+                    </div>
+                  </>
                 )}
 
                 {/* User ID Display */}

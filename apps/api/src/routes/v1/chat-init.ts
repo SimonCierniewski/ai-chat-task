@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { logger } from '../../utils/logger';
 import { zepAdapter } from './memory';
+import { getSupabaseAdmin } from '../../services/supabase-admin';
 
 interface InitRequest {
   sessionId: string;
@@ -61,8 +62,29 @@ export const chatInitRoute: FastifyPluginAsync = async (server) => {
       }, 'Chat initialization request');
 
       try {
+        // Load user name from DB if available
+        let userName: string | undefined;
+        try {
+          const supabaseAdmin = getSupabaseAdmin();
+          const {data: context} = await supabaseAdmin
+            .from('memory_context')
+            .select('user_name')
+            .eq('user_id', userId)
+            .single();
+          
+          if (context?.user_name) {
+            userName = context.user_name;
+          }
+        } catch (error) {
+          logger.debug({
+            req_id: reqId,
+            userId,
+            error
+          }, 'Could not load user name from DB');
+        }
+        
         // Check/create user in Zep
-        const userExists = await zepAdapter.ensureUser(userId, req.user!.email);
+        const userExists = await zepAdapter.ensureUser(userId, req.user!.email, userName);
         
         // Check/create thread in Zep
         const threadExists = await zepAdapter.ensureThread(userId, sessionId);

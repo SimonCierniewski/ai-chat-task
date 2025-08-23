@@ -26,9 +26,9 @@ export async function GET(request: Request) {
     // Get all users from memory_context where current admin is the owner
     const { data: users, error: usersError } = await supabase
       .from('memory_context')
-      .select('user_id, name')
+      .select('user_id, user_name, experiment_title')
       .eq('owner_id', user.id)
-      .order('name', { ascending: true });
+      .order('experiment_title', { ascending: true });
 
     if (usersError) {
       console.error('Error fetching users:', usersError);
@@ -38,8 +38,9 @@ export async function GET(request: Request) {
     // Format users for dropdown
     const formattedUsers = (users || []).map(u => ({
       id: u.user_id,
-      name: u.name || `User ${u.user_id.substring(0, 8)}`,
-      label: `${u.name || 'Unnamed'} (${u.user_id.substring(0, 8)}...)`
+      name: u.user_name || `User ${u.user_id.substring(0, 8)}`,
+      experimentTitle: u.experiment_title || 'Untitled Experiment',
+      label: u.experiment_title || 'Untitled Experiment'  // Use experiment title as label in dropdowns
     }));
 
     return NextResponse.json({ users: formattedUsers });
