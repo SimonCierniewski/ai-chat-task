@@ -1139,25 +1139,9 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
           });
         }
         
-        // Get the last episode
-        const lastEpisode = episodes.episodes[episodes.episodes.length - 1];
-        
-        // Get episode ID - might be in different properties
-        const episodeId = lastEpisode.episodeId || lastEpisode.episode_id || lastEpisode.id;
-        
-        // Get detailed status of the last episode
-        let episodeDetails;
-        if (episodeId) {
-          try {
-            episodeDetails = await zepAdapter.client.graph.episode.get(episodeId);
-          } catch (error) {
-            logger.warn(`Could not get episode details for ${episodeId}`, error);
-          }
-        }
-        
         // Check status of all episodes
         const allComplete = episodes.episodes.every((ep: any) => 
-          ep.status === 'complete' || ep.status === 'completed'
+          ep.processed
         );
         
         const episodeStatus = allComplete ? 'complete' : 'incomplete';
@@ -1165,10 +1149,9 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         return reply.send({
           episodeStatus,
           episodeCount: episodes.episodes.length,
-          lastEpisodeId: episodeId,
           message: allComplete 
             ? 'All episodes have been processed successfully' 
-            : `Processing in progress. ${episodes.episodes.filter((ep: any) => ep.status === 'complete' || ep.status === 'completed').length}/${episodes.episodes.length} episodes complete`,
+            : `Processing in progress. ${episodes.episodes.filter((ep: any) => ep.processed).length}/${episodes.episodes.length} episodes complete`,
           episodes: episodes.episodes.map((ep: any) => ({
             id: ep.episodeId || ep.episode_id || ep.id || '',
             status: ep.status || 'unknown'
