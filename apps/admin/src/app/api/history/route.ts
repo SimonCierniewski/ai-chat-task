@@ -173,6 +173,16 @@ export async function GET(request: Request) {
           tokensOut: assistantMessages.reduce((sum, m) => sum + (m.tokens_out || 0), 0)
         };
 
+        // Calculate user metrics (TTFT and total time from user messages)
+        const userMetrics = {
+          ttftMs: userMessages.length > 0
+            ? userMessages.reduce((sum, m) => sum + (m.ttft_ms || 0), 0) / userMessages.length
+            : 0,
+          totalMs: userMessages.length > 0
+            ? userMessages.reduce((sum, m) => sum + (m.total_ms || 0), 0) / userMessages.length
+            : 0
+        };
+
         // Calculate total cost
         const totalCost = memoryMetrics.cost + openAiMetrics.cost;
 
@@ -187,8 +197,11 @@ export async function GET(request: Request) {
           messageCount: safeMessages.length,
           memory: memoryMetrics,
           openai: openAiMetrics,
+          user: userMetrics, // Add user metrics
           total: {
-            cost: totalCost
+            cost: totalCost,
+            userTtftMs: userMetrics.ttftMs,
+            userTotalMs: userMetrics.totalMs
           }
         };
       })

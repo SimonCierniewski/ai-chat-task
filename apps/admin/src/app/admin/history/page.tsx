@@ -21,14 +21,22 @@ interface OpenAIMetrics {
   tokensOut: number;
 }
 
+interface UserMetrics {
+  ttftMs: number;
+  totalMs: number;
+}
+
 interface UserHistory {
   userId: string;
   name: string;
   messageCount?: number;
   memory: MemoryMetrics;
   openai: OpenAIMetrics;
+  user?: UserMetrics;
   total: {
     cost: number;
+    userTtftMs?: number;
+    userTotalMs?: number;
   };
 }
 
@@ -197,13 +205,25 @@ export default function HistoryPage() {
                   {/* Total Block */}
                   <div className="space-y-2">
                     <h4 className="font-medium text-sm text-gray-700">Total</h4>
-                    <div className="bg-blue-50 rounded-lg p-3">
+                    <div className="bg-blue-50 rounded-lg p-3 space-y-1">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Total Cost:</span>
                         <span className="font-mono text-blue-600 font-semibold">
                           {formatCost(user.total.cost)}
                         </span>
                       </div>
+                      {user.total.userTtftMs !== undefined && user.total.userTtftMs > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">User TTFT (avg):</span>
+                          <span className="font-mono">{formatTime(user.total.userTtftMs)}</span>
+                        </div>
+                      )}
+                      {user.total.userTotalMs !== undefined && user.total.userTotalMs > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">User Total (avg):</span>
+                          <span className="font-mono">{formatTime(user.total.userTotalMs)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
