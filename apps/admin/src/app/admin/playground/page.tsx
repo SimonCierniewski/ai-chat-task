@@ -1889,6 +1889,22 @@ export default function PlaygroundPage() {
               </div>
             </Card>
             
+            {/* System Prompt Card - Moved from right column */}
+            <Card title="System Prompt" icon="🤖">
+              <div className="mt-4">
+                <textarea
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Enter a custom system prompt..."
+                  disabled={isStreaming}
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  This prompt sets the behavior and context for the AI assistant.
+                </p>
+              </div>
+            </Card>
 
           </div>
 
@@ -2110,23 +2126,6 @@ export default function PlaygroundPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 font-mono text-sm"
                   />
                 </div>
-              </div>
-            </Card>
-
-            {/* System Prompt Card - At the bottom */}
-            <Card title="System Prompt" icon="🤖">
-              <div className="mt-4">
-                <textarea
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                  placeholder="Enter a custom system prompt..."
-                  disabled={isStreaming}
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  This prompt sets the behavior and context for the AI assistant.
-                </p>
               </div>
             </Card>
 
