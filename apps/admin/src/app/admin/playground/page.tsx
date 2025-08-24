@@ -2007,6 +2007,43 @@ export default function PlaygroundPage() {
             <Card title="Configuration" icon="⚙️">
               <div className="mt-4 space-y-4">
                 <div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={testingMode}
+                      onChange={(e) => setTestingMode(e.target.checked)}
+                      className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                      disabled={isStreaming}
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Testing Mode: Don't save messages
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 ml-6 mt-1">
+                    When enabled, messages won't be stored in Zep or the database. Use this to test different responses.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Number of past messages added to context
+                  </label>
+                  <select
+                    value={pastMessagesCount}
+                    onChange={(e) => setPastMessagesCount(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isStreaming}
+                  >
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                      <option key={num} value={num}>{num}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Load this many previous messages from the conversation history
+                  </p>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Model
                   </label>
@@ -2059,43 +2096,6 @@ export default function PlaygroundPage() {
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Maximum tokens in response (1-4096)
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Number of past messages added to context
-                  </label>
-                  <select
-                    value={pastMessagesCount}
-                    onChange={(e) => setPastMessagesCount(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={isStreaming}
-                  >
-                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                      <option key={num} value={num}>{num}</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Load this many previous messages from the conversation history
-                  </p>
-                </div>
-
-                <div>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={testingMode}
-                      onChange={(e) => setTestingMode(e.target.checked)}
-                      className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                      disabled={isStreaming}
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      Testing Mode: Don't save messages
-                    </span>
-                  </label>
-                  <p className="text-xs text-gray-500 ml-6 mt-1">
-                    When enabled, messages won't be stored in Zep or the database. Use this to test different responses.
                   </p>
                 </div>
 
