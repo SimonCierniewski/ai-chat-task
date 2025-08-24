@@ -40,10 +40,12 @@ export async function GET(request: Request) {
 
     // Get all users from memory_context where current admin is the owner
     // Try to get all columns and handle what's available
+    // Sort by updated_at DESC to show newest/most recently active users first
     const { data: users, error: usersError } = await supabase
       .from('memory_context')
       .select('*')
-      .eq('owner_id', user.id);
+      .eq('owner_id', user.id)
+      .order('updated_at', { ascending: false });
 
     console.log('User list - Memory context users:', { 
       count: users?.length,
