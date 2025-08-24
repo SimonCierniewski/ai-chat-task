@@ -1087,6 +1087,7 @@ export default function PlaygroundPage() {
     if (!importText.trim() || isImporting || !selectedUserId) return;
     
     setIsImporting(true);
+    // Reset progress for new import
     setImportProgress({ current: 0, total: 0 });
     
     try {
@@ -1226,9 +1227,9 @@ export default function PlaygroundPage() {
         }
       }
       
-      // Don't clear the import text, just reset progress
+      // Don't clear the import text or progress to show completion status
       setError(null);
-      setImportProgress({ current: 0, total: 0 });
+      // Progress stays visible to show completion
       
       // Show success message
       alert(`Successfully imported ${messages.length} messages`);
@@ -2137,11 +2138,14 @@ export default function PlaygroundPage() {
             {/* Import Conversations Card */}
             <Card title="Import Conversations" icon="📥">
             {/* Progress indicator */}
-            {isImporting && (
+            {(isImporting || importProgress.total > 0) && (
               <div className="absolute top-4 right-4 flex items-center gap-2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                <span className="text-sm text-gray-600">
+                {isImporting && (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                )}
+                <span className={`text-sm ${importProgress.current === importProgress.total && importProgress.total > 0 ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
                   {importProgress.current}/{importProgress.total}
+                  {importProgress.current === importProgress.total && importProgress.total > 0 && ' ✓'}
                 </span>
               </div>
             )}
