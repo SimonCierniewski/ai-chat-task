@@ -381,7 +381,7 @@ async function storeConversationInZep(userId: string, sessionId: string, message
   }
 }
 
-async function storeConversationInDB(sessionId: string, message: string, userId: string, startTime: number, contextBlock: string | undefined, memoryStartMs: number, memoryMs: number, outputText: string, openAIStartTime: number, openAIMetrics: any, usageCalc: any, model: string, openAIDoneTime: number, reqId: string) {
+async function storeConversationInDB(sessionId: string, message: string, userId: string, startTime: number, contextBlock: string | undefined, memoryStartMs: number, memoryMs: number, outputText: string, openAIStartTime: number, openAIMetrics: any, usageCalc: any, model: string, openAIDoneTime: number, reqId: string, prompt?: any[]) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
 
@@ -411,8 +411,8 @@ async function storeConversationInDB(sessionId: string, message: string, userId:
       messagesToInsert.push(memoryContextMessage);
     }
 
-    // Store assistant message with metrics
-    const assistantMessage: AssistantMessage = {
+    // Store assistant message with metrics and prompt
+    const assistantMessage: AssistantMessage & { prompt?: any } = {
       thread_id: sessionId,
       role: 'assistant',
       content: outputText,
@@ -424,7 +424,8 @@ async function storeConversationInDB(sessionId: string, message: string, userId:
       tokens_out: usageCalc?.tokens_out || 0,
       price: usageCalc?.cost_usd || 0,
       model: model,
-      created_at: new Date(openAIDoneTime).toISOString()
+      created_at: new Date(openAIDoneTime).toISOString(),
+      prompt: prompt // Store the full prompt sent to OpenAI
     };
     messagesToInsert.push(assistantMessage);
 
@@ -710,7 +711,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                     await storeConversationInZep(userId, sessionId, message, outputText, reqId);
 
                     // Step 7: Store messages in database (skip in testing mode)
-                    await storeConversationInDB(sessionId, message, userId, startTime, contextBlock, memoryStartMs, memoryMs, outputText, openAIStartTime, openAIMetrics, usageCalc, model, openAIDoneTime, reqId);
+                    await storeConversationInDB(sessionId, message, userId, startTime, contextBlock, memoryStartMs, memoryMs, outputText, openAIStartTime, openAIMetrics, usageCalc, model, openAIDoneTime, reqId, messages);
 
                     // Step 8: Update memory context cache after successful Zep storage
                     loadContextAndStoreInDB(userId, sessionId, contextMode, reqId)

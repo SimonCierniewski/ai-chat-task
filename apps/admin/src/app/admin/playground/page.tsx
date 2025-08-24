@@ -1378,7 +1378,7 @@ export default function PlaygroundPage() {
             <Card title="Search" icon="🔍">
               <div className="mt-4 space-y-4">
                 <p className="text-xs text-gray-500">
-                  Search is based on Context mode selected in Context Mode card (based on message query)
+                  Search is based on Context mode selected in Context Mode card (only modes "Based on message query")
                 </p>
                 
                 <div>

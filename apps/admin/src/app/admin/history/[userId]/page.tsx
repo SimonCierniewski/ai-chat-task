@@ -21,6 +21,7 @@ interface Message {
   content: string;
   createdAt: string;
   metadata: MessageMetadata;
+  prompt?: any[]; // OpenAI prompt for assistant messages
 }
 
 interface ChatUser {
@@ -38,6 +39,7 @@ export default function ChatHistoryPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPrompts, setShowPrompts] = useState(false);
 
   useEffect(() => {
     console.log('ChatHistoryPage mounted with userId:', userId);
@@ -156,6 +158,21 @@ export default function ChatHistoryPage() {
 
       {!loading && !error && messages.length > 0 && (
         <div className="space-y-4 max-w-6xl mx-auto">
+          {/* Prompts toggle checkbox */}
+          <Card className="p-4 bg-gray-50">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showPrompts}
+                onChange={(e) => setShowPrompts(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Show OpenAI Prompts (Admin Only)
+              </span>
+            </label>
+          </Card>
+          
           {messages.map((message) => (
             <div 
               key={message.id} 
@@ -186,6 +203,25 @@ export default function ChatHistoryPage() {
                 <div className="prose prose-sm max-w-none mb-3">
                   <p className="whitespace-pre-wrap">{message.content}</p>
                 </div>
+
+                {/* Show prompt if enabled and available (for assistant messages) */}
+                {showPrompts && message.role === 'assistant' && message.prompt && (
+                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <p className="text-xs font-semibold text-yellow-800 mb-2">OpenAI Prompt:</p>
+                    <div className="space-y-2">
+                      {message.prompt.map((msg: any, idx: number) => (
+                        <div key={idx} className="text-xs">
+                          <span className="font-semibold text-yellow-700">
+                            {msg.role.toUpperCase()}:
+                          </span>
+                          <pre className="mt-1 whitespace-pre-wrap text-gray-700 font-mono">
+                            {msg.content}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Metadata Footer */}
                 <div className="border-t pt-2 mt-3 flex flex-wrap gap-3 text-xs text-gray-500">

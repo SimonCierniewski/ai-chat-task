@@ -106,7 +106,8 @@ export async function GET(
         tokensOut: msg.tokens_out,
         price: msg.price,
         model: msg.model
-      }
+      },
+      prompt: msg.prompt // Include the OpenAI prompt if available
     }));
 
     // Get user name and experiment title from memory context
