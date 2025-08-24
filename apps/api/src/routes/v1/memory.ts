@@ -237,30 +237,46 @@ class ZepAdapter {
    */
   async ensureUser(userId: string, email?: string, firstName?: string): Promise<boolean> {
     try {
+      logger.debug('Ensuring Zep user exists', { userId, email, firstName });
+      
       // Try to get the user first
       try {
-        await this.client.user.get(userId);
+        const existingUser = await this.client.user.get(userId);
+        logger.debug('Zep user already exists', { userId, existingUser });
         return true; // User exists
       } catch (error: any) {
         // User doesn't exist, create it
         if (error.statusCode === 404 || error.message?.includes('not found')) {
-          await this.client.user.add({
+          logger.info('Creating new Zep user', { userId, email, firstName });
+          
+          const userData = {
             userId,
-            email,
-            firstName, // Add first name if provided
+            email: email || `${userId}@zep.local`, // Provide default email if none given
+            firstName: firstName || userId.substring(0, 8), // Default name if none given
             metadata: {
-              created_at: new Date().toISOString()
+              created_at: new Date().toISOString(),
+              source: 'playground'
             }
-          });
-          logger.info('Created new Zep user', {userId, firstName});
+          };
+          
+          await this.client.user.add(userData);
+          logger.info('Created new Zep user successfully', { userId, userData });
           return true;
         }
+        logger.error('Unexpected error checking Zep user', { 
+          userId, 
+          error: error.message,
+          statusCode: error.statusCode 
+        });
         throw error; // Re-throw other errors
       }
     } catch (error: any) {
       logger.error('Failed to ensure Zep user', {
         userId,
-        error: error.message
+        email,
+        firstName,
+        error: error.message,
+        stack: error.stack
       });
       return false;
     }
