@@ -47,9 +47,8 @@ export async function GET(
     }
 
     // Fetch all messages for this user
-    // Important: Playground messages are stored with the admin's user_id, not the playground user's ID
+    // For playground users, the thread_id IS the user_id
     let messages: any[] = [];
-    let messagesError = null;
     
     // First try: Get messages with this exact user_id (for real users)
     const { data: directMessages, error: directError } = await supabase
@@ -60,39 +59,38 @@ export async function GET(
       
     if (!directError && directMessages && directMessages.length > 0) {
       messages = directMessages;
+      console.log('Found direct messages for user:', params.userId, 'count:', directMessages.length);
     } else {
-      // Second try: For playground users, messages are stored with admin's ID
-      const { data: adminMessages, error: adminError } = await supabase
+      // Second try: For playground users, get messages where thread_id matches the userId
+      // In playground, sessionId (which becomes thread_id) is set to the user's ID
+      const { data: threadMessages, error: threadError } = await supabase
         .from('messages')
         .select('*')
-        .eq('user_id', user.id)  // Use the admin's ID
+        .eq('thread_id', params.userId)  // Thread ID matches the user ID for playground users
         .order('created_at', { ascending: true });
         
-      if (!adminError && adminMessages) {
-        // Filter messages that belong to this user based on thread_id or context
-        const userIdShort = params.userId.substring(0, 8);
-        messages = adminMessages.filter(m => {
-          // Check if thread_id contains part of the user ID
-          return m.thread_id && (
-            m.thread_id.includes(params.userId) || 
-            m.thread_id.includes(userIdShort)
-          );
-        });
-        
-        // If still no messages with user ID in thread, try to match by memory_context
-        if (messages.length === 0 && memoryUser) {
-          // Get all threads for this memory context user
-          messages = adminMessages; // For now, show all admin messages if we can't filter
-        }
+      if (!threadError && threadMessages && threadMessages.length > 0) {
+        messages = threadMessages;
+        console.log('Found thread messages for user:', params.userId, 'count:', threadMessages.length);
       } else {
-        messagesError = adminError;
+        // Last try: Get admin messages and filter by thread_id
+        const { data: adminMessages, error: adminError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('user_id', user.id)  // Use the admin's ID
+          .order('created_at', { ascending: true });
+          
+        if (!adminError && adminMessages) {
+          // Filter for exact thread_id match only
+          messages = adminMessages.filter(m => m.thread_id === params.userId);
+          // Don't use partial match - it causes wrong messages to show
+          console.log('Filtered admin messages for user:', params.userId, 'count:', messages.length);
+        }
       }
     }
 
-    if (messagesError) {
-      console.error('Error fetching messages:', messagesError);
-      // Don't fail completely, just return empty messages
-      messages = [];
+    if (messages.length === 0) {
+      console.log('No messages found for user:', params.userId);
     }
 
     // Format messages with proper metadata
@@ -113,7 +111,24 @@ export async function GET(
     }));
 
     // Get user name from memory context or generate one
-    const userName = memoryUser?.experiment_title || memoryUser?.user_name || memoryUser?.name || `User ${params.userId.substring(0, 8)}`;
+    let userName = 'Unknown User';
+    if (memoryUser) {
+      // Prefer experiment_title, then user_name
+      if (memoryUser.experiment_title && memoryUser.experiment_title.trim()) {
+        userName = memoryUser.experiment_title;
+      } else if (memoryUser.user_name && memoryUser.user_name.trim()) {
+        userName = memoryUser.user_name;
+      } else if (memoryUser.name && memoryUser.name.trim()) {
+        userName = memoryUser.name;
+      } else {
+        // Fallback to User ID prefix
+        userName = `User ${params.userId.substring(0, 8)}`;
+      }
+    } else {
+      // No memory context found
+      userName = `User ${params.userId.substring(0, 8)}`;
+    }
+    
     const actualUserId = memoryUser?.user_id || params.userId;
 
     return NextResponse.json({

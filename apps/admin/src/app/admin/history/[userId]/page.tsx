@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
-import { AdminHeader } from '@/components/admin/header';
 import { ArrowLeft } from 'lucide-react';
 
 interface MessageMetadata {
@@ -114,17 +113,22 @@ export default function ChatHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => router.push('/admin/history')}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <AdminHeader 
-          title={`Chat History: ${user?.name || 'Loading...'}`}
-          description={`User ID: ${userId}`}
-        />
+      {/* Header with back button */}
+      <div className="bg-white border-b border-gray-200 px-8 py-6">
+        <div className="flex items-start gap-4">
+          <button
+            onClick={() => router.push('/admin/history')}
+            className="mt-1 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="flex-1">
+            <h2 className="text-3xl font-bold text-gray-900">
+              Chat History: {user?.name || 'Loading...'}
+            </h2>
+            <p className="text-gray-600 mt-1">User ID: {userId}</p>
+          </div>
+        </div>
       </div>
 
       {loading && (

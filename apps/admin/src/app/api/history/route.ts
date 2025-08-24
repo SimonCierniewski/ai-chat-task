@@ -57,6 +57,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ users: [] });
     }
 
+    // First, get ALL messages for the admin to properly distribute them
+    const { data: allAdminMessages } = await supabase
+      .from('messages')
+      .select('role, start_ms, ttft_ms, total_ms, tokens_in, tokens_out, price, thread_id, user_id')
+      .eq('user_id', user.id);
+
+    console.log('History - All admin messages:', {
+      count: allAdminMessages?.length,
+      uniqueThreads: [...new Set(allAdminMessages?.map(m => m.thread_id) || [])]
+    });
+
     // Get aggregated metrics for each user
     const usersWithMetrics = await Promise.all(
       memoryUsers.map(async (memoryUser) => {
@@ -81,16 +92,13 @@ export async function GET(request: Request) {
           };
         }
         
-        // Get all messages for this user
-        // Important: Playground messages are stored with the admin's user_id, not the playground user's ID
-        // We need to check both scenarios:
-        // 1. Direct messages with this user_id (for real users)
-        // 2. Messages with admin's user_id but thread_id containing this user (for playground users)
+        // Get messages for this user
+        // For playground users, the thread_id IS the user_id (from memory_context)
+        // For real users, messages are stored with their actual user_id
         
         let messages: any[] = [];
-        let messagesError = null;
         
-        // First try: Get messages with this exact user_id
+        // First try: Get messages with this exact user_id (for real users)
         const { data: directMessages, error: directError } = await supabase
           .from('messages')
           .select('role, start_ms, ttft_ms, total_ms, tokens_in, tokens_out, price, thread_id')
@@ -98,39 +106,25 @@ export async function GET(request: Request) {
           
         if (!directError && directMessages && directMessages.length > 0) {
           messages = directMessages;
-        } else {
-          // Second try: For playground users, messages are stored with admin's ID
-          // Use the thread_id which contains the user ID or session ID
-          const { data: adminMessages, error: adminError } = await supabase
-            .from('messages')
-            .select('role, start_ms, ttft_ms, total_ms, tokens_in, tokens_out, price, thread_id')
-            .eq('user_id', user.id);  // Use the admin's ID
-            
-          if (!adminError && adminMessages) {
-            // Filter messages that belong to this user based on thread_id
-            // Thread IDs for playground users typically include the user ID or are associated with the user
-            messages = adminMessages.filter(m => {
-              // Check if thread_id contains part of the user ID or matches a known pattern
-              return m.thread_id && (
-                m.thread_id.includes(userId) || 
-                m.thread_id.includes(userId.substring(0, 8))
-              );
-            });
-            
-            // If still no messages, just use all admin messages for now
-            if (messages.length === 0) {
-              messages = adminMessages;
-            }
-          } else {
-            messagesError = adminError;
-          }
+        } else if (allAdminMessages) {
+          // For playground users: filter admin messages by thread_id
+          // In playground, the sessionId (which becomes thread_id) is set to the user's ID
+          messages = allAdminMessages.filter(m => {
+            // Exact match: thread_id equals the user_id from memory_context
+            return m.thread_id === userId;
+          });
+          
+          // Don't use partial match fallback - it causes wrong data to show
+          // If no messages found, keep empty array
         }
 
-        // Don't skip users with message errors or no messages
-        if (messagesError) {
-          console.error(`Error fetching messages for user ${userId}:`, messagesError);
-          // Continue with empty messages array
-        }
+        // Log what we found for debugging
+        console.log(`History - Messages for user ${userId}:`, {
+          memoryUser_id: memoryUser.id,
+          memoryUser_user_id: memoryUser.user_id,
+          messagesFound: messages.length,
+          threadIds: [...new Set(messages.map(m => m.thread_id))]
+        });
         
         console.log(`History - Found messages for ${userId}:`, {
           count: messages?.length || 0,
