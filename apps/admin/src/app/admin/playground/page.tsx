@@ -1453,6 +1453,15 @@ export default function PlaygroundPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Search Filters
+                    <a
+                      href="https://help.getzep.com/searching-the-graph#search-filters"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-1 inline-block text-gray-400 hover:text-gray-600"
+                      title="Learn more about search filters"
+                    >
+                      ℹ️
+                    </a>
                   </label>
                   <div className="ml-4 space-y-2">
                     <div>
