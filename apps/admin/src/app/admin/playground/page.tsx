@@ -666,17 +666,41 @@ export default function PlaygroundPage() {
   const parseConversations = (text: string) => {
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
     
-    // Split by headers and keep them
-    const parts = text.split(/(##\s*(User|Assistant)\s*##)/i);
+    // Regular expression to match headers
+    const headerRegex = /##\s*(User|Assistant)\s*##/gi;
     
-    for (let i = 1; i < parts.length; i += 2) {
-      const headerMatch = parts[i].match(/##\s*(User|Assistant)\s*##/i);
-      if (headerMatch && parts[i + 1]) {
-        const role = headerMatch[1].toLowerCase() === 'user' ? 'user' : 'assistant';
-        const content = parts[i + 1].trim();
-        if (content) {
-          messages.push({ role, content });
-        }
+    // Find all header positions
+    const headers: Array<{ index: number; role: 'user' | 'assistant'; match: string }> = [];
+    let match;
+    while ((match = headerRegex.exec(text)) !== null) {
+      const role = match[1].toLowerCase() === 'user' ? 'user' : 'assistant';
+      headers.push({
+        index: match.index,
+        role,
+        match: match[0]
+      });
+    }
+    
+    // Extract content between headers
+    for (let i = 0; i < headers.length; i++) {
+      const currentHeader = headers[i];
+      const nextHeader = headers[i + 1];
+      
+      // Calculate content start position (after current header and newline if present)
+      const contentStart = currentHeader.index + currentHeader.match.length;
+      
+      // Calculate content end position (before next header or end of text)
+      const contentEnd = nextHeader ? nextHeader.index : text.length;
+      
+      // Extract content and trim whitespace
+      let content = text.substring(contentStart, contentEnd).trim();
+      
+      // Only add if there's actual content
+      if (content) {
+        messages.push({
+          role: currentHeader.role,
+          content
+        });
       }
     }
     
@@ -695,8 +719,8 @@ export default function PlaygroundPage() {
     const baseReadingCharsPerSec = 21; // 1.5x typing speed
     
     // Apply the delay multiplier (inverse for speed: higher multiplier = slower)
-    const typingCharsPerSec = baseTypingCharsPerSec * delayMultiplier;
-    const readingCharsPerSec = baseReadingCharsPerSec * delayMultiplier;
+    const typingCharsPerSec = baseTypingCharsPerSec / delayMultiplier;
+    const readingCharsPerSec = baseReadingCharsPerSec / delayMultiplier;
     
     const typingTime = (userChars / typingCharsPerSec) * 1000; // ms
     const readingTime = (assistantChars / readingCharsPerSec) * 1000; // ms
