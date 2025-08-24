@@ -97,19 +97,19 @@ export default function ChatHistoryPage() {
   const getMessageStyle = (role: string) => {
     switch (role) {
       case 'user':
-        return 'bg-blue-50 border-blue-200 ml-0 mr-auto';
+        return 'bg-blue-50 border-blue-200 ml-auto mr-0';
       case 'assistant':
-        return 'bg-white border-gray-200 ml-auto mr-0';
+        return 'bg-white border-gray-200 ml-0 mr-auto';
       case 'system':
       case 'memory':
-        return 'bg-gray-50 border-gray-200 ml-auto mr-0 opacity-75';
+        return 'bg-gray-50 border-gray-200 ml-0 mr-auto opacity-75';
       default:
         return 'bg-white border-gray-200';
     }
   };
 
   const getMessageAlignment = (role: string) => {
-    return role === 'user' ? 'items-start' : 'items-end';
+    return role === 'user' ? 'items-end' : 'items-start';
   };
 
   return (
