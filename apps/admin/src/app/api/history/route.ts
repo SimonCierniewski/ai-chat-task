@@ -34,10 +34,12 @@ export async function GET(request: Request) {
 
     // Get all users from memory_context that have the current user as owner
     // Get all columns to handle both old and new schema
+    // Sort by updated_at DESC to show newest/most recently active users first
     const { data: memoryUsers, error: memoryError } = await supabase
       .from('memory_context')
       .select('*')
-      .eq('owner_id', user.id);
+      .eq('owner_id', user.id)
+      .order('updated_at', { ascending: false });
 
     if (memoryError) {
       console.error('Error fetching memory users:', memoryError);
