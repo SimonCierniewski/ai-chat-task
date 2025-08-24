@@ -362,16 +362,15 @@ class ZepAdapter {
       if (contextMode === 'bfs') {
         try {
           const episodeLimit = graphSearchParams?.episodes?.limit || 10;
-          // Use getByUserId instead of getByGroup
-          const episodesResponse = await this.client.graph.episode.getByUserId(userId);
+          // Use getByUserId with lastn parameter to limit episodes
+          const episodesResponse = await this.client.graph.episode.getByUserId(userId, {
+            lastn: episodeLimit
+          });
           const episodes = episodesResponse?.episodes || [];
           
-          // Limit the episodes if needed
-          const limitedEpisodes = episodes.slice(0, episodeLimit);
-          
-          if (limitedEpisodes && limitedEpisodes.length > 0) {
+          if (episodes && episodes.length > 0) {
             // Extract node UUIDs from episodes for BFS
-            bfsNodeUuids = limitedEpisodes.map((ep: any) => ep.uuid || ep.id).filter((id: any) => id);
+            bfsNodeUuids = episodes.map((ep: any) => ep.uuid || ep.id).filter((id: any) => id);
           }
         } catch (error) {
           logger.warn('Failed to get episodes for BFS', { error, userId });
