@@ -419,7 +419,7 @@ class ZepAdapter {
       }
 
       // Search edges if needed  
-      if (['edge_search', 'node_edge_search'].includes(contextMode)) {
+      if (['edge_search', 'node_edge_search', 'bfs'].includes(contextMode)) {
         const edgeParams = graphSearchParams?.edges || {};
         const edgeSearchOptions = {
           ...searchOptions,

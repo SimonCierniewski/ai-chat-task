@@ -1714,7 +1714,7 @@ export default function PlaygroundPage() {
                       )}
                       
                       {/* Edges parameters */}
-                      {['edge_search', 'node_edge_search'].includes(contextMode) && (
+                      {['edge_search', 'node_edge_search', 'bfs'].includes(contextMode) && (
                         <div className="space-y-2">
                           <div className="text-xs font-medium text-gray-600">Edges:</div>
                           <div className="ml-4 space-y-2">
