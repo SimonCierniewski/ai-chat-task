@@ -1187,24 +1187,45 @@ export default function PlaygroundPage() {
                       + New
                     </button>
                     {selectedUserId && !showCreateUser && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isEditingUser) {
-                            // Cancel editing - reset values
-                            const user = users.find(u => u.id === selectedUserId);
-                            if (user) {
-                              setEditingUserName(user.name);
-                              setEditingExperimentTitle(user.experimentTitle);
-                            }
-                          }
-                          setIsEditingUser(!isEditingUser);
-                        }}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-                        disabled={userLoading}
-                      >
-                        {isEditingUser ? 'Cancel' : 'Edit'}
-                      </button>
+                      <>
+                        {!isEditingUser ? (
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingUser(true)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+                            disabled={userLoading}
+                          >
+                            Edit
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={updateUserName}
+                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                              disabled={userLoading || !editingExperimentTitle.trim()}
+                            >
+                              {userLoading ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                // Cancel editing - reset values
+                                const user = users.find(u => u.id === selectedUserId);
+                                if (user) {
+                                  setEditingUserName(user.name);
+                                  setEditingExperimentTitle(user.experimentTitle);
+                                }
+                                setIsEditingUser(false);
+                              }}
+                              className="px-4 py-2 bg-gray-400 text-white rounded-md hover:bg-gray-500"
+                              disabled={userLoading}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -1278,16 +1299,6 @@ export default function PlaygroundPage() {
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           disabled={!isEditingUser || userLoading}
                         />
-                        {isEditingUser && (
-                          <button
-                            type="button"
-                            onClick={updateUserName}
-                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
-                            disabled={userLoading || !editingExperimentTitle.trim()}
-                          >
-                            {userLoading ? 'Saving...' : 'Save'}
-                          </button>
-                        )}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
                         This title identifies the experiment in the dropdown and history.
