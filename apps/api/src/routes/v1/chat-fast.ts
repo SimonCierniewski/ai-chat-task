@@ -393,6 +393,7 @@ async function storeConversationInDB(sessionId: string, message: string, userId:
       user_id: userId,
       ttft_ms: ttftMs,
       total_ms: totalMs,
+      created_at: new Date(startTime).toISOString()
     };
 
     // Build messages array
