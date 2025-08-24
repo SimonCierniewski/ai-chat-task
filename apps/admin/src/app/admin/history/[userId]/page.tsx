@@ -30,6 +30,14 @@ interface ChatUser {
   experimentTitle?: string;
 }
 
+interface UserMetrics {
+  avgTtftMs: number | null;
+  avgTotalMs: number | null;
+  userMessageCount: number;
+  userMessagesWithTtft: number;
+  userMessagesWithTotal: number;
+}
+
 export default function ChatHistoryPage() {
   const params = useParams();
   const router = useRouter();
@@ -37,6 +45,7 @@ export default function ChatHistoryPage() {
   
   const [user, setUser] = useState<ChatUser | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [userMetrics, setUserMetrics] = useState<UserMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPrompts, setShowPrompts] = useState(false);
@@ -65,7 +74,8 @@ export default function ChatHistoryPage() {
       
       setUser(data.user);
       setMessages(data.messages || []);
-      console.log('Set user and messages:', { user: data.user, messageCount: data.messages?.length });
+      setUserMetrics(data.userMetrics || null);
+      console.log('Set user and messages:', { user: data.user, messageCount: data.messages?.length, userMetrics: data.userMetrics });
     } catch (err) {
       console.error('Error fetching chat history:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -331,6 +341,41 @@ export default function ChatHistoryPage() {
                 </p>
               </div>
             </div>
+            
+            {/* User Message Metrics */}
+            {userMetrics && userMetrics.userMessageCount > 0 && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h4 className="text-md font-semibold mb-4 text-gray-700">User Message Metrics</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">User Messages</p>
+                    <p className="text-2xl font-bold">{userMetrics.userMessageCount}</p>
+                  </div>
+                  {userMetrics.avgTtftMs !== null && (
+                    <div>
+                      <p className="text-sm text-gray-600">Avg User TTFT</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {formatDuration(Math.round(userMetrics.avgTtftMs * 100) / 100)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        ({userMetrics.userMessagesWithTtft} messages)
+                      </p>
+                    </div>
+                  )}
+                  {userMetrics.avgTotalMs !== null && (
+                    <div>
+                      <p className="text-sm text-gray-600">Avg User Total Time</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {formatDuration(Math.round(userMetrics.avgTotalMs * 100) / 100)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        ({userMetrics.userMessagesWithTotal} messages)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </Card>
         </div>
       )}

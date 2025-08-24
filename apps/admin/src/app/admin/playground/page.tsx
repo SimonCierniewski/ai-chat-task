@@ -1166,18 +1166,18 @@ export default function PlaygroundPage() {
         subtitle="Test the AI chat system with different configurations"
       />
 
-      <div className="p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
           {/* Configuration Panel */}
           <div className="space-y-6">
             {/* User Card */}
             <Card title="User" icon="👤">
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 space-y-4 overflow-hidden">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Select User
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <select
                       value={selectedUserId}
                       onChange={(e) => {
@@ -1188,7 +1188,7 @@ export default function PlaygroundPage() {
                           setEditingExperimentTitle(user.experimentTitle);
                         }
                       }}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       disabled={isStreaming || userLoading}
                     >
                       {users.length === 0 && (
@@ -1203,7 +1203,7 @@ export default function PlaygroundPage() {
                     <button
                       type="button"
                       onClick={() => setShowCreateUser(true)}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 whitespace-nowrap"
                       disabled={isStreaming || userLoading}
                     >
                       + New
@@ -1214,7 +1214,7 @@ export default function PlaygroundPage() {
                           <button
                             type="button"
                             onClick={() => setIsEditingUser(true)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 whitespace-nowrap"
                             disabled={userLoading}
                           >
                             Edit
@@ -1224,7 +1224,7 @@ export default function PlaygroundPage() {
                             <button
                               type="button"
                               onClick={updateUserName}
-                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 whitespace-nowrap"
                               disabled={userLoading || !editingExperimentTitle.trim()}
                             >
                               {userLoading ? 'Saving...' : 'Save'}
@@ -1240,7 +1240,7 @@ export default function PlaygroundPage() {
                                 }
                                 setIsEditingUser(false);
                               }}
-                              className="px-4 py-2 bg-gray-400 text-white rounded-md hover:bg-gray-500"
+                              className="px-4 py-2 bg-gray-400 text-white rounded-md hover:bg-gray-500 whitespace-nowrap"
                               disabled={userLoading}
                             >
                               Cancel
@@ -1313,15 +1313,13 @@ export default function PlaygroundPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Experiment Title
                       </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={editingExperimentTitle}
-                          onChange={(e) => setEditingExperimentTitle(e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          disabled={!isEditingUser || userLoading}
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        value={editingExperimentTitle}
+                        onChange={(e) => setEditingExperimentTitle(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!isEditingUser || userLoading}
+                      />
                       <p className="text-xs text-gray-500 mt-1">
                         This title identifies the experiment in the dropdown and history.
                       </p>
@@ -1331,16 +1329,14 @@ export default function PlaygroundPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         User Name
                       </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={editingUserName}
-                          onChange={(e) => setEditingUserName(e.target.value)}
-                          placeholder="Enter user name (optional)"
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          disabled={!isEditingUser || userLoading}
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        value={editingUserName}
+                        onChange={(e) => setEditingUserName(e.target.value)}
+                        placeholder="Enter user name (optional)"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={!isEditingUser || userLoading}
+                      />
                       <p className="text-xs text-gray-500 mt-1">
                         Optional: This user's name will be added to messages sent to Zep, which can improve memory context.
                       </p>

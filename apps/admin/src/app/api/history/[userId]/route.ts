@@ -129,13 +129,33 @@ export async function GET(
     
     const actualUserId = memoryUser?.user_id || params.userId;
 
+    // Calculate average ttft_ms and total_ms from user messages
+    const userMessages = formattedMessages.filter(msg => msg.role === 'user');
+    const userMessagesWithTtft = userMessages.filter(msg => msg.metadata.ttftMs);
+    const userMessagesWithTotal = userMessages.filter(msg => msg.metadata.totalMs);
+    
+    const avgUserTtft = userMessagesWithTtft.length > 0
+      ? userMessagesWithTtft.reduce((sum, msg) => sum + (msg.metadata.ttftMs || 0), 0) / userMessagesWithTtft.length
+      : null;
+    
+    const avgUserTotal = userMessagesWithTotal.length > 0
+      ? userMessagesWithTotal.reduce((sum, msg) => sum + (msg.metadata.totalMs || 0), 0) / userMessagesWithTotal.length
+      : null;
+
     return NextResponse.json({
       user: {
         id: actualUserId,
         name: userName,
         experimentTitle: experimentTitle
       },
-      messages: formattedMessages
+      messages: formattedMessages,
+      userMetrics: {
+        avgTtftMs: avgUserTtft,
+        avgTotalMs: avgUserTotal,
+        userMessageCount: userMessages.length,
+        userMessagesWithTtft: userMessagesWithTtft.length,
+        userMessagesWithTotal: userMessagesWithTotal.length
+      }
     });
   } catch (error) {
     console.error('Error in chat history API:', error);
