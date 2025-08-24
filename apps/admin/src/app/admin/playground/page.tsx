@@ -627,9 +627,9 @@ export default function PlaygroundPage() {
 
   const handleAddAssistant = () => {
     setImportText(prev => {
-      // If text is empty, add 2 newlines at the top
+      // If text is empty, don't add 2 newlines at the top
       if (!prev.trim()) {
-        return '\n\n## Assistant ##\n';
+        return '## Assistant ##\n';
       }
       return prev + '\n\n## Assistant ##\n';
     });
@@ -644,9 +644,9 @@ export default function PlaygroundPage() {
 
   const handleAddUser = () => {
     setImportText(prev => {
-      // If text is empty, add 2 newlines at the top
+      // If text is empty, don't add 2 newlines at the top
       if (!prev.trim()) {
-        return '\n\n## User ##\n';
+        return '## User ##\n';
       }
       return prev + '\n\n## User ##\n';
     });
