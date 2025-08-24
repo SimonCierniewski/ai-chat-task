@@ -803,7 +803,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                 }
 
                 // Send error as a token message for user visibility
-                stream.sendEvent(ChatEventType.TOKEN, {text: errorCode + ": " + userMessage});
+                stream.sendEvent(ChatEventType.TOKEN, {text: errorCode + ": " + userMessage + "\n\n" + error.message});
 
                 stream.sendEvent(ChatEventType.DONE, {finish_reason: 'error'});
                 stream.close();
