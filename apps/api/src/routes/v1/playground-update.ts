@@ -23,7 +23,7 @@ const playgroundUpdateRequestSchema = {
   properties: {
     userId: {
       type: 'string',
-      format: 'uuid'
+      minLength: 1
     },
     experimentTitle: {
       type: 'string',
