@@ -43,6 +43,8 @@ export default function PlaygroundPage() {
   const [useMemory, setUseMemory] = useState(true);
   const [contextMode, setContextMode] = useState<'basic' | 'summarized' | 'node_search' | 'edge_search' | 'node_edge_search' | 'bfs'>('basic');
   const [model, setModel] = useState('gpt-4o-mini');
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(2048);
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant. Use any provided context to give accurate and relevant responses.');
   const [testingMode, setTestingMode] = useState(false);
   const [pastMessagesCount, setPastMessagesCount] = useState(4);
@@ -464,6 +466,8 @@ export default function PlaygroundPage() {
         contextMode,
         sessionId: selectedUserId || sessionId,
         model,
+        temperature,
+        maxTokens,
         returnMemory: true, // Always request memory context in playground for debugging
         systemPrompt: systemPrompt.trim() || undefined,
         testingMode, // Add testing mode parameter
@@ -1994,6 +1998,44 @@ export default function PlaygroundPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Temperature
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={temperature}
+                    onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isStreaming}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    0 = deterministic, 1 = balanced, 2 = creative
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Max Tokens
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="4096"
+                    step="1"
+                    value={maxTokens}
+                    onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isStreaming}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Maximum tokens in response (1-4096)
+                  </p>
                 </div>
 
                 <div>

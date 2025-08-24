@@ -560,6 +560,8 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         useMemory = false,
         sessionId,
         model: requestedModel,
+        temperature,
+        maxTokens,
         systemPrompt,
         returnMemory = false,
         contextMode = 'basic',
@@ -677,6 +679,8 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
           openAIMetrics = await openAIProvider.streamCompletion({
             message,
             model,
+            temperature,
+            maxTokens,
             messages,
             signal: stream.getAbortSignal(),
             onFirstToken: () => {
