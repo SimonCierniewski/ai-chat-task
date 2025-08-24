@@ -353,9 +353,23 @@ class ZepAdapter {
     contextMode: 'node_search' | 'edge_search' | 'node_edge_search' | 'bfs',
     graphSearchParams?: any
   ): Promise<string | undefined> {
+    // Context template
+    const CONTEXT_TEMPLATE = `FACTS and ENTITIES represent relevant context to the current conversation.
+# These are the most relevant facts and their valid date ranges
+# format: FACT (Date range: from - to)
+<FACTS>
+{facts}
+</FACTS>
+# These are the most relevant entities
+# ENTITY_NAME: entity summary
+<ENTITIES>
+{entities}
+</ENTITIES>`;
+
     try {
       const searchQuery = query.substring(0, 400); // Limit query to 400 chars
-      let contextParts: string[] = [];
+      let nodes: any[] = [];
+      let edges: any[] = [];
       
       // For BFS mode, get recent episodes to seed the search
       let bfsNodeUuids: string[] | undefined;
@@ -404,13 +418,7 @@ class ZepAdapter {
           });
           
           if (nodeResults?.nodes && nodeResults.nodes.length > 0) {
-            const nodeContext = nodeResults.nodes
-              .map((node: any) => `Entity: ${node.name || node.id}`)
-              .join('\n');
-            
-            if (nodeContext) {
-              contextParts.push('## Relevant Entities\n' + nodeContext);
-            }
+            nodes = nodeResults.nodes;
           }
         } catch (error) {
           logger.warn('Failed to search nodes', { error, userId, contextMode });
@@ -438,22 +446,32 @@ class ZepAdapter {
           });
           
           if (edgeResults?.edges && edgeResults.edges.length > 0) {
-            const edgeContext = edgeResults.edges
-              .map((edge: any) => edge.fact || `${edge.source} ${edge.type} ${edge.target}`)
-              .join('\n');
-            
-            if (edgeContext) {
-              contextParts.push('## Relevant Facts\n' + edgeContext);
-            }
+            edges = edgeResults.edges;
           }
         } catch (error) {
           logger.warn('Failed to search edges', { error, userId, contextMode });
         }
       }
 
-      // Combine all context parts
-      if (contextParts.length > 0) {
-        return contextParts.join('\n\n');
+      // Format results using the template
+      if (nodes.length > 0 || edges.length > 0) {
+        // Format facts (edges)
+        const formattedFacts = edges.map((edge: any) => {
+          const validAt = edge.valid_at || edge.validAt || "date unknown";
+          const invalidAt = edge.invalid_at || edge.invalidAt || "present";
+          return `  - ${edge.fact} (Date range: ${validAt} - ${invalidAt})`;
+        }).join('\n');
+
+        // Format entities (nodes)
+        const formattedEntities = nodes.map((node: any) => {
+          const summary = node.summary || '';
+          return `  - ${node.name}: ${summary}`;
+        }).join('\n');
+
+        // Build the context using the template
+        return CONTEXT_TEMPLATE
+          .replace('{facts}', formattedFacts || '  (No relevant facts found)')
+          .replace('{entities}', formattedEntities || '  (No relevant entities found)');
       }
 
       return undefined;
