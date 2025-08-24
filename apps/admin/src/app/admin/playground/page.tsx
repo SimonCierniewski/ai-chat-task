@@ -1302,40 +1302,25 @@ export default function PlaygroundPage() {
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        User Name (Optional)
+                        User Name
                       </label>
-                      <input
-                        type="text"
-                        value={editingUserName}
-                        onChange={(e) => setEditingUserName(e.target.value)}
-                        placeholder="Optional"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={!isEditingUser || userLoading}
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={editingUserName}
+                          onChange={(e) => setEditingUserName(e.target.value)}
+                          placeholder="Enter user name (optional)"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={!isEditingUser || userLoading}
+                        />
+                      </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        Optional: This user's name will be added to messages sent to Zep, which apparently should improve memory context.
+                        Optional: This user's name will be added to messages sent to Zep, which can improve memory context.
                       </p>
                     </div>
                   </>
                 )}
 
-                {/* User ID Display */}
-                {selectedUserId && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      User ID
-                    </label>
-                    <input
-                      type="text"
-                      value={selectedUserId}
-                      readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 font-mono text-sm"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      This ID is used as the thread ID in Zep
-                    </p>
-                  </div>
-                )}
               </div>
             </Card>
             
