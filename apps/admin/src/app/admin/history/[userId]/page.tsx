@@ -40,6 +40,7 @@ export default function ChatHistoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('ChatHistoryPage mounted with userId:', userId);
     if (userId) {
       fetchChatHistory();
     }
@@ -47,11 +48,14 @@ export default function ChatHistoryPage() {
 
   const fetchChatHistory = async () => {
     try {
+      console.log('Fetching chat history for userId:', userId);
       setLoading(true);
       setError(null);
       
       const response = await fetch(`/api/history/${userId}`);
+      console.log('API response status:', response.status);
       const data = await response.json();
+      console.log('API response data:', data);
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch chat history');
@@ -59,6 +63,7 @@ export default function ChatHistoryPage() {
       
       setUser(data.user);
       setMessages(data.messages || []);
+      console.log('Set user and messages:', { user: data.user, messageCount: data.messages?.length });
     } catch (err) {
       console.error('Error fetching chat history:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');

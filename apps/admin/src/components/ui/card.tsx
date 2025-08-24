@@ -1,18 +1,21 @@
 interface CardProps {
-  title: string;
+  title?: string;
   description?: string;
   value?: string | number;
   icon?: string;
   className?: string;
   children?: React.ReactNode;
+  onClick?: () => void;
 }
 
-export function Card({ title, description, value, icon, className = '', children }: CardProps) {
+export function Card({ title, description, value, icon, className = '', children, onClick }: CardProps) {
   return (
-    <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 ${className}`}>
+    <div 
+      className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 ${className}`}
+      onClick={onClick}>
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+          {title && <h3 className="text-lg font-semibold text-gray-900">{title}</h3>}
           {description && (
             <p className="text-sm text-gray-500 mt-1">{description}</p>
           )}

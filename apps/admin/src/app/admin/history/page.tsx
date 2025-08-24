@@ -112,7 +112,15 @@ export default function HistoryPage() {
               className="p-6 hover:shadow-lg transition-shadow cursor-pointer relative"
               onClick={() => {
                 // Always navigate to the history page, even if no messages
-                router.push(`/admin/history/${user.userId}`);
+                console.log('Navigating to user history:', { userId: user.userId, name: user.name });
+                if (!user.userId) {
+                  console.error('User ID is missing!', user);
+                  alert('Error: User ID is missing');
+                  return;
+                }
+                const url = `/admin/history/${user.userId}`;
+                console.log('Navigating to:', url);
+                router.push(url);
               }}
             >
               <div className="absolute top-6 right-6">
