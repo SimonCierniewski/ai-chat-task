@@ -156,11 +156,45 @@ export default function PlaygroundPage() {
     };
   }, []); // Remove sessionId dependency - it's stable from useState initializer
   
-  // Update sessionId when selected user changes
+  // Update sessionId when selected user changes and reinitialize chat
   useEffect(() => {
     if (selectedUserId) {
       // Use userId as sessionId/threadId
       setSessionId(selectedUserId);
+      
+      // Reinitialize chat for the selected user
+      const initializeChatForUser = async () => {
+        try {
+          const supabase = createClient();
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (!session?.access_token) {
+            console.warn('No session token for chat initialization');
+            return;
+          }
+
+          // Call the init endpoint with the selected user's ID
+          const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/chat/init`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ sessionId: selectedUserId })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Chat initialized for user:', selectedUserId, data);
+          } else {
+            console.warn('Chat initialization failed for user:', selectedUserId, response.status);
+          }
+        } catch (error) {
+          console.error('Error initializing chat for user:', selectedUserId, error);
+        }
+      };
+      
+      initializeChatForUser();
     }
   }, [selectedUserId]);
 
@@ -175,13 +209,15 @@ export default function PlaygroundPage() {
       }
 
       // Call the init endpoint to ensure user and thread exist
+      // Use selectedUserId if available, otherwise use the generated sessionId
+      const initSessionId = selectedUserId || sessionId;
       const response = await fetch(`${publicConfig.apiBaseUrl}/api/v1/chat/init`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ sessionId })
+        body: JSON.stringify({ sessionId: initSessionId })
       });
 
       if (response.ok) {
@@ -421,11 +457,12 @@ export default function PlaygroundPage() {
       }
 
       // Create request body
+      // Use selectedUserId if a user is selected, otherwise use sessionId
       const requestBody: any = {
         message: message.trim(),
         useMemory,
         contextMode,
-        sessionId,
+        sessionId: selectedUserId || sessionId,
         model,
         returnMemory: true, // Always request memory context in playground for debugging
         systemPrompt: systemPrompt.trim() || undefined,
