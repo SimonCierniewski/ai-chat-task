@@ -568,8 +568,40 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         graphSearchParams,
         minRating
       } = req.body;
-      const userId: string = req.user!.id;
+      let userId: string = req.user!.id;
       const reqId = req.id;
+      
+      // Check if this is a playground user by looking for it in memory_context
+      // For playground users, the sessionId IS the user ID
+      if (sessionId) {
+        try {
+          const supabaseAdmin = getSupabaseAdmin();
+          const { data: memoryContext } = await supabaseAdmin
+            .from('memory_context')
+            .select('user_id, user_name, experiment_title')
+            .eq('user_id', sessionId)
+            .single();
+          
+          if (memoryContext) {
+            // This is a playground user, use their ID instead
+            userId = sessionId;
+            logger.info({
+              req_id: reqId,
+              authenticatedUserId: req.user!.id,
+              playgroundUserId: userId,
+              userName: memoryContext.user_name,
+              experimentTitle: memoryContext.experiment_title
+            }, 'Using playground user ID for memory context');
+          }
+        } catch (error) {
+          // Not a playground user, continue with authenticated user ID
+          logger.debug({
+            req_id: reqId,
+            sessionId,
+            error
+          }, 'Session ID is not a playground user, using authenticated user ID');
+        }
+      }
 
       // Initialize SSE stream
       const stream = new SSEStream(reply, req.id);
