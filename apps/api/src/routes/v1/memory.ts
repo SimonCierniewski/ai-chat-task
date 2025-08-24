@@ -362,13 +362,16 @@ class ZepAdapter {
       if (contextMode === 'bfs') {
         try {
           const episodeLimit = graphSearchParams?.episodes?.limit || 10;
-          const episodes = await this.client.graph.episode.getByGroup(userId, {
-            limit: episodeLimit
-          });
+          // Use getByUserId instead of getByGroup
+          const episodesResponse = await this.client.graph.episode.getByUserId(userId);
+          const episodes = episodesResponse?.episodes || [];
           
-          if (episodes && episodes.length > 0) {
+          // Limit the episodes if needed
+          const limitedEpisodes = episodes.slice(0, episodeLimit);
+          
+          if (limitedEpisodes && limitedEpisodes.length > 0) {
             // Extract node UUIDs from episodes for BFS
-            bfsNodeUuids = episodes.map((ep: any) => ep.uuid).filter((id: any) => id);
+            bfsNodeUuids = limitedEpisodes.map((ep: any) => ep.uuid || ep.id).filter((id: any) => id);
           }
         } catch (error) {
           logger.warn('Failed to get episodes for BFS', { error, userId });
@@ -395,7 +398,11 @@ class ZepAdapter {
         };
 
         try {
-          const nodeResults = await this.client.graph.search(userId, searchQuery, nodeSearchOptions);
+          const nodeResults = await this.client.graph.search({
+            userId,
+            query: searchQuery,
+            ...nodeSearchOptions
+          });
           
           if (nodeResults?.nodes && nodeResults.nodes.length > 0) {
             const nodeContext = nodeResults.nodes
@@ -425,7 +432,11 @@ class ZepAdapter {
         };
 
         try {
-          const edgeResults = await this.client.graph.search(userId, searchQuery, edgeSearchOptions);
+          const edgeResults = await this.client.graph.search({
+            userId,
+            query: searchQuery,
+            ...edgeSearchOptions
+          });
           
           if (edgeResults?.edges && edgeResults.edges.length > 0) {
             const edgeContext = edgeResults.edges
@@ -488,7 +499,11 @@ class ZepAdapter {
       };
 
       // Add to Zep graph
-      await this.client.graph.add(userId, graphData);
+      await this.client.graph.add({
+        userId,
+        type: 'json',
+        data: graphData
+      });
 
       logger.info('Facts upserted to Zep via SDK', {
         userId,
