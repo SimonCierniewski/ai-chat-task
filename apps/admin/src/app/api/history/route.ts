@@ -44,6 +44,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
     }
 
+    console.log('History - Found memory users:', {
+      count: memoryUsers?.length,
+      users: memoryUsers?.map(u => ({ 
+        user_id: u.user_id, 
+        experiment_title: u.experiment_title,
+        user_name: u.user_name 
+      }))
+    });
+
     if (!memoryUsers || memoryUsers.length === 0) {
       return NextResponse.json({ users: [] });
     }
@@ -51,8 +60,25 @@ export async function GET(request: Request) {
     // Get aggregated metrics for each user
     const usersWithMetrics = await Promise.all(
       memoryUsers.map(async (memoryUser) => {
-        // Get the user ID - use user_id field
+        // Get the user ID - use user_id field, or skip if not present
         const userId = memoryUser.user_id;
+        
+        console.log(`History - Processing user:`, { 
+          userId, 
+          experiment_title: memoryUser.experiment_title,
+          has_user_id: !!userId 
+        });
+        
+        // If no user_id, return user with zero stats
+        if (!userId) {
+          return {
+            userId: memoryUser.id, // Use the record id as fallback
+            name: memoryUser.experiment_title || memoryUser.user_name || 'Unknown User',
+            memory: { totalMs: 0, startMs: 0, cost: 0 },
+            openai: { ttftMs: 0, totalMs: 0, startMs: 0, cost: 0, tokensIn: 0, tokensOut: 0 },
+            total: { cost: 0 }
+          };
+        }
         
         // Get all messages for this user
         const { data: messages, error: messagesError } = await supabase
@@ -60,15 +86,22 @@ export async function GET(request: Request) {
           .select('role, start_ms, ttft_ms, total_ms, tokens_in, tokens_out, price')
           .eq('user_id', userId);
 
+        // Don't skip users with message errors or no messages
         if (messagesError) {
           console.error(`Error fetching messages for user ${userId}:`, messagesError);
-          return null;
+          // Continue with empty messages array
         }
+        
+        console.log(`History - Found messages for ${userId}:`, {
+          count: messages?.length || 0,
+          roles: messages?.map(m => m.role) || []
+        });
 
-        // Separate messages by role
-        const userMessages = messages?.filter(m => m.role === 'user') || [];
-        const assistantMessages = messages?.filter(m => m.role === 'assistant') || [];
-        const memoryMessages = messages?.filter(m => m.role === 'memory') || [];
+        // Separate messages by role (handle null messages)
+        const safeMessages = messages || [];
+        const userMessages = safeMessages.filter(m => m.role === 'user');
+        const assistantMessages = safeMessages.filter(m => m.role === 'assistant');
+        const memoryMessages = safeMessages.filter(m => m.role === 'memory');
 
         // Calculate memory metrics
         const memoryMetrics = {
@@ -104,8 +137,9 @@ export async function GET(request: Request) {
         const userIdentifier = memoryUser.user_id;
         const userName = memoryUser.experiment_title || memoryUser.user_name || memoryUser.name || `User ${userIdentifier ? userIdentifier.substring(0, 8) : 'Unknown'}`;
         
+        // Always return user data, even if no messages
         return {
-          userId: userIdentifier,
+          userId: userIdentifier || memoryUser.id, // Fallback to id if user_id is null
           name: userName,
           memory: memoryMetrics,
           openai: openAiMetrics,
