@@ -2606,9 +2606,12 @@ export default function PlaygroundPage() {
               </div>
             </Card>
             
-            {/* Ontology Card */}
-            <Card title="Ontology" icon="🔗">
-              <div className="mt-4 space-y-4">
+            {/* Ontology Card - DISABLED */}
+            <Card title="Ontology" icon="🔗" className="opacity-50 relative">
+              {/* Disabled overlay */}
+              <div className="absolute inset-0 bg-gray-100 bg-opacity-50 z-10 rounded-lg cursor-not-allowed" />
+              
+              <div className="mt-4 space-y-4 pointer-events-none">
               <p className="text-sm text-gray-600">
                 Define custom entity and relation types for your knowledge graph. This sets the ontology for graph extraction and organization.
               </p>
@@ -2622,7 +2625,7 @@ export default function PlaygroundPage() {
                   onChange={(e) => setOntologyEntities(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
                   rows={8}
-                  disabled={isUpdatingOntology}
+                  disabled={true}
                   placeholder='{\n  "EntityType": {\n    "description": "Description of the entity type"\n  }\n}'
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -2639,7 +2642,7 @@ export default function PlaygroundPage() {
                   onChange={(e) => setOntologyRelations(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
                   rows={10}
-                  disabled={isUpdatingOntology}
+                  disabled={true}
                   placeholder='{\n  "RELATION_TYPE": {\n    "description": "Description",\n    "source_types": ["EntityType1"],\n    "target_types": ["EntityType2"]\n  }\n}'
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -2651,7 +2654,7 @@ export default function PlaygroundPage() {
                 type="button"
                 onClick={handleUpdateOntology}
                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-                disabled={isUpdatingOntology || !selectedUserId}
+                disabled={true}
               >
                 {isUpdatingOntology ? (
                   <>
