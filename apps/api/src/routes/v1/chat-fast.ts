@@ -220,7 +220,7 @@ async function loadPastMessages(sessionId: string, userId: string, pastMessagesC
       .eq('user_id', userId)
       .in('role', ['user', 'assistant'])
       .order('created_at', {ascending: false})
-      .limit(pastMessagesCount * 2); // Get both user and assistant messages
+      .limit(pastMessagesCount); // Get exactly the requested number of messages
 
     if (!error && messages && messages.length > 0) {
       // Reverse to get chronological order
