@@ -37,7 +37,7 @@ export interface Message {
 /**
  * User message
  */
-export interface UserMessage extends Omit<Message, 'role' | 'start_ms' | 'ttft_ms' | 'total_ms' | 'tokens_in' | 'tokens_out' | 'price' | 'model'> {
+export interface UserMessage extends Omit<Message, 'role' | 'start_ms' | 'tokens_in' | 'tokens_out' | 'price' | 'model'> {
   role: 'user';
 }
 

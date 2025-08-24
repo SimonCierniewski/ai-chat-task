@@ -381,7 +381,7 @@ async function storeConversationInZep(userId: string, sessionId: string, message
   }
 }
 
-async function storeConversationInDB(sessionId: string, message: string, userId: string, startTime: number, contextBlock: string | undefined, memoryStartMs: number, memoryMs: number, outputText: string, openAIStartTime: number, openAIMetrics: any, usageCalc: any, model: string, openAIDoneTime: number, reqId: string, prompt?: any[]) {
+async function storeConversationInDB(sessionId: string, message: string, userId: string, startTime: number, contextBlock: string | undefined, memoryStartMs: number, memoryMs: number, outputText: string, openAIStartTime: number, openAIMetrics: any, usageCalc: any, model: string, openAIDoneTime: number, ttftMs: number | undefined, totalMs: number | undefined, reqId: string, prompt?: any[]) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
 
@@ -391,7 +391,8 @@ async function storeConversationInDB(sessionId: string, message: string, userId:
       role: 'user',
       content: message,
       user_id: userId,
-      created_at: new Date(startTime).toISOString()
+      ttft_ms: ttftMs,
+      total_ms: totalMs,
     };
 
     // Build messages array
@@ -711,7 +712,7 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
                     await storeConversationInZep(userId, sessionId, message, outputText, reqId);
 
                     // Step 7: Store messages in database (skip in testing mode)
-                    await storeConversationInDB(sessionId, message, userId, startTime, contextBlock, memoryStartMs, memoryMs, outputText, openAIStartTime, openAIMetrics, usageCalc, model, openAIDoneTime, reqId, messages);
+                    await storeConversationInDB(sessionId, message, userId, startTime, contextBlock, memoryStartMs, memoryMs, outputText, openAIStartTime, openAIMetrics, usageCalc, model, openAIDoneTime, ttftMs, totalMs, reqId, messages);
 
                     // Step 8: Update memory context cache after successful Zep storage
                     loadContextAndStoreInDB(userId, sessionId, contextMode, reqId)
