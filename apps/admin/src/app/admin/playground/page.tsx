@@ -87,7 +87,7 @@ export default function PlaygroundPage() {
   const [importText, setImportText] = useState('');
   const [importMode, setImportMode] = useState<'zep-only' | 'memory-test' | 'full-test'>('zep-only');
   const [enableDelay, setEnableDelay] = useState(false);
-  const [humanSpeed, setHumanSpeed] = useState(5);
+  const [humanSpeed, setHumanSpeed] = useState(1.0);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const importTextAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -682,11 +682,17 @@ export default function PlaygroundPage() {
   const calculateDelay = (userChars: number, assistantChars: number) => {
     if (!enableDelay) return 0;
     
-    // humanSpeed from 0-10, where 5 is average
-    // Average typing speed: 40 chars/sec at speed 5
-    // Average reading speed: 60 chars/sec at speed 5
-    const typingCharsPerSec = 20 + (humanSpeed * 8); // 20-100 chars/sec
-    const readingCharsPerSec = 30 + (humanSpeed * 12); // 30-150 chars/sec
+    // humanSpeed is a delay multiplier where 1.0 = normal speed (140 WPM)
+    // Average typing speed: 140 WPM (words per minute)
+    // Average word length: 5 characters + 1 space = 6 characters
+    // Base typing speed: 140 * 6 / 60 = 14 chars/sec
+    // Reading is typically 1.5x faster than typing
+    const baseTypingCharsPerSec = 14;
+    const baseReadingCharsPerSec = 21; // 1.5x typing speed
+    
+    // Apply the delay multiplier (inverse for speed: higher multiplier = slower)
+    const typingCharsPerSec = baseTypingCharsPerSec / humanSpeed;
+    const readingCharsPerSec = baseReadingCharsPerSec / humanSpeed;
     
     const typingTime = (userChars / typingCharsPerSec) * 1000; // ms
     const readingTime = (assistantChars / readingCharsPerSec) * 1000; // ms
@@ -2156,27 +2162,27 @@ export default function PlaygroundPage() {
                     disabled={isImporting}
                   />
                   <label htmlFor="enableDelay" className="text-sm font-medium text-gray-700">
-                    Enable delay between messages
+                    Enable delay between messages to give ZEP more time to process graph
                   </label>
                 </div>
                 
                 {enableDelay && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Human writing/reading speed (0-10)
+                      Delay Multiplier
                     </label>
                     <input
                       type="number"
-                      min="0"
-                      max="10"
-                      step="0.5"
+                      min="0.1"
+                      max="5"
+                      step="0.1"
                       value={humanSpeed}
                       onChange={(e) => setHumanSpeed(parseFloat(e.target.value))}
                       className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       disabled={isImporting}
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      0 = very slow (40 WPM), 5 = average (140 WPM), 10 = very fast (240 WPM)
+                      1.0 = normal (140 WPM), 0.5 = fast (280 WPM), 2.0 = slow (70 WPM)
                     </p>
                   </div>
                 )}
