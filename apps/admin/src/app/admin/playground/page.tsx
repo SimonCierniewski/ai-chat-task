@@ -284,6 +284,14 @@ export default function PlaygroundPage() {
   const updateUserName = async () => {
     if (!editingExperimentTitle.trim() || !selectedUserId) return;
     
+    // Check if trying to remove an existing user name
+    const currentUser = users.find(u => u.id === selectedUserId);
+    if (currentUser?.name && currentUser.name.trim() && !editingUserName.trim()) {
+      alert('User name cannot be removed once it has been set');
+      setEditingUserName(currentUser.name); // Reset to original value
+      return;
+    }
+    
     setUserLoading(true);
     try {
       const supabase = createClient();
@@ -319,6 +327,20 @@ export default function PlaygroundPage() {
       } else {
         const error = await response.json();
         console.error('Failed to update user:', error);
+        
+        // Show specific error message if available
+        if (error.error) {
+          alert(error.error);
+          // If it was about removing user name, reset the value
+          if (error.error.includes('Cannot remove user name')) {
+            const currentUser = users.find(u => u.id === selectedUserId);
+            if (currentUser) {
+              setEditingUserName(currentUser.name);
+            }
+          }
+        } else {
+          alert('Failed to update user');
+        }
       }
     } catch (error) {
       console.error('Error updating user:', error);

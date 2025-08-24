@@ -84,6 +84,55 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
 
       try {
         const supabaseAdmin = getSupabaseAdmin();
+        
+        // First, get the current user data to check existing userName
+        const {data: existingUser, error: fetchError} = await supabaseAdmin
+          .from('memory_context')
+          .select('user_id, experiment_title, user_name')
+          .eq('user_id', userId)
+          .eq('owner_id', adminId)
+          .single();
+          
+        if (fetchError || !existingUser) {
+          logger.error({
+            req_id: reqId,
+            adminId,
+            userId,
+            error: fetchError?.message
+          }, 'Failed to fetch existing user data');
+          
+          return reply.status(404).send({
+            success: false,
+            user: {
+              id: userId,
+              experimentTitle: '',
+              userName: undefined
+            }
+          });
+        }
+        
+        // Check if trying to remove an existing userName
+        if (userName !== undefined && 
+            existingUser.user_name && 
+            existingUser.user_name.trim() !== '' && 
+            (!userName || userName.trim() === '')) {
+          logger.warn({
+            req_id: reqId,
+            userId,
+            existingUserName: existingUser.user_name,
+            attemptedUserName: userName
+          }, 'Attempted to remove existing user name');
+          
+          return reply.status(400).send({
+            success: false,
+            error: 'Cannot remove user name once it has been set',
+            user: {
+              id: userId,
+              experimentTitle: existingUser.experiment_title,
+              userName: existingUser.user_name
+            }
+          });
+        }
 
         // Build update object
         const updateData: any = {};
@@ -91,7 +140,17 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
           updateData.experiment_title = experimentTitle.trim();
         }
         if (userName !== undefined) {
-          updateData.user_name = userName.trim() || null;
+          // Only update if not trying to remove existing name
+          const newUserName = userName.trim() || null;
+          if (existingUser.user_name && !newUserName) {
+            // Skip updating userName if it would remove existing one
+            logger.info({
+              req_id: reqId,
+              userId
+            }, 'Skipping userName update to preserve existing value');
+          } else {
+            updateData.user_name = newUserName;
+          }
         }
 
         // Update user in memory_context table
