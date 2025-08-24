@@ -87,7 +87,7 @@ export default function PlaygroundPage() {
   const [importText, setImportText] = useState('');
   const [importMode, setImportMode] = useState<'zep-only' | 'memory-test' | 'full-test'>('zep-only');
   const [enableDelay, setEnableDelay] = useState(false);
-  const [humanSpeed, setHumanSpeed] = useState(1.0);
+  const [delayMultiplier, setDelayMultiplier] = useState(1.0);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const importTextAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -682,7 +682,7 @@ export default function PlaygroundPage() {
   const calculateDelay = (userChars: number, assistantChars: number) => {
     if (!enableDelay) return 0;
     
-    // humanSpeed is a delay multiplier where 1.0 = normal speed (140 WPM)
+    // delayMultiplier is a delay multiplier where 1.0 = normal speed (140 WPM)
     // Average typing speed: 140 WPM (words per minute)
     // Average word length: 5 characters + 1 space = 6 characters
     // Base typing speed: 140 * 6 / 60 = 14 chars/sec
@@ -691,8 +691,8 @@ export default function PlaygroundPage() {
     const baseReadingCharsPerSec = 21; // 1.5x typing speed
     
     // Apply the delay multiplier (inverse for speed: higher multiplier = slower)
-    const typingCharsPerSec = baseTypingCharsPerSec / humanSpeed;
-    const readingCharsPerSec = baseReadingCharsPerSec / humanSpeed;
+    const typingCharsPerSec = baseTypingCharsPerSec * delayMultiplier;
+    const readingCharsPerSec = baseReadingCharsPerSec * delayMultiplier;
     
     const typingTime = (userChars / typingCharsPerSec) * 1000; // ms
     const readingTime = (assistantChars / readingCharsPerSec) * 1000; // ms
@@ -2173,16 +2173,16 @@ export default function PlaygroundPage() {
                     </label>
                     <input
                       type="number"
-                      min="0.1"
-                      max="5"
-                      step="0.1"
-                      value={humanSpeed}
-                      onChange={(e) => setHumanSpeed(parseFloat(e.target.value))}
+                      min="1"
+                      max="30"
+                      step="1"
+                      value={delayMultiplier}
+                      onChange={(e) => setDelayMultiplier(parseFloat(e.target.value))}
                       className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       disabled={isImporting}
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      1.0 = normal (140 WPM), 0.5 = fast (280 WPM), 2.0 = slow (70 WPM)
+                      1.0 = normal reading speed (140 Words Per Minute), 2 = fast (280 WPM), ...
                     </p>
                   </div>
                 )}
