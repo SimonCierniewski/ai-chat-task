@@ -1561,7 +1561,18 @@ export default function PlaygroundPage() {
                       
                       {/* Query-based context modes */}
                       <div>
-                        <p className="text-xs text-gray-500 mb-2">Based on message query (slower: have to be conducted before calling LLM)</p>
+                        <p className="text-xs text-gray-500 mb-2">
+                          Based on message query (slower: have to be conducted before calling LLM)
+                          <a 
+                            href="https://help.getzep.com/searching-the-graph" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="ml-1 inline-block hover:opacity-70 transition-opacity"
+                            title="Learn more about Zep graph search"
+                          >
+                            ℹ️
+                          </a>
+                        </p>
                         <div className="space-y-2">
                           <label className="flex items-center space-x-2 cursor-pointer">
                             <input
