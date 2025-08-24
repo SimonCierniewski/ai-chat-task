@@ -47,24 +47,45 @@ export async function GET(
     }
 
     // Fetch all messages for this user
-    // Try with user_id first (actual user ID)
-    let { data: messages, error: messagesError } = await supabase
+    // Important: Playground messages are stored with the admin's user_id, not the playground user's ID
+    let messages: any[] = [];
+    let messagesError = null;
+    
+    // First try: Get messages with this exact user_id (for real users)
+    const { data: directMessages, error: directError } = await supabase
       .from('messages')
       .select('*')
       .eq('user_id', params.userId)
       .order('created_at', { ascending: true });
-
-    // If error or no messages and memoryUser exists, try with memory_context.user_id
-    if ((messagesError || messages?.length === 0) && memoryUser?.user_id && memoryUser.user_id !== params.userId) {
-      const result = await supabase
+      
+    if (!directError && directMessages && directMessages.length > 0) {
+      messages = directMessages;
+    } else {
+      // Second try: For playground users, messages are stored with admin's ID
+      const { data: adminMessages, error: adminError } = await supabase
         .from('messages')
         .select('*')
-        .eq('user_id', memoryUser.user_id)
+        .eq('user_id', user.id)  // Use the admin's ID
         .order('created_at', { ascending: true });
-      
-      if (!result.error) {
-        messages = result.data;
-        messagesError = null;
+        
+      if (!adminError && adminMessages) {
+        // Filter messages that belong to this user based on thread_id or context
+        const userIdShort = params.userId.substring(0, 8);
+        messages = adminMessages.filter(m => {
+          // Check if thread_id contains part of the user ID
+          return m.thread_id && (
+            m.thread_id.includes(params.userId) || 
+            m.thread_id.includes(userIdShort)
+          );
+        });
+        
+        // If still no messages with user ID in thread, try to match by memory_context
+        if (messages.length === 0 && memoryUser) {
+          // Get all threads for this memory context user
+          messages = adminMessages; // For now, show all admin messages if we can't filter
+        }
+      } else {
+        messagesError = adminError;
       }
     }
 

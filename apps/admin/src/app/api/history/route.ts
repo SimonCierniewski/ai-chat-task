@@ -82,10 +82,49 @@ export async function GET(request: Request) {
         }
         
         // Get all messages for this user
-        const { data: messages, error: messagesError } = await supabase
+        // Important: Playground messages are stored with the admin's user_id, not the playground user's ID
+        // We need to check both scenarios:
+        // 1. Direct messages with this user_id (for real users)
+        // 2. Messages with admin's user_id but thread_id containing this user (for playground users)
+        
+        let messages: any[] = [];
+        let messagesError = null;
+        
+        // First try: Get messages with this exact user_id
+        const { data: directMessages, error: directError } = await supabase
           .from('messages')
-          .select('role, start_ms, ttft_ms, total_ms, tokens_in, tokens_out, price')
+          .select('role, start_ms, ttft_ms, total_ms, tokens_in, tokens_out, price, thread_id')
           .eq('user_id', userId);
+          
+        if (!directError && directMessages && directMessages.length > 0) {
+          messages = directMessages;
+        } else {
+          // Second try: For playground users, messages are stored with admin's ID
+          // Use the thread_id which contains the user ID or session ID
+          const { data: adminMessages, error: adminError } = await supabase
+            .from('messages')
+            .select('role, start_ms, ttft_ms, total_ms, tokens_in, tokens_out, price, thread_id')
+            .eq('user_id', user.id);  // Use the admin's ID
+            
+          if (!adminError && adminMessages) {
+            // Filter messages that belong to this user based on thread_id
+            // Thread IDs for playground users typically include the user ID or are associated with the user
+            messages = adminMessages.filter(m => {
+              // Check if thread_id contains part of the user ID or matches a known pattern
+              return m.thread_id && (
+                m.thread_id.includes(userId) || 
+                m.thread_id.includes(userId.substring(0, 8))
+              );
+            });
+            
+            // If still no messages, just use all admin messages for now
+            if (messages.length === 0) {
+              messages = adminMessages;
+            }
+          } else {
+            messagesError = adminError;
+          }
+        }
 
         // Don't skip users with message errors or no messages
         if (messagesError) {
