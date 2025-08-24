@@ -1,6 +1,7 @@
-import { FastifyPluginAsync } from 'fastify';
-import { logger } from '../../utils/logger';
-import { getSupabaseAdmin } from '../../services/supabase-admin';
+import {FastifyPluginAsync} from 'fastify';
+import {logger} from '../../utils/logger';
+import {getSupabaseAdmin} from '../../services/supabase-admin';
+import {ZepClient} from '@getzep/zep-cloud';
 
 interface PlaygroundUpdateRequest {
   userId: string;
@@ -54,13 +55,13 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
           200: {
             type: 'object',
             properties: {
-              success: { type: 'boolean' },
+              success: {type: 'boolean'},
               user: {
                 type: 'object',
                 properties: {
-                  id: { type: 'string' },
-                  experimentTitle: { type: 'string' },
-                  userName: { type: 'string', nullable: true }
+                  id: {type: 'string'},
+                  experimentTitle: {type: 'string'},
+                  userName: {type: 'string', nullable: true}
                 }
               }
             }
@@ -69,7 +70,7 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
       },
     },
     async (req, reply) => {
-      const { userId, experimentTitle, userName } = req.body;
+      const {userId, experimentTitle, userName} = req.body;
       const adminId = req.user!.id;
       const reqId = req.id;
 
@@ -83,7 +84,7 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
 
       try {
         const supabaseAdmin = getSupabaseAdmin();
-        
+
         // Build update object
         const updateData: any = {};
         if (experimentTitle !== undefined) {
@@ -95,7 +96,7 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
 
         // Update user in memory_context table
         // Use user_id to identify the user
-        const { data, error: updateError } = await supabaseAdmin
+        const {data, error: updateError} = await supabaseAdmin
           .from('memory_context')
           .update(updateData)
           .eq('user_id', userId)
@@ -110,7 +111,7 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
             userId,
             error: updateError?.message
           }, 'Failed to update user in memory_context');
-          
+
           return reply.status(500).send({
             success: false,
             user: {
@@ -121,12 +122,62 @@ export const playgroundUpdateRoute: FastifyPluginAsync = async (server) => {
           });
         }
 
+        // Update user in Zep if userName or experimentTitle changed
+        if (userName !== undefined || experimentTitle !== undefined) {
+          try {
+            const zepApiKey = process.env.ZEP_API_KEY;
+            if (!zepApiKey) {
+              logger.warn({
+                req_id: reqId,
+                userId
+              }, 'ZEP_API_KEY not configured, skipping Zep update');
+            } else {
+              const zepClient = new ZepClient({apiKey: zepApiKey});
+
+              // Build Zep update data
+              const zepUpdateData: any = {};
+
+              // Update firstName in Zep (use userName or experimentTitle)
+              zepUpdateData.firstName = userName?.trim() || '';
+              
+              // Update metadata to track the source
+              zepUpdateData.metadata = {
+                updated_at: new Date().toISOString(),
+                experiment_title: data.experiment_title,
+                user_name: data.user_name || null,
+                source: 'playground_update'
+              };
+
+              logger.info({
+                req_id: reqId,
+                userId,
+                zepUpdateData
+              }, 'Updating Zep user');
+
+              await zepClient.user.update(userId, zepUpdateData);
+
+              logger.info({
+                req_id: reqId,
+                userId
+              }, 'Zep user updated successfully');
+            }
+          } catch (zepError: any) {
+            // Log error but don't fail the request
+            logger.error({
+              req_id: reqId,
+              userId,
+              error: zepError.message,
+              stack: zepError.stack
+            }, 'Failed to update Zep user, but continuing anyway');
+          }
+        }
+
         logger.info({
           req_id: reqId,
           adminId,
           playgroundUserId: data.user_id,
           data
-        }, 'Playground user updated successfully');
+        }, 'Playground user update completed');
 
         return reply.send({
           success: true,
