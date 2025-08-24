@@ -87,7 +87,7 @@ export function AdminSidebar() {
   ];
 
   return (
-    <aside className={`${isCollapsed ? 'w-20' : 'w-64'} bg-gray-900 text-white min-h-screen flex flex-col relative transition-all duration-300 ease-in-out`}>
+    <aside className={`${isCollapsed ? 'w-20' : 'w-64'} bg-gray-900 text-white h-screen flex flex-col relative transition-all duration-300 ease-in-out flex-shrink-0`}>
       {/* Toggle Button */}
       <button
         onClick={toggleCollapse}
@@ -117,7 +117,7 @@ export function AdminSidebar() {
       </div>
       
       {/* Navigation */}
-      <nav className={`${isCollapsed ? 'px-2' : 'px-4'}`}>
+      <nav className={`${isCollapsed ? 'px-2' : 'px-4'} flex-1 overflow-y-auto`}>
         {navItems.map((item) => {
           if (!item.enabled) return null;
           
@@ -149,7 +149,7 @@ export function AdminSidebar() {
       </nav>
 
       {/* User Info */}
-      <div className={`mt-auto border-t border-gray-800 ${isCollapsed ? 'p-2' : 'p-4'}`}>
+      <div className={`border-t border-gray-800 ${isCollapsed ? 'p-2' : 'p-4'} flex-shrink-0`}>
         <UserInfo isCollapsed={isCollapsed} />
       </div>
     </aside>
