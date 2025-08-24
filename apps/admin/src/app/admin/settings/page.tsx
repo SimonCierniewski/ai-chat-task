@@ -53,9 +53,12 @@ export default function SettingsPage() {
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Memory Settings */}
-          <Card title="Memory Configuration" icon="🧠">
-            <div className="mt-4 space-y-4">
+          {/* Memory Settings - DISABLED */}
+          <Card title="Memory Configuration" icon="🧠" className="opacity-50 relative">
+            {/* Disabled overlay */}
+            <div className="absolute inset-0 bg-gray-100 bg-opacity-50 z-10 rounded-lg cursor-not-allowed" />
+            
+            <div className="mt-4 space-y-4 pointer-events-none">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Top K Results
@@ -65,6 +68,7 @@ export default function SettingsPage() {
                   value={settings.memoryTopK}
                   onChange={(e) => setSettings({ ...settings, memoryTopK: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  disabled
                 />
                 <p className="text-xs text-gray-500 mt-1">Number of memory results to retrieve</p>
               </div>
@@ -78,6 +82,7 @@ export default function SettingsPage() {
                   value={settings.memoryTokenBudget}
                   onChange={(e) => setSettings({ ...settings, memoryTokenBudget: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  disabled
                 />
                 <p className="text-xs text-gray-500 mt-1">Maximum tokens for memory context</p>
               </div>
@@ -91,6 +96,7 @@ export default function SettingsPage() {
                   value={settings.clipSentences}
                   onChange={(e) => setSettings({ ...settings, clipSentences: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  disabled
                 />
                 <p className="text-xs text-gray-500 mt-1">Max sentences per memory item</p>
               </div>
@@ -107,15 +113,19 @@ export default function SettingsPage() {
                   value={settings.minRelevanceScore}
                   onChange={(e) => setSettings({ ...settings, minRelevanceScore: parseFloat(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  disabled
                 />
                 <p className="text-xs text-gray-500 mt-1">Minimum score for memory relevance (0-1)</p>
               </div>
             </div>
           </Card>
 
-          {/* System Settings */}
-          <Card title="System Configuration" icon="⚙️">
-            <div className="mt-4 space-y-4">
+          {/* System Settings - DISABLED */}
+          <Card title="System Configuration" icon="⚙️" className="opacity-50 relative">
+            {/* Disabled overlay */}
+            <div className="absolute inset-0 bg-gray-100 bg-opacity-50 z-10 rounded-lg cursor-not-allowed" />
+            
+            <div className="mt-4 space-y-4 pointer-events-none">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Rate Limit Window (ms)
@@ -125,6 +135,7 @@ export default function SettingsPage() {
                   value={settings.rateLimitWindow}
                   onChange={(e) => setSettings({ ...settings, rateLimitWindow: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  disabled
                 />
                 <p className="text-xs text-gray-500 mt-1">Time window for rate limiting</p>
               </div>
@@ -138,6 +149,7 @@ export default function SettingsPage() {
                   value={settings.rateLimitMax}
                   onChange={(e) => setSettings({ ...settings, rateLimitMax: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  disabled
                 />
                 <p className="text-xs text-gray-500 mt-1">Max requests per window</p>
               </div>
@@ -151,6 +163,7 @@ export default function SettingsPage() {
                   value={settings.sseHeartbeatMs}
                   onChange={(e) => setSettings({ ...settings, sseHeartbeatMs: parseInt(e.target.value) || 0 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  disabled
                 />
                 <p className="text-xs text-gray-500 mt-1">Keep-alive interval for SSE connections</p>
               </div>
@@ -163,6 +176,7 @@ export default function SettingsPage() {
                   value={settings.defaultModel}
                   onChange={(e) => setSettings({ ...settings, defaultModel: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  disabled
                 >
                   <option value="gpt-4o-mini">GPT-4 Mini</option>
                   <option value="gpt-4o">GPT-4</option>
@@ -174,11 +188,12 @@ export default function SettingsPage() {
           </Card>
         </div>
 
-        {/* Save Button */}
+        {/* Save Button - DISABLED */}
         <div className="mt-8 flex justify-end">
           <button
             onClick={handleSave}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="px-6 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed opacity-50"
+            disabled
           >
             Save Settings
           </button>
