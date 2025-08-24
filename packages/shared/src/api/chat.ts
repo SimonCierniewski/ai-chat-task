@@ -58,7 +58,6 @@ export const chatRequestSchema = {
     },
     sessionId: {
       type: 'string',
-      pattern: '^session-[0-9]{8}-[0-9]{6}-[A-Za-z0-9]{4}$',
       description: 'Session ID for conversation continuity'
     },
     model: {

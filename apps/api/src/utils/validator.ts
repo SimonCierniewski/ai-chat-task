@@ -39,7 +39,7 @@ export const schemas = {
     properties: {
       message: { type: 'string', minLength: 1, maxLength: 4000 },
       useMemory: { type: 'boolean', default: false },
-      sessionId: { type: 'string', pattern: '^session-[0-9]{8}-[0-9]{6}-[A-Za-z0-9]{4}$' },
+      sessionId: { type: 'string' },
       model: { 
         type: 'string', 
         enum: ['gpt-4-mini', 'gpt-4', 'gpt-3.5-turbo'],
