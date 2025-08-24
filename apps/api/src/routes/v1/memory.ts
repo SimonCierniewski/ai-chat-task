@@ -547,42 +547,36 @@ class ZepAdapter {
     relations: Record<string, any>
   ): Promise<boolean> {
     try {
+      logger.info('Setting graph ontology - input data', {
+        userId,
+        entities,
+        relations
+      });
+      
       // Transform the entities and relations into Zep format
       const formattedEntities: Record<string, any> = {};
       const formattedRelations: Record<string, any> = {};
       
-      // Format entities
+      // Format entities - just pass them through as-is
       for (const [name, config] of Object.entries(entities)) {
         formattedEntities[name] = config;
       }
       
-      // Format relations with source/target constraints
+      // Format relations - for TypeScript SDK, we pass them as-is
+      // The SDK expects the relations in the same format as entities
       for (const [name, config] of Object.entries(relations)) {
-        const relationConfig: any = config;
-        const constraints: any[] = [];
-        
-        // Add source/target type constraints if specified
-        if (relationConfig.source_types || relationConfig.target_types) {
-          constraints.push({
-            source: relationConfig.source_types || null,
-            target: relationConfig.target_types || null
-          });
-        }
-        
-        formattedRelations[name] = [
-          {
-            description: relationConfig.description
-          },
-          constraints.length > 0 ? constraints : undefined
-        ].filter(Boolean);
+        formattedRelations[name] = config;
       }
       
       // Set ontology for the specific user
-      await this.client.graph.setOntology({
-        entities: formattedEntities,
-        relations: formattedRelations,
-        user_ids: [userId]
-      });
+      // Note: TypeScript SDK uses camelCase for parameters
+      await this.client.graph.setOntology(
+        formattedEntities,  // entities
+        formattedRelations, // edges/relations
+        {
+          userIds: [userId]  // Use camelCase, not snake_case
+        }
+      );
       
       logger.info('Set graph ontology for user', {
         userId,
@@ -594,7 +588,12 @@ class ZepAdapter {
     } catch (error: any) {
       logger.error('Failed to set graph ontology', {
         userId,
-        error: error.message
+        error: error.message,
+        stack: error.stack,
+        entities: Object.keys(entities),
+        relations: Object.keys(relations),
+        formattedEntities,
+        formattedRelations
       });
       return false;
     }
