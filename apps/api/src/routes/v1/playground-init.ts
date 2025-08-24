@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { logger } from '../../utils/logger';
 import { getSupabaseAdmin } from '../../services/supabase-admin';
+import { zepAdapter } from './memory';
 
 interface PlaygroundInitRequest {
   experimentTitle: string;
@@ -110,13 +111,50 @@ export const playgroundInitRoute: FastifyPluginAsync = async (server) => {
           });
         }
 
+        // Create user in Zep
+        try {
+          const zepEmail = `${playgroundUserId}@playground.local`;
+          const zepUserName = userName?.trim() || experimentTitle.trim();
+          
+          logger.info({
+            req_id: reqId,
+            playgroundUserId,
+            zepEmail,
+            zepUserName
+          }, 'Creating Zep user for playground user');
+          
+          const zepUserCreated = await zepAdapter.ensureUser(
+            playgroundUserId,
+            zepEmail,
+            zepUserName
+          );
+          
+          if (!zepUserCreated) {
+            logger.warn({
+              req_id: reqId,
+              playgroundUserId
+            }, 'Failed to create Zep user, but continuing anyway');
+          } else {
+            logger.info({
+              req_id: reqId,
+              playgroundUserId
+            }, 'Zep user created successfully');
+          }
+        } catch (zepError: any) {
+          logger.error({
+            req_id: reqId,
+            playgroundUserId,
+            error: zepError.message
+          }, 'Error creating Zep user, but continuing anyway');
+        }
+
         logger.info({
           req_id: reqId,
           adminId,
           playgroundUserId: data.user_id,
           experimentTitle,
           userName
-        }, 'Playground user created successfully');
+        }, 'Playground user initialization completed');
 
         return reply.send({
           success: true,
