@@ -546,16 +546,16 @@ class ZepAdapter {
     entities: Record<string, any>,
     relations: Record<string, any>
   ): Promise<boolean> {
+    // Define these outside try block so they're accessible in catch
+    const formattedEntities: Record<string, any> = {};
+    const formattedRelations: Record<string, any> = {};
+    
     try {
       logger.info('Setting graph ontology - input data', {
         userId,
         entities,
         relations
       });
-      
-      // Transform the entities and relations into Zep format
-      const formattedEntities: Record<string, any> = {};
-      const formattedRelations: Record<string, any> = {};
       
       // Format entities - just pass them through as-is
       for (const [name, config] of Object.entries(entities)) {
