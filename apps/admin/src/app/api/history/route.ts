@@ -74,6 +74,7 @@ export async function GET(request: Request) {
           return {
             userId: memoryUser.id, // Use the record id as fallback
             name: memoryUser.experiment_title || memoryUser.user_name || 'Unknown User',
+            messageCount: 0,
             memory: { totalMs: 0, startMs: 0, cost: 0 },
             openai: { ttftMs: 0, totalMs: 0, startMs: 0, cost: 0, tokensIn: 0, tokensOut: 0 },
             total: { cost: 0 }
@@ -94,7 +95,14 @@ export async function GET(request: Request) {
         
         console.log(`History - Found messages for ${userId}:`, {
           count: messages?.length || 0,
-          roles: messages?.map(m => m.role) || []
+          roles: messages?.map(m => m.role) || [],
+          samples: messages?.slice(0, 3).map(m => ({
+            role: m.role,
+            tokens_in: m.tokens_in,
+            tokens_out: m.tokens_out,
+            price: m.price,
+            ttft_ms: m.ttft_ms
+          }))
         });
 
         // Separate messages by role (handle null messages)
@@ -141,6 +149,7 @@ export async function GET(request: Request) {
         return {
           userId: userIdentifier || memoryUser.id, // Fallback to id if user_id is null
           name: userName,
+          messageCount: safeMessages.length,
           memory: memoryMetrics,
           openai: openAiMetrics,
           total: {

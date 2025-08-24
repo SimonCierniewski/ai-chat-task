@@ -24,6 +24,7 @@ interface OpenAIMetrics {
 interface UserHistory {
   userId: string;
   name: string;
+  messageCount?: number;
   memory: MemoryMetrics;
   openai: OpenAIMetrics;
   total: {
@@ -63,16 +64,18 @@ export default function HistoryPage() {
   };
 
   const formatCost = (cost: number) => {
+    if (cost === 0) return '-';
     return `$${cost.toFixed(4)}`;
   };
 
   const formatTime = (ms: number) => {
-    if (ms === 0) return '0ms';
+    if (ms === 0) return '-';
     if (ms < 1000) return `${Math.round(ms)}ms`;
     return `${(ms / 1000).toFixed(2)}s`;
   };
 
   const formatTokens = (tokens: number) => {
+    if (tokens === 0) return '-';
     return tokens.toLocaleString();
   };
 
@@ -107,7 +110,10 @@ export default function HistoryPage() {
             <Card 
               key={user.userId} 
               className="p-6 hover:shadow-lg transition-shadow cursor-pointer relative"
-              onClick={() => router.push(`/admin/history/${user.userId}`)}
+              onClick={() => {
+                // Always navigate to the history page, even if no messages
+                router.push(`/admin/history/${user.userId}`);
+              }}
             >
               <div className="absolute top-6 right-6">
                 <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -117,7 +123,16 @@ export default function HistoryPage() {
                 <div className="border-b pb-3">
                   <h3 className="text-lg font-semibold">{user.name}</h3>
                   <p className="text-sm text-gray-500">ID: {user.userId}</p>
-                  <p className="text-xs text-blue-600 mt-1">Click to view chat history</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <p className="text-xs text-blue-600">Click to view chat history</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      user.messageCount === 0 
+                        ? 'bg-yellow-100 text-yellow-700' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {user.messageCount ?? 0} {user.messageCount === 1 ? 'message' : 'messages'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
