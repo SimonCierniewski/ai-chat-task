@@ -2,75 +2,122 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { publicConfig } from '../../../lib/config';
 import { UserInfo } from './user-info';
+import { ChevronLeft, ChevronRight, LayoutDashboard, Gamepad2, ScrollText, Users, TrendingUp, DollarSign, Settings } from 'lucide-react';
 
 interface NavItem {
   label: string;
   href: string;
-  icon: string;
+  icon: React.ReactNode;
+  emoji: string;
   enabled: boolean;
 }
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  
+  // Load collapsed state from localStorage on mount
+  useEffect(() => {
+    const savedState = localStorage.getItem('sidebarCollapsed');
+    if (savedState === 'true') {
+      setIsCollapsed(true);
+    }
+  }, []);
+  
+  // Save collapsed state to localStorage
+  const toggleCollapse = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    localStorage.setItem('sidebarCollapsed', newState.toString());
+  };
   
   const navItems: NavItem[] = [
     { 
       label: 'Dashboard', 
       href: '/admin', 
-      icon: '📊',
+      icon: <LayoutDashboard className="w-5 h-5" />,
+      emoji: '📊',
       enabled: true 
     },
     { 
       label: 'Playground', 
       href: '/admin/playground', 
-      icon: '🎮',
+      icon: <Gamepad2 className="w-5 h-5" />,
+      emoji: '🎮',
       enabled: publicConfig.features.playground 
     },
     { 
       label: 'History', 
       href: '/admin/history', 
-      icon: '📜',
+      icon: <ScrollText className="w-5 h-5" />,
+      emoji: '📜',
       enabled: true 
     },
     { 
       label: 'Users', 
       href: '/admin/users', 
-      icon: '👥',
+      icon: <Users className="w-5 h-5" />,
+      emoji: '👥',
       enabled: true 
     },
     { 
       label: 'Telemetry', 
       href: '/admin/telemetry', 
-      icon: '📈',
+      icon: <TrendingUp className="w-5 h-5" />,
+      emoji: '📈',
       enabled: publicConfig.features.telemetry 
     },
     { 
       label: 'Pricing', 
       href: '/admin/pricing', 
-      icon: '💰',
+      icon: <DollarSign className="w-5 h-5" />,
+      emoji: '💰',
       enabled: publicConfig.features.pricing 
     },
     { 
       label: 'Settings', 
       href: '/admin/settings', 
-      icon: '⚙️',
+      icon: <Settings className="w-5 h-5" />,
+      emoji: '⚙️',
       enabled: publicConfig.features.settings 
     },
   ];
 
   return (
-    <aside className="w-64 bg-gray-900 text-white min-h-screen flex flex-col relative">
-      <div className="p-6">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <span>🤖</span>
-          <span>{publicConfig.appName}</span>
+    <aside className={`${isCollapsed ? 'w-20' : 'w-64'} bg-gray-900 text-white min-h-screen flex flex-col relative transition-all duration-300 ease-in-out`}>
+      {/* Toggle Button */}
+      <button
+        onClick={toggleCollapse}
+        className="absolute -right-3 top-8 bg-gray-800 text-white rounded-full p-1.5 hover:bg-gray-700 transition-colors z-10 border border-gray-700"
+        aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {isCollapsed ? (
+          <ChevronRight className="w-4 h-4" />
+        ) : (
+          <ChevronLeft className="w-4 h-4" />
+        )}
+      </button>
+      
+      {/* Header */}
+      <div className={`${isCollapsed ? 'p-4' : 'p-6'} transition-all duration-300`}>
+        <h1 className={`font-bold flex items-center gap-2 ${isCollapsed ? 'justify-center' : ''}`}>
+          <span className="text-2xl">🤖</span>
+          {!isCollapsed && (
+            <>
+              <span className="text-2xl">{publicConfig.appName}</span>
+            </>
+          )}
         </h1>
-        <p className="text-sm text-gray-400 mt-1">v{publicConfig.appVersion}</p>
+        {!isCollapsed && (
+          <p className="text-sm text-gray-400 mt-1">v{publicConfig.appVersion}</p>
+        )}
       </div>
       
-      <nav className="px-4">
+      {/* Navigation */}
+      <nav className={`${isCollapsed ? 'px-2' : 'px-4'}`}>
         {navItems.map((item) => {
           if (!item.enabled) return null;
           
@@ -82,23 +129,28 @@ export function AdminSidebar() {
               key={item.href}
               href={item.href}
               className={`
-                flex items-center gap-3 px-4 py-3 rounded-lg mb-1
-                transition-colors duration-200
+                flex items-center gap-3 rounded-lg mb-1
+                transition-all duration-200
+                ${isCollapsed ? 'px-3 py-3 justify-center' : 'px-4 py-3'}
                 ${isActive 
                   ? 'bg-blue-600 text-white' 
                   : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                 }
               `}
+              title={isCollapsed ? item.label : undefined}
             >
-              <span className="text-xl">{item.icon}</span>
-              <span className="font-medium">{item.label}</span>
+              <span className="text-xl flex-shrink-0">{item.emoji}</span>
+              {!isCollapsed && (
+                <span className="font-medium">{item.label}</span>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto p-4 border-t border-gray-800">
-        <UserInfo />
+      {/* User Info */}
+      <div className={`mt-auto border-t border-gray-800 ${isCollapsed ? 'p-2' : 'p-4'}`}>
+        <UserInfo isCollapsed={isCollapsed} />
       </div>
     </aside>
   );
