@@ -626,7 +626,13 @@ export default function PlaygroundPage() {
   };
 
   const handleAddAssistant = () => {
-    setImportText(prev => prev + '\n\n## Assistant ##\n');
+    setImportText(prev => {
+      // If text is empty, add 2 newlines at the top
+      if (!prev.trim()) {
+        return '\n\n## Assistant ##\n';
+      }
+      return prev + '\n\n## Assistant ##\n';
+    });
     // Scroll to bottom and focus textarea
     setTimeout(() => {
       if (importTextAreaRef.current) {
@@ -637,7 +643,13 @@ export default function PlaygroundPage() {
   };
 
   const handleAddUser = () => {
-    setImportText(prev => prev + '\n\n## User ##\n');
+    setImportText(prev => {
+      // If text is empty, add 2 newlines at the top
+      if (!prev.trim()) {
+        return '\n\n## User ##\n';
+      }
+      return prev + '\n\n## User ##\n';
+    });
     // Scroll to bottom and focus textarea
     setTimeout(() => {
       if (importTextAreaRef.current) {
@@ -1180,7 +1192,7 @@ export default function PlaygroundPage() {
         }
       }
       
-      setImportText('');
+      // Don't clear the import text, just reset progress
       setError(null);
       setImportProgress({ current: 0, total: 0 });
       
