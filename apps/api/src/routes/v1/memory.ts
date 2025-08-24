@@ -872,10 +872,19 @@ function mapZepError(error: any): { status: number; message: string } {
 function emitZepTelemetry(
   req: FastifyRequest & { user: { id: string } },
   eventType: 'zep_upsert' | 'zep_search' | 'zep_error',
-  payload: any
+  payload: any,
+  actualUserId?: string
 ) {
+  // Use the actual user ID if provided (for playground users), otherwise use the authenticated user
+  const userId = actualUserId || req.user.id;
+  
+  // Skip telemetry for playground users (handled by telemetry service)
+  if (userId.startsWith('playground_')) {
+    return;
+  }
+  
   const basePayload = {
-    user_id: req.user.id,
+    user_id: userId,
     session_id: payload.session_id || null,
     req_id: req.id
   };
@@ -970,7 +979,7 @@ async function searchMemoryHandler(
         zep_ms: zepMs,
         total_ms: totalMs,
         success: true
-      });
+      }, userId);
 
       const response: MemorySearchResponse = {
         results,
@@ -1001,7 +1010,7 @@ async function searchMemoryHandler(
         error_status: mappedError.status,
         error_message: mappedError.message,
         original_error: zepError.message
-      });
+      }, userId);
 
       logger.error('Zep search error', {
         req_id: req.id,
@@ -1246,7 +1255,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         zep_ms: zepMs,
         total_ms: totalMs,
         success: true
-      });
+      }, userId);
       
       logger.info({
         req_id: reqId,
@@ -1279,7 +1288,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         error_status: mappedError.status,
         error_message: mappedError.message,
         original_error: error.message
-      });
+      }, userId);
       
       logger.error({
         req_id: reqId,

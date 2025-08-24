@@ -32,6 +32,12 @@ export class TelemetryService {
     sessionId?: string
   ): Promise<void> {
     try {
+      // Skip telemetry for playground users (non-UUID user IDs)
+      // Playground user IDs start with "playground_"
+      if (userId.startsWith('playground_')) {
+        return;
+      }
+      
       const event = {
         user_id: userId,
         session_id: sessionId || null,
