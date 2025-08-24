@@ -114,7 +114,7 @@ export const playgroundInitRoute: FastifyPluginAsync = async (server) => {
         // Create user in Zep
         try {
           const zepEmail = `${playgroundUserId}@playground.local`;
-          const zepUserName = userName?.trim() || experimentTitle.trim();
+          const zepUserName = userName?.trim();
           
           logger.info({
             req_id: reqId,

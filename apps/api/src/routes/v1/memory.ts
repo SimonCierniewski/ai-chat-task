@@ -252,7 +252,7 @@ class ZepAdapter {
           const userData = {
             userId,
             email: email || `${userId}@zep.local`, // Provide default email if none given
-            firstName: firstName || userId.substring(0, 8), // Default name if none given
+            firstName: firstName, 
             metadata: {
               created_at: new Date().toISOString(),
               source: 'playground'
