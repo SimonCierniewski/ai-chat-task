@@ -91,7 +91,7 @@ export function AdminSidebar() {
       {/* Toggle Button */}
       <button
         onClick={toggleCollapse}
-        className="absolute -right-3 top-8 bg-gray-800 text-white rounded-full p-1.5 hover:bg-gray-700 transition-colors z-10 border border-gray-700"
+        className="absolute -right-3 top-4 bg-gray-800 text-white rounded-full p-1.5 hover:bg-gray-700 transition-colors z-50 border border-gray-700"
         aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {isCollapsed ? (
