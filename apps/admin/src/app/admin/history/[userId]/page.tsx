@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
@@ -42,6 +42,7 @@ export default function ChatHistoryPage() {
   const params = useParams();
   const router = useRouter();
   const userId = params.userId as string;
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const [user, setUser] = useState<ChatUser | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -56,6 +57,13 @@ export default function ChatHistoryPage() {
       fetchChatHistory();
     }
   }, [userId]);
+
+  // Scroll to bottom when messages change or component mounts
+  useEffect(() => {
+    if (messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [messages]);
 
   const fetchChatHistory = async () => {
     try {
@@ -273,6 +281,9 @@ export default function ChatHistoryPage() {
               </Card>
             </div>
           ))}
+
+          {/* Scroll anchor */}
+          <div ref={messagesEndRef} />
 
           {/* Summary Statistics */}
           <Card className="p-6 mt-16 bg-gray-50">
