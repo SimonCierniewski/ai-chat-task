@@ -139,6 +139,40 @@ export const playgroundInitRoute: FastifyPluginAsync = async (server) => {
               req_id: reqId,
               playgroundUserId
             }, 'Zep user created successfully');
+            
+            // Create initial thread for the user
+            // In playground, the user ID is used as the session/thread ID
+            try {
+              logger.info({
+                req_id: reqId,
+                playgroundUserId,
+                threadId: playgroundUserId
+              }, 'Creating initial Zep thread for playground user');
+              
+              const threadCreated = await zepAdapter.ensureThread(
+                playgroundUserId,  // userId
+                playgroundUserId   // threadId (same as userId for playground)
+              );
+              
+              if (threadCreated) {
+                logger.info({
+                  req_id: reqId,
+                  playgroundUserId,
+                  threadId: playgroundUserId
+                }, 'Zep thread created successfully');
+              } else {
+                logger.warn({
+                  req_id: reqId,
+                  playgroundUserId
+                }, 'Failed to create Zep thread, but continuing anyway');
+              }
+            } catch (threadError: any) {
+              logger.error({
+                req_id: reqId,
+                playgroundUserId,
+                error: threadError.message
+              }, 'Error creating Zep thread, but continuing anyway');
+            }
           }
         } catch (zepError: any) {
           logger.error({
