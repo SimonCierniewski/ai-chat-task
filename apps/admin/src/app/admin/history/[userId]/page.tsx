@@ -115,7 +115,7 @@ export default function ChatHistoryPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="relative">
       {/* Header with back button */}
       <div className="bg-white border-b border-gray-200 px-8 py-6">
         <div className="flex items-start gap-4">
@@ -137,6 +137,27 @@ export default function ChatHistoryPage() {
           </div>
         </div>
       </div>
+      
+      {/* Sticky prompts toggle */}
+      {!loading && !error && messages.length > 0 && (
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+          <div className="px-8 py-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showPrompts}
+                onChange={(e) => setShowPrompts(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Show OpenAI Prompts (Admin Only)
+              </span>
+            </label>
+          </div>
+        </div>
+      )}
+      
+      <div className="space-y-6 px-8 py-6">
 
       {loading && (
         <div className="flex items-center justify-center py-12">
@@ -158,21 +179,6 @@ export default function ChatHistoryPage() {
 
       {!loading && !error && messages.length > 0 && (
         <div className="space-y-4 max-w-6xl mx-auto">
-          {/* Prompts toggle checkbox */}
-          <Card className="p-4 bg-gray-50">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showPrompts}
-                onChange={(e) => setShowPrompts(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-gray-700">
-                Show OpenAI Prompts (Admin Only)
-              </span>
-            </label>
-          </Card>
-          
           {messages.map((message) => (
             <div 
               key={message.id} 
@@ -323,6 +329,7 @@ export default function ChatHistoryPage() {
           </Card>
         </div>
       )}
+      </div>
     </div>
   );
 }
