@@ -1779,26 +1779,6 @@ export default function PlaygroundPage() {
             </Card>
             
 
-            {/* Performance Metrics */}
-            {timing && (
-              <Card title="Performance" icon="⚡" className="mt-4">
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  {timing.ttft_ms !== undefined && (
-                    <div className="p-3 bg-purple-50 rounded-md">
-                      <p className="text-xs text-purple-600 font-medium">Time to First Token</p>
-                      <p className="text-lg font-bold text-purple-900">{formatTiming(timing.ttft_ms)}</p>
-                    </div>
-                  )}
-                  {timing.total_ms !== undefined && (
-                    <div className="p-3 bg-indigo-50 rounded-md">
-                      <p className="text-xs text-indigo-600 font-medium">Total Duration</p>
-                      <p className="text-lg font-bold text-indigo-900">{formatTiming(timing.total_ms)}</p>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            )}
-
           </div>
 
           {/* Response Panel */}
@@ -1891,6 +1871,26 @@ export default function PlaygroundPage() {
                 </div>
               )}
             </Card>
+
+            {/* Performance Metrics */}
+            {timing && (
+              <Card title="Performance" icon="⚡" className="mt-4">
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  {timing.ttft_ms !== undefined && (
+                    <div className="p-3 bg-purple-50 rounded-md">
+                      <p className="text-xs text-purple-600 font-medium">Time to First Token</p>
+                      <p className="text-lg font-bold text-purple-900">{formatTiming(timing.ttft_ms)}</p>
+                    </div>
+                  )}
+                  {timing.total_ms !== undefined && (
+                    <div className="p-3 bg-indigo-50 rounded-md">
+                      <p className="text-xs text-indigo-600 font-medium">Total Duration</p>
+                      <p className="text-lg font-bold text-indigo-900">{formatTiming(timing.total_ms)}</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
 
             {/* Configuration Card - Moved below Response */}
             <Card title="Configuration" icon="⚙️">
