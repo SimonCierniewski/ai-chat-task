@@ -704,7 +704,45 @@ export default function PlaygroundPage() {
       }
     }
     
-    return messages;
+    // Now convert messages into pairs (user + assistant)
+    const pairs: Array<{ userMessage: string; assistantMessage: string }> = [];
+    
+    for (let i = 0; i < messages.length; i++) {
+      const currentMsg = messages[i];
+      const nextMsg = messages[i + 1];
+      
+      if (currentMsg.role === 'user') {
+        if (nextMsg && nextMsg.role === 'assistant') {
+          // User + Assistant pair
+          pairs.push({
+            userMessage: currentMsg.content,
+            assistantMessage: nextMsg.content
+          });
+          i++; // Skip the next message as we've already processed it
+        } else {
+          // User message without assistant response
+          pairs.push({
+            userMessage: currentMsg.content,
+            assistantMessage: ''
+          });
+        }
+      } else if (currentMsg.role === 'assistant') {
+        // Assistant message without user message
+        pairs.push({
+          userMessage: '',
+          assistantMessage: currentMsg.content
+        });
+      }
+    }
+    
+    // Log the generated pairs for debugging
+    console.log('Generated message pairs for import:', pairs.map((pair, idx) => ({
+      index: idx + 1,
+      userMessage: pair.userMessage ? pair.userMessage.substring(0, 50) + '...' : '(empty)',
+      assistantMessage: pair.assistantMessage ? pair.assistantMessage.substring(0, 50) + '...' : '(empty)'
+    })));
+    
+    return pairs;
   };
 
   const calculateDelay = (userChars: number, assistantChars: number) => {
@@ -1091,8 +1129,8 @@ export default function PlaygroundPage() {
     setImportProgress({ current: 0, total: 0 });
     
     try {
-      const messages = parseConversations(importText);
-      if (messages.length === 0) {
+      const pairs = parseConversations(importText);
+      if (pairs.length === 0) {
         setError('No valid messages found. Use "## User ##" and "## Assistant ##" to separate messages.');
         return;
       }
@@ -1104,21 +1142,30 @@ export default function PlaygroundPage() {
         throw new Error('Please sign in to import conversations');
       }
 
-      setImportProgress({ current: 0, total: messages.length });
+      setImportProgress({ current: 0, total: pairs.length });
       
-      // Process messages based on import mode
-      for (let i = 0; i < messages.length; i++) {
-        const msg = messages[i];
-        setImportProgress({ current: i + 1, total: messages.length });
+      // Process message pairs based on import mode
+      for (let i = 0; i < pairs.length; i++) {
+        const pair = pairs[i];
+        setImportProgress({ current: i + 1, total: pairs.length });
         
-        // Update the message text field to show current message
-        setMessage(msg.content);
+        // Log the current pair being processed
+        console.log(`Processing pair ${i + 1}/${pairs.length}:`, {
+          userMessage: pair.userMessage ? pair.userMessage.substring(0, 50) + '...' : '(empty)',
+          assistantMessage: pair.assistantMessage ? pair.assistantMessage.substring(0, 50) + '...' : '(empty)'
+        });
+        
+        // Update the message text field to show current user message
+        setMessage(pair.userMessage || '(System: Processing assistant-only message)');
         
         // Prepare request body based on import mode
+        // Always use the user message (or empty string) as the message
         let requestBody: any = {
-          message: msg.content,
+          message: pair.userMessage || '',
           sessionId: selectedUserId,
           model,
+          temperature,
+          maxTokens,
           systemPrompt: systemPrompt.trim() || undefined
         };
         
@@ -1126,26 +1173,27 @@ export default function PlaygroundPage() {
           // Generate ZEP graph only - no memory, no OpenAI
           requestBody.useMemory = false;
           requestBody.returnMemory = false;
-          if (msg.role === 'assistant') {
-            requestBody.assistantOutput = msg.content; // Skip OpenAI for assistant messages
-          }
+          // Always provide assistantOutput to skip OpenAI
+          // Use the assistant message from the pair, or a placeholder if empty
+          requestBody.assistantOutput = pair.assistantMessage || "Message processed.";
         } else if (importMode === 'memory-test') {
           // Test memory context - with memory, skip OpenAI
           requestBody.useMemory = true;
           requestBody.contextMode = contextMode;
           requestBody.returnMemory = true;
-          if (msg.role === 'assistant') {
-            requestBody.assistantOutput = msg.content; // Skip OpenAI for assistant messages
-          }
+          // Always provide assistantOutput to skip OpenAI
+          requestBody.assistantOutput = pair.assistantMessage || "Message processed.";
         } else if (importMode === 'full-test') {
-          // Test memory and OpenAI answers - only for user messages
-          if (msg.role === 'assistant') {
-            // Skip assistant messages in full test mode
+          // Test memory and OpenAI answers
+          // Only process if there's a user message (skip assistant-only pairs)
+          if (!pair.userMessage) {
+            console.log(`Skipping assistant-only pair ${i + 1} in full-test mode`);
             continue;
           }
           requestBody.useMemory = true;
           requestBody.contextMode = contextMode;
           requestBody.returnMemory = true;
+          // Don't provide assistantOutput - let OpenAI generate the response
         }
         
         // Send the request using the standard chat endpoint
@@ -1216,9 +1264,9 @@ export default function PlaygroundPage() {
         }
         
         // Apply delay if enabled
-        if (enableDelay && i < messages.length - 1) {
-          const userChars = msg.role === 'user' ? msg.content.length : 0;
-          const assistantChars = msg.role === 'assistant' ? msg.content.length : (fullResponse?.length || 0);
+        if (enableDelay && i < pairs.length - 1) {
+          const userChars = pair.userMessage ? pair.userMessage.length : 0;
+          const assistantChars = pair.assistantMessage ? pair.assistantMessage.length : (fullResponse?.length || 0);
           const delay = calculateDelay(userChars, assistantChars);
           await new Promise(resolve => setTimeout(resolve, delay));
         } else if (importMode === 'zep-only') {
@@ -1232,7 +1280,7 @@ export default function PlaygroundPage() {
       // Progress stays visible to show completion
       
       // Show success message
-      alert(`Successfully imported ${messages.length} messages`);
+      alert(`Successfully imported ${pairs.length} message pairs`);
     } catch (err: any) {
       console.error('Import error:', err);
       setError(err.message || 'Failed to import conversations');
