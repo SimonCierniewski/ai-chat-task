@@ -1,21 +1,40 @@
 -- Migration: 012_create_memory_context_table.sql
--- Purpose: Create memory_context table for caching Zep context blocks
+-- Purpose: Create memory_context table for caching Zep context blocks and playground users
 -- Author: AI Chat Task
 -- Date: 2025-01-22
+-- Updated: 2025-01-24 - Consolidated changes for playground support
 
 -- Drop existing table if it exists (for clean recreation)
 DROP TABLE IF EXISTS public.memory_context CASCADE;
 
+-- Drop existing functions that might conflict
+DROP FUNCTION IF EXISTS public.get_or_create_memory_context(UUID);
+DROP FUNCTION IF EXISTS public.get_or_create_memory_context(TEXT);
+DROP FUNCTION IF EXISTS public.update_memory_context(UUID, TEXT, JSONB, TEXT);
+DROP FUNCTION IF EXISTS public.update_memory_context(TEXT, TEXT, JSONB, TEXT);
+DROP FUNCTION IF EXISTS public.update_memory_context_updated_at();
+DROP FUNCTION IF EXISTS public.cleanup_expired_memory_contexts();
+
 -- Create memory_context table
 CREATE TABLE public.memory_context (
-    -- Primary key - user_id is the main identifier
-    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    -- Primary key - auto-generated UUID
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     
-    -- Optional owner_id for shared contexts (future feature)
+    -- User identifier - TEXT field for flexibility
+    -- For real users: matches auth.users.id
+    -- For playground users: generated string like 'playground_timestamp_random'
+    user_id TEXT,
+    
+    -- Owner ID - references the admin who created playground users
+    -- For real users: can be NULL or same as user_id
+    -- For playground users: the admin's user_id from auth.users
     owner_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     
-    -- User display name for identification in History view
-    name TEXT,
+    -- User display name
+    user_name TEXT,
+    
+    -- Experiment title for easy identification in dropdowns
+    experiment_title TEXT,
     
     -- The actual context block from Zep (can be large text)
     context_block TEXT,
@@ -41,15 +60,23 @@ CREATE TABLE public.memory_context (
 );
 
 -- Create indices for performance
+CREATE INDEX idx_memory_context_user_id ON public.memory_context(user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_memory_context_owner_id ON public.memory_context(owner_id) WHERE owner_id IS NOT NULL;
 CREATE INDEX idx_memory_context_updated_at ON public.memory_context(updated_at DESC);
 CREATE INDEX idx_memory_context_expires_at ON public.memory_context(expires_at) WHERE expires_at IS NOT NULL;
-CREATE INDEX idx_memory_context_owner_id ON public.memory_context(owner_id) WHERE owner_id IS NOT NULL;
+
+-- Create unique index to prevent duplicate playground experiments per owner
+CREATE UNIQUE INDEX idx_memory_context_owner_experiment 
+ON public.memory_context(owner_id, experiment_title) 
+WHERE owner_id IS NOT NULL AND experiment_title IS NOT NULL;
 
 -- Add comments for documentation
-COMMENT ON TABLE public.memory_context IS 'Caches Zep memory context blocks for users to reduce API calls';
-COMMENT ON COLUMN public.memory_context.user_id IS 'Primary key - the user this context belongs to';
-COMMENT ON COLUMN public.memory_context.owner_id IS 'Optional owner for shared contexts (future feature)';
-COMMENT ON COLUMN public.memory_context.name IS 'User display name for identification in History view';
+COMMENT ON TABLE public.memory_context IS 'Stores memory context for both real users and playground test users';
+COMMENT ON COLUMN public.memory_context.id IS 'Primary key - auto-generated UUID';
+COMMENT ON COLUMN public.memory_context.user_id IS 'User identifier - TEXT field that can be any value. For real users: auth.users.id, for playground: generated string';
+COMMENT ON COLUMN public.memory_context.owner_id IS 'The admin who owns this playground user (NULL for real users)';
+COMMENT ON COLUMN public.memory_context.user_name IS 'User display name to add to messages sent to Zep for better context';
+COMMENT ON COLUMN public.memory_context.experiment_title IS 'Title of the experiment/conversation for easy identification in dropdowns';
 COMMENT ON COLUMN public.memory_context.context_block IS 'The cached context block from Zep';
 COMMENT ON COLUMN public.memory_context.zep_parameters IS 'Parameters used to fetch this context from Zep';
 COMMENT ON COLUMN public.memory_context.created_at IS 'When this record was first created';
@@ -62,16 +89,25 @@ COMMENT ON COLUMN public.memory_context.metadata IS 'Additional metadata (e.g., 
 -- Row Level Security (RLS)
 ALTER TABLE public.memory_context ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can read their own context
-CREATE POLICY "Users can read own context" ON public.memory_context
+-- Policy: Users can read contexts they own or created
+CREATE POLICY "Users can read own contexts" ON public.memory_context
     FOR SELECT
-    USING (auth.uid() = user_id);
+    USING (
+        auth.uid()::TEXT = user_id 
+        OR auth.uid() = owner_id
+    );
 
--- Policy: Users can insert/update their own context
-CREATE POLICY "Users can manage own context" ON public.memory_context
+-- Policy: Users can manage contexts they own or created
+CREATE POLICY "Users can manage own contexts" ON public.memory_context
     FOR ALL
-    USING (auth.uid() = user_id)
-    WITH CHECK (auth.uid() = user_id);
+    USING (
+        auth.uid()::TEXT = user_id 
+        OR auth.uid() = owner_id
+    )
+    WITH CHECK (
+        auth.uid()::TEXT = user_id 
+        OR auth.uid() = owner_id
+    );
 
 -- Policy: Service role has full access
 CREATE POLICY "Service role has full access" ON public.memory_context
@@ -98,13 +134,16 @@ CREATE TRIGGER update_memory_context_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION public.update_memory_context_updated_at();
 
--- Create function to get or create memory context (no expiry)
+-- Create function to get or create memory context
 CREATE OR REPLACE FUNCTION public.get_or_create_memory_context(
-    p_user_id UUID
+    p_user_id TEXT
 )
 RETURNS TABLE(
-    user_id UUID,
+    id UUID,
+    user_id TEXT,
     owner_id UUID,
+    user_name TEXT,
+    experiment_title TEXT,
     context_block TEXT,
     zep_parameters JSONB,
     created_at TIMESTAMPTZ,
@@ -122,8 +161,11 @@ BEGIN
     -- First try to get existing context
     RETURN QUERY
     SELECT 
+        mc.id,
         mc.user_id,
         mc.owner_id,
+        mc.user_name,
+        mc.experiment_title,
         mc.context_block,
         mc.zep_parameters,
         mc.created_at,
@@ -139,14 +181,16 @@ BEGIN
     -- If no record exists, create one
     IF NOT FOUND THEN
         INSERT INTO public.memory_context (user_id)
-        VALUES (p_user_id)
-        ON CONFLICT (user_id) DO NOTHING;
+        VALUES (p_user_id);
         
         -- Return the newly created record
         RETURN QUERY
         SELECT 
+            mc.id,
             mc.user_id,
             mc.owner_id,
+            mc.user_name,
+            mc.experiment_title,
             mc.context_block,
             mc.zep_parameters,
             mc.created_at,
@@ -163,14 +207,14 @@ END;
 $$;
 
 -- Grant execute permission
-GRANT EXECUTE ON FUNCTION public.get_or_create_memory_context(UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_or_create_memory_context(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_or_create_memory_context(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_or_create_memory_context(TEXT) TO service_role;
 
 COMMENT ON FUNCTION public.get_or_create_memory_context IS 'Gets existing memory context or creates a new one if it doesn''t exist';
 
 -- Create function to update or create memory context (upsert)
 CREATE OR REPLACE FUNCTION public.update_memory_context(
-    p_user_id UUID,
+    p_user_id TEXT,
     p_context_block TEXT,
     p_zep_parameters JSONB DEFAULT NULL,
     p_session_id TEXT DEFAULT NULL
@@ -180,35 +224,40 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-    -- Use INSERT ... ON CONFLICT to handle both insert and update
-    INSERT INTO public.memory_context (
-        user_id,
-        context_block,
-        zep_parameters,
-        last_session_id,
-        expires_at
-    ) VALUES (
-        p_user_id,
-        p_context_block,
-        COALESCE(p_zep_parameters, '{}'::jsonb),
-        p_session_id,
-        NULL -- Never expires
-    )
-    ON CONFLICT (user_id) DO UPDATE
+    -- Update existing record or fail if not found
+    UPDATE public.memory_context
     SET 
-        context_block = EXCLUDED.context_block,
-        zep_parameters = COALESCE(EXCLUDED.zep_parameters, memory_context.zep_parameters),
+        context_block = p_context_block,
+        zep_parameters = COALESCE(p_zep_parameters, memory_context.zep_parameters),
         expires_at = NULL, -- Never expires
-        last_session_id = COALESCE(EXCLUDED.last_session_id, memory_context.last_session_id),
-        updated_at = NOW();
+        last_session_id = COALESCE(p_session_id, memory_context.last_session_id),
+        updated_at = NOW()
+    WHERE user_id = p_user_id;
+    
+    -- If no rows were updated, try to insert
+    IF NOT FOUND THEN
+        INSERT INTO public.memory_context (
+            user_id,
+            context_block,
+            zep_parameters,
+            last_session_id,
+            expires_at
+        ) VALUES (
+            p_user_id,
+            p_context_block,
+            COALESCE(p_zep_parameters, '{}'::jsonb),
+            p_session_id,
+            NULL -- Never expires
+        );
+    END IF;
     
     RETURN TRUE;
 END;
 $$;
 
 -- Grant execute permission
-GRANT EXECUTE ON FUNCTION public.update_memory_context(UUID, TEXT, JSONB, TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.update_memory_context(UUID, TEXT, JSONB, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.update_memory_context(TEXT, TEXT, JSONB, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_memory_context(TEXT, TEXT, JSONB, TEXT) TO service_role;
 
 COMMENT ON FUNCTION public.update_memory_context IS 'Updates or creates memory context for a user (upsert with no expiry)';
 
@@ -240,3 +289,14 @@ $$;
 GRANT EXECUTE ON FUNCTION public.cleanup_expired_memory_contexts() TO service_role;
 
 COMMENT ON FUNCTION public.cleanup_expired_memory_contexts IS 'Cleans up expired memory contexts to save storage space';
+
+-- Verify the table structure
+SELECT 
+    column_name, 
+    data_type, 
+    is_nullable,
+    column_default
+FROM information_schema.columns 
+WHERE table_schema = 'public' 
+AND table_name = 'memory_context'
+ORDER BY ordinal_position;
