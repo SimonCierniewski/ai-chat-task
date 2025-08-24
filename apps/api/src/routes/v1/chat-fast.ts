@@ -257,7 +257,7 @@ function buildPrompt(systemPrompt: string | undefined, contextBlock: string | un
     systemContent += `\n\nContext:\n${contextBlock}`;
   }
   if (pastMessages) {
-    systemContent += `\n\nLast messages:\n${contextBlock}`;
+    systemContent += `\n\nLast messages:\n${pastMessages}`;
   }
 
   const messages: any[] = [];
