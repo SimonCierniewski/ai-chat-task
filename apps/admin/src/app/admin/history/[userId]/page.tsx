@@ -26,6 +26,7 @@ interface Message {
 interface ChatUser {
   id: string;
   name: string;
+  experimentTitle?: string;
 }
 
 export default function ChatHistoryPage() {
@@ -124,7 +125,11 @@ export default function ChatHistoryPage() {
           </button>
           <div className="flex-1">
             <h2 className="text-3xl font-bold text-gray-900">
-              Chat History: {user?.name || 'Loading...'}
+              Chat History: {user ? (
+                user.name && user.experimentTitle ? 
+                  `${user.name}, ${user.experimentTitle}` :
+                  user.name || user.experimentTitle || 'Unknown User'
+              ) : 'Loading...'}
             </h2>
             <p className="text-gray-600 mt-1">User ID: {userId}</p>
           </div>
@@ -213,7 +218,7 @@ export default function ChatHistoryPage() {
           ))}
 
           {/* Summary Statistics */}
-          <Card className="p-6 mt-8 bg-gray-50">
+          <Card className="p-6 mt-16 bg-gray-50">
             <h3 className="text-lg font-semibold mb-4">Conversation Summary</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>

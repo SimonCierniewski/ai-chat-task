@@ -36,8 +36,7 @@ export async function GET(
     const { data: memoryUser, error: memoryError } = await supabase
       .from('memory_context')
       .select('*')
-      .eq('owner_id', user.id)
-      .or(`user_id.eq.${params.userId},id.eq.${params.userId}`)
+      .eq('user_id', params.userId)
       .single();
 
     if (memoryError || !memoryUser) {
@@ -110,18 +109,16 @@ export async function GET(
       }
     }));
 
-    // Get user name from memory context or generate one
-    let userName = 'Unknown User';
+    // Get user name and experiment title from memory context
+    let userName = '';
+    let experimentTitle = '';
+    
     if (memoryUser) {
-      // Prefer experiment_title, then user_name
-      if (memoryUser.experiment_title && memoryUser.experiment_title.trim()) {
-        userName = memoryUser.experiment_title;
-      } else if (memoryUser.user_name && memoryUser.user_name.trim()) {
-        userName = memoryUser.user_name;
-      } else if (memoryUser.name && memoryUser.name.trim()) {
-        userName = memoryUser.name;
-      } else {
-        // Fallback to User ID prefix
+      userName = memoryUser.user_name || '';
+      experimentTitle = memoryUser.experiment_title || '';
+      
+      // If neither is available, use fallback
+      if (!userName && !experimentTitle) {
         userName = `User ${params.userId.substring(0, 8)}`;
       }
     } else {
@@ -134,7 +131,8 @@ export async function GET(
     return NextResponse.json({
       user: {
         id: actualUserId,
-        name: userName
+        name: userName,
+        experimentTitle: experimentTitle
       },
       messages: formattedMessages
     });
