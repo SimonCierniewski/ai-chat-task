@@ -2183,11 +2183,14 @@ export default function PlaygroundPage() {
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Column */}
           <div className="space-y-8">
-            {/* Import Conversations Card */}
-            <Card title="Import Conversations" icon="📥">
+            {/* Import Conversations Card - DISABLED */}
+            <Card title="Import Conversations" icon="📥" className="opacity-50 relative">
+            {/* Disabled overlay */}
+            <div className="absolute inset-0 bg-gray-100 bg-opacity-50 z-10 rounded-lg cursor-not-allowed" />
+            
             {/* Progress indicator */}
             {(isImporting || importProgress.total > 0) && (
-              <div className="absolute top-4 right-4 flex items-center gap-2">
+              <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
                 {isImporting && (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
                 )}
@@ -2198,7 +2201,7 @@ export default function PlaygroundPage() {
               </div>
             )}
             
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 space-y-4 pointer-events-none">
               {/* Import Mode Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2213,7 +2216,7 @@ export default function PlaygroundPage() {
                       checked={importMode === 'zep-only'}
                       onChange={(e) => setImportMode(e.target.value as any)}
                       className="mt-1 text-blue-600 focus:ring-blue-500"
-                      disabled={isImporting}
+                      disabled={true}
                     />
                     <div>
                       <span className="text-sm font-medium text-gray-700">Generate ZEP graph only</span>
@@ -2232,7 +2235,7 @@ export default function PlaygroundPage() {
                       checked={importMode === 'memory-test'}
                       onChange={(e) => setImportMode(e.target.value as any)}
                       className="mt-1 text-blue-600 focus:ring-blue-500"
-                      disabled={isImporting}
+                      disabled={true}
                     />
                     <div>
                       <span className="text-sm font-medium text-gray-700">Test memory context</span>
@@ -2252,7 +2255,7 @@ export default function PlaygroundPage() {
                       checked={importMode === 'full-test'}
                       onChange={(e) => setImportMode(e.target.value as any)}
                       className="mt-1 text-blue-600 focus:ring-blue-500"
-                      disabled={isImporting}
+                      disabled={true}
                     />
                     <div>
                       <span className="text-sm font-medium text-gray-700">Test memory and OpenAI answers</span>
@@ -2294,7 +2297,7 @@ export default function PlaygroundPage() {
                       value={delayMultiplier}
                       onChange={(e) => setDelayMultiplier(parseFloat(e.target.value))}
                       className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={isImporting}
+                      disabled={true}
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       1.0 = normal reading speed (140 Words Per Minute), 2 = fast (280 WPM), ...
@@ -2315,7 +2318,7 @@ export default function PlaygroundPage() {
                   placeholder="Paste or type your conversation here. Use ## User ## and ## Assistant ## to separate messages..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                   rows={10}
-                  disabled={isImporting}
+                  disabled={true}
                 />
               </div>
 
@@ -2326,7 +2329,7 @@ export default function PlaygroundPage() {
                     type="button"
                     onClick={handleAddUser}
                     className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-400"
-                    disabled={isImporting}
+                    disabled={true}
                   >
                     + User
                   </button>
@@ -2334,7 +2337,7 @@ export default function PlaygroundPage() {
                     type="button"
                     onClick={handleAddAssistant}
                     className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-400"
-                    disabled={isImporting}
+                    disabled={true}
                   >
                     + Assistant
                   </button>
@@ -2344,7 +2347,7 @@ export default function PlaygroundPage() {
                   type="button"
                   onClick={handleImportConversations}
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  disabled={isImporting || !importText.trim() || !selectedUserId}
+                  disabled={true}
                 >
                   {isImporting ? 'Importing...' : 'Import'}
                 </button>
