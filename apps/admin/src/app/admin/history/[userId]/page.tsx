@@ -87,7 +87,12 @@ export default function ChatHistoryPage() {
 
   const formatDuration = (ms?: number) => {
     if (!ms) return null;
-    if (ms < 1000) return `${ms}ms`;
+    if (ms < 1) return '<1ms';
+    if (ms < 1000) {
+      // Round to 2 decimal places, but remove trailing zeros
+      const rounded = Math.round(ms * 100) / 100;
+      return `${rounded}ms`;
+    }
     return `${(ms / 1000).toFixed(2)}s`;
   };
 
@@ -307,7 +312,7 @@ export default function ChatHistoryPage() {
                       .filter(m => m.metadata.ttftMs)
                       .map(m => m.metadata.ttftMs!);
                     if (ttfts.length === 0) return 'N/A';
-                    const avg = ttfts.reduce((a, b) => a + b, 0) / ttfts.length;
+                    const avg = Math.round((ttfts.reduce((a, b) => a + b, 0) / ttfts.length) * 100) / 100;
                     return formatDuration(avg);
                   })()}
                 </p>
@@ -320,7 +325,7 @@ export default function ChatHistoryPage() {
                       .filter(m => m.metadata.totalMs)
                       .map(m => m.metadata.totalMs!);
                     if (times.length === 0) return 'N/A';
-                    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+                    const avg = Math.round((times.reduce((a, b) => a + b, 0) / times.length) * 100) / 100;
                     return formatDuration(avg);
                   })()}
                 </p>
