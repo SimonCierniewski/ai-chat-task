@@ -345,10 +345,10 @@ async function loadUserNameFromDB(userId: string, reqId: string): Promise<string
 async function storeConversationInZep(userId: string, sessionId: string, message: string, outputText: string, reqId: string) {
   try {
     const memoryUpsertStartMs = Date.now()
-    
+
     // Load user name from DB
     const userName = await loadUserNameFromDB(userId, reqId);
-    
+
     const stored = await zepAdapter.storeConversationTurn(
       userId,
       sessionId,
@@ -572,18 +572,18 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
       } = req.body;
       let userId: string = req.user!.id;
       const reqId = req.id;
-      
+
       // Check if this is a playground user by looking for it in memory_context
       // For playground users, the sessionId IS the user ID
       if (sessionId) {
         try {
           const supabaseAdmin = getSupabaseAdmin();
-          const { data: memoryContext } = await supabaseAdmin
+          const {data: memoryContext} = await supabaseAdmin
             .from('memory_context')
             .select('user_id, user_name, experiment_title')
             .eq('user_id', sessionId)
             .single();
-          
+
           if (memoryContext) {
             // This is a playground user, use their ID instead
             userId = sessionId;
@@ -621,15 +621,17 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
           // For query-based context modes, always build fresh context (no cache)
           if (['node_search', 'edge_search', 'node_edge_search', 'bfs'].includes(contextMode)) {
             contextBlock = await zepAdapter.buildCustomContext(
-              userId, 
-              sessionId!!, 
+              userId,
+              sessionId!!,
               message, // Use the user's message as the query
               contextMode as any,
               graphSearchParams
             );
           } else {
             // For basic/summarized modes, try cache first
-            contextBlock = await loadCachedContextFromDB(userId, reqId);
+            if (!testingMode) {
+              contextBlock = await loadCachedContextFromDB(userId, reqId);
+            }
 
             // If no valid cache, fetch from Zep
             if (!contextBlock) {
@@ -662,6 +664,12 @@ export const chatFastRoute: FastifyPluginAsync = async (server) => {
         // If assistantOutput is provided, use it instead of calling OpenAI
         if (req.body.assistantOutput) {
           outputText = await simulateStreamFromOpenAI(stream, userId, reqId, req.body, messages, contextBlock, returnMemory, usageCalc, model, memoryMs)
+
+          // Step 6: Store conversation in Zep if successful and session exists (skip in testing mode)
+          await storeConversationInZep(userId, sessionId!!, message, outputText, reqId);
+
+          // Step 7: Store messages in database (skip in testing mode)
+          await storeConversationInDB(sessionId!!, message, userId, startTime, contextBlock, startTime + 1, 0, outputText, startTime, null, usageCalc, model, startTime + 2, 0, 0, reqId, messages);
 
         } else {
           // Normal OpenAI streaming path

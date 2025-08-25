@@ -1147,7 +1147,12 @@ export default function PlaygroundPage() {
       // Process message pairs based on import mode
       for (let i = 0; i < pairs.length; i++) {
         const pair = pairs[i];
-        setImportProgress({ current: i + 1, total: pairs.length });
+        
+        // Update progress with a small delay to ensure React renders the update
+        await new Promise(resolve => {
+          setImportProgress({ current: i + 1, total: pairs.length });
+          setTimeout(resolve, 10); // Small delay to allow React to render
+        });
         
         // Log the current pair being processed
         console.log(`Processing pair ${i + 1}/${pairs.length}:`, {
