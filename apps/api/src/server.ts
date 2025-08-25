@@ -28,23 +28,32 @@ export function getUptime(): number {
 }
 
 export async function buildServer(): Promise<FastifyInstance> {
+  // Only use pino-pretty in development and if it's available
+  let transport = undefined;
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      // Check if pino-pretty is available
+      require.resolve('pino-pretty');
+      transport = {
+        target: 'pino-pretty',
+        options: {
+          translateTime: 'HH:MM:ss Z',
+          ignore: 'pid,hostname',
+          messageFormat: '[{req_id}] {msg}',
+          singleLine: false,
+          depth: 10,
+          errorLikeObjectKeys: ['err', 'error']
+        },
+      };
+    } catch {
+      // pino-pretty not available, use default logger
+    }
+  }
+
   const server = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || 'info',
-      transport:
-        process.env.NODE_ENV === 'development'
-          ? {
-              target: 'pino-pretty',
-              options: {
-                translateTime: 'HH:MM:ss Z',
-                ignore: 'pid,hostname',
-                messageFormat: '[{req_id}] {msg}',
-                singleLine: false,
-                depth: 10,
-                errorLikeObjectKeys: ['err', 'error']
-              },
-            }
-          : undefined,
+      transport,
       serializers: {
         req(request) {
           return {
