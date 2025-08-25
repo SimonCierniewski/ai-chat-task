@@ -137,10 +137,27 @@ See [API Runbook](./apps/api/RUNBOOK_API.md) for operational procedures.
 
 ### Admin Dashboard (Vercel)
 
-1. Connect GitHub repository to Vercel
-2. Set root directory to `apps/admin`
-3. Configure environment variables
-4. Deploy automatically on push to main
+1. **Quick Deploy with Vercel Button**:
+   [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/SimonCierniewski/ai-chat-task&root-directory=apps/admin)
+
+2. **Manual Setup**:
+   ```bash
+   # Using Vercel CLI
+   npm install -g vercel
+   cd apps/admin
+   vercel
+   
+   # Or use deployment script
+   ./scripts/deploy-vercel.sh
+   ```
+
+3. **Configure Environment Variables** (in Vercel Dashboard):
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_API_BASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY` (server-side only)
+
+See [Admin Vercel Deployment Guide](./apps/admin/VERCEL_DEPLOYMENT.md) for detailed instructions.
 
 ### Database Setup (Supabase)
 

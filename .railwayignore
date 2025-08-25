@@ -1,0 +1,32 @@
+# Ignore other apps in monorepo
+apps/admin
+apps/android
+
+# Development files
+.git
+.github
+node_modules
+*.log
+.env.local
+.env.development
+.env.test
+coverage
+.nyc_output
+.DS_Store
+
+# Documentation
+*.md
+docs
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__
+
+# IDE files
+.vscode
+.idea
+
+# Build artifacts we don't need
+dist/
+*.map

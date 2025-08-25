@@ -1,53 +1,20 @@
 {
-  "name": "@prototype/root",
-  "version": "0.0.1",
+  "name": "ai-chat-monorepo",
+  "version": "1.0.0",
   "private": true,
-  "description": "Prototype monorepo - 3 apps + shared package",
+  "description": "AI Chat Application",
   "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=8.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
-    "// Development": "Start development servers for each app",
-    "dev": "pnpm run --parallel --stream --filter './apps/*' dev 2>/dev/null || echo '⚠️  No dev scripts found in apps'",
-    "dev:api": "pnpm --filter @prototype/api --if-present dev || echo '⚠️  API dev script not configured'",
-    "dev:admin": "pnpm --filter @prototype/admin --if-present dev || echo '⚠️  Admin dev script not configured'",
-    "dev:android": "echo '📱 Android: Use Android Studio or run ./gradlew from apps/android'",
-    "dev:all": "pnpm run --parallel --stream dev:api dev:admin",
-    "// Building": "Build all apps and packages for production",
-    "build": "pnpm run build:shared && pnpm run --parallel --stream --filter './apps/*' build 2>/dev/null || echo '⚠️  No build scripts found'",
-    "build:api": "pnpm --filter @prototype/api --if-present build || echo '⚠️  API build script not configured'",
-    "build:admin": "pnpm --filter @prototype/admin --if-present build || echo '⚠️  Admin build script not configured'",
-    "build:android": "echo '📱 Android: Run ./gradlew build from apps/android'",
-    "build:shared": "pnpm --filter @prototype/shared --if-present build || echo '⚠️  Shared build script not configured'",
-    "build:all": "pnpm run build:shared && pnpm run --filter './apps/*' --if-present build",
-    "// Code Quality": "Linting, formatting, and type checking",
-    "lint": "pnpm run --parallel --stream --filter '**' --if-present lint || echo '⚠️  No lint scripts configured'",
-    "lint:fix": "pnpm run --parallel --stream --filter '**' --if-present 'lint:fix' || echo '⚠️  No lint:fix scripts configured'",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md,yml,yaml}\" --ignore-path .gitignore",
-    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md,yml,yaml}\" --ignore-path .gitignore",
-    "typecheck": "pnpm run --parallel --stream --filter '**' --if-present typecheck || echo '⚠️  No typecheck scripts configured'",
-    "// Testing": "Run tests across all workspaces",
-    "test": "pnpm run --parallel --stream --filter '**' --if-present test || echo '⚠️  No test scripts configured'",
-    "test:watch": "pnpm run --parallel --stream --filter '**' --if-present 'test:watch' || echo '⚠️  No test:watch scripts configured'",
-    "test:coverage": "pnpm run --parallel --stream --filter '**' --if-present 'test:coverage' || echo '⚠️  No coverage scripts configured'",
-    "// Maintenance": "Repository maintenance and verification",
-    "clean": "pnpm run clean:build && pnpm run clean:deps",
-    "clean:build": "pnpm -r --parallel exec rm -rf dist build .next .turbo coverage .tsbuildinfo 2>/dev/null || true",
-    "clean:deps": "pnpm -r --parallel exec rm -rf node_modules 2>/dev/null && rm -rf node_modules",
-    "clean:cache": "pnpm store prune && rm -rf .parcel-cache .next .turbo",
-    "// Checks": "Verify repository health and dependencies",
-    "check:repo": "node -e \"console.log('✓ Node ' + process.version)\" && pnpm -v > /dev/null && echo \"✓ pnpm $(pnpm -v)\" && pnpm ls --depth 0 > /dev/null 2>&1 && echo '✓ Workspaces OK' || echo '⚠️  Workspaces need install'",
-    "check:deps": "pnpm outdated --recursive",
-    "check:all": "pnpm run check:repo && pnpm run format:check && pnpm run typecheck && pnpm run lint",
-    "// Setup": "Initial repository setup",
-    "setup": "pnpm install && pnpm run check:repo",
-    "postinstall": "echo '✅ Dependencies installed. Run `pnpm dev` to start development.'",
-    "preinstall": "npx only-allow pnpm"
+    "dev:api": "pnpm --filter @prototype/api dev",
+    "dev:admin": "pnpm --filter @prototype/admin dev",
+    "build:api": "pnpm --filter @prototype/shared build && pnpm --filter @prototype/api build",
+    "build:admin": "pnpm --filter @prototype/shared build && pnpm --filter @prototype/admin build",
+    "build:all": "pnpm --filter @prototype/shared build && pnpm --filter @prototype/api build && pnpm --filter @prototype/admin build"
   },
   "devDependencies": {
     "prettier": "^3.2.5",
     "supabase": "^2.34.3"
-  },
-  "packageManager": "pnpm@8.15.0"
+  }
 }
