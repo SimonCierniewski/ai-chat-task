@@ -57,6 +57,10 @@ export const config = {
 } as const;
 
 export function validateConfig(): void {
+  console.log('Validating configuration...');
+  console.log('Environment:', process.env.NODE_ENV);
+  console.log('Port:', config.port);
+  
   const required = [
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
@@ -66,10 +70,13 @@ export function validateConfig(): void {
   const missing = required.filter(key => !process.env[key]);
   
   if (missing.length > 0 && process.env.NODE_ENV === 'production') {
+    console.error('Missing required environment variables:', missing);
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
   
   if (!config.corsOrigins.admin && !config.corsOrigins.androidDev) {
     console.warn('Warning: No CORS origins configured. All cross-origin requests will be blocked.');
   }
+  
+  console.log('Configuration validated successfully');
 }
