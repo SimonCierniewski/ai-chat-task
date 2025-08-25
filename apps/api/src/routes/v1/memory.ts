@@ -557,14 +557,61 @@ class ZepAdapter {
         relations
       });
       
-      // Format entities - just pass them through as-is
+      // Validation: Check entity count (max 10 custom types)
+      const entityCount = Object.keys(entities).length;
+      if (entityCount > 10) {
+        logger.error('Too many entity types', {
+          userId,
+          count: entityCount,
+          limit: 10
+        });
+        throw new Error(`Cannot create more than 10 custom entity types. You provided ${entityCount}.`);
+      }
+      
+      // Validation: Check relation/edge count (max 10 custom types)
+      const relationCount = Object.keys(relations).length;
+      if (relationCount > 10) {
+        logger.error('Too many edge types', {
+          userId,
+          count: relationCount,
+          limit: 10
+        });
+        throw new Error(`Cannot create more than 10 custom edge types. You provided ${relationCount}.`);
+      }
+      
+      // Format and validate entities
       for (const [name, config] of Object.entries(entities)) {
+        // Validation: Check field count per entity (max 10 fields)
+        if (config && typeof config === 'object' && config.fields) {
+          const fieldCount = Object.keys(config.fields).length;
+          if (fieldCount > 10) {
+            logger.error('Too many fields in entity', {
+              userId,
+              entity: name,
+              count: fieldCount,
+              limit: 10
+            });
+            throw new Error(`Entity "${name}" cannot have more than 10 fields. It has ${fieldCount}.`);
+          }
+        }
         formattedEntities[name] = config;
       }
       
-      // Format relations - for TypeScript SDK, we pass them as-is
-      // The SDK expects the relations in the same format as entities
+      // Format and validate relations
       for (const [name, config] of Object.entries(relations)) {
+        // Validation: Check field count per relation (max 10 fields)
+        if (config && typeof config === 'object' && config.fields) {
+          const fieldCount = Object.keys(config.fields).length;
+          if (fieldCount > 10) {
+            logger.error('Too many fields in edge type', {
+              userId,
+              edge: name,
+              count: fieldCount,
+              limit: 10
+            });
+            throw new Error(`Edge type "${name}" cannot have more than 10 fields. It has ${fieldCount}.`);
+          }
+        }
         formattedRelations[name] = config;
       }
       
