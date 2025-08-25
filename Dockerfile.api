@@ -10,6 +10,7 @@ WORKDIR /app
 # Copy all workspace configuration files
 COPY pnpm-workspace.yaml ./
 COPY pnpm-lock.yaml ./
+COPY tsconfig.base.json ./
 
 # Create minimal root package.json if it doesn't exist properly
 COPY package.json ./
