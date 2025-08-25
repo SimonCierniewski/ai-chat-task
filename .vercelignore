@@ -1,5 +1,10 @@
-# Ignore everything except the admin app and shared packages
-/*
+# Keep essential root files for pnpm workspace
+!/package.json
+!/pnpm-lock.yaml
+!/pnpm-workspace.yaml
+!/.npmrc
+
+# Keep admin and shared packages
 !/apps/
 /apps/*
 !/apps/admin/
