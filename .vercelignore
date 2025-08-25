@@ -1,0 +1,50 @@
+# Ignore everything except the admin app and shared packages
+/*
+!/apps/
+/apps/*
+!/apps/admin/
+!/packages/
+/packages/*
+!/packages/shared/
+
+# Ignore non-essential files in admin and shared
+**/.env*
+!**/.env.example
+**/node_modules
+**/.next
+**/dist
+**/build
+**/.turbo
+**/.git
+**/.gitignore
+**/*.log
+**/.DS_Store
+**/coverage
+**/.vscode
+**/.idea
+**/tmp
+**/temp
+**/*.md
+!**/README.md
+**/__tests__
+**/*.test.*
+**/*.spec.*
+**/docs
+.github
+.husky
+scripts
+
+# Android app (not needed for admin deployment)
+/apps/android/
+
+# API app (not needed for admin deployment)
+/apps/api/
+
+# Root files we don't need
+.editorconfig
+.prettierrc
+commitlint.config.js
+turbo.json
+.gitignore
+package.json.backup
+package.json.original
