@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 // Memory message cost multiplier
 const MEMORY_COST_PER_MESSAGE = 0.00125;
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
     

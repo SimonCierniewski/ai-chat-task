@@ -91,7 +91,7 @@ export default function HistoryPage() {
     <div className="space-y-6">
       <AdminHeader 
         title="User History" 
-        description="View aggregated metrics for users in your memory context"
+        subtitle="View aggregated metrics for users in your memory context"
       />
 
       {loading && (

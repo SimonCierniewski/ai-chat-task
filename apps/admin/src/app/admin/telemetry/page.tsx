@@ -14,8 +14,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  BarChart,
-  Bar,
 } from 'recharts';
 
 interface MetricsData {
@@ -44,8 +42,8 @@ export default function TelemetryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<'7' | '30'>('7');
-  const [selectedUser, setSelectedUser] = useState<string>('');
-  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [selectedUser] = useState<string>('');
+  const [selectedModel] = useState<string>('');
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
