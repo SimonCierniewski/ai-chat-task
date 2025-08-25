@@ -238,7 +238,7 @@ class ZepAdapter {
   async ensureUser(userId: string, email?: string, firstName?: string): Promise<boolean> {
     try {
       logger.debug('Ensuring Zep user exists', { userId, email, firstName });
-      
+
       // Try to get the user first
       try {
         const existingUser = await this.client.user.get(userId);
@@ -248,25 +248,25 @@ class ZepAdapter {
         // User doesn't exist, create it
         if (error.statusCode === 404 || error.message?.includes('not found')) {
           logger.info('Creating new Zep user', { userId, email, firstName });
-          
+
           const userData = {
             userId,
             email: email || `${userId}@zep.local`, // Provide default email if none given
-            firstName: firstName, 
+            firstName: firstName,
             metadata: {
               created_at: new Date().toISOString(),
               source: 'playground'
             }
           };
-          
+
           await this.client.user.add(userData);
           logger.info('Created new Zep user successfully', { userId, userData });
           return true;
         }
-        logger.error('Unexpected error checking Zep user', { 
-          userId, 
+        logger.error('Unexpected error checking Zep user', {
+          userId,
           error: error.message,
-          statusCode: error.statusCode 
+          statusCode: error.statusCode
         });
         throw error; // Re-throw other errors
       }
@@ -301,7 +301,7 @@ class ZepAdapter {
       });
       logger.info('Created new Zep thread', {userId, sessionId: threadId});
       return true
-      
+
     } catch (error: any) {
       logger.error('Failed to ensure Zep thread', {
         userId,
@@ -322,12 +322,12 @@ class ZepAdapter {
       const options: any = {
         mode: mode === 'basic' ? 'basic' : undefined // Default mode is summarized
       };
-      
+
       // Add min_rating if provided
       if (minRating !== undefined && minRating > 0) {
         options.min_rating = minRating;
       }
-      
+
       // Get thread context which includes facts and summaries
       const context = await this.client.thread.getUserContext(sessionId, options);
       return context.context;
@@ -347,8 +347,8 @@ class ZepAdapter {
    * Build custom context using graph search for query-based context modes
    */
   async buildCustomContext(
-    userId: string, 
-    sessionId: string, 
+    userId: string,
+    sessionId: string,
     query: string,
     contextMode: 'node_search' | 'edge_search' | 'node_edge_search' | 'bfs',
     graphSearchParams?: any
@@ -370,7 +370,7 @@ class ZepAdapter {
       const searchQuery = query.substring(0, 400); // Limit query to 400 chars
       let nodes: any[] = [];
       let edges: any[] = [];
-      
+
       // For BFS mode, get recent episodes to seed the search
       let bfsNodeUuids: string[] | undefined;
       if (contextMode === 'bfs') {
@@ -381,7 +381,7 @@ class ZepAdapter {
             lastn: episodeLimit
           });
           const episodes = episodesResponse?.episodes || [];
-          
+
           if (episodes && episodes.length > 0) {
             // Extract node UUIDs from episodes for BFS
             bfsNodeUuids = episodes.map((ep: any) => ep.uuid || ep.id).filter((id: any) => id);
@@ -416,7 +416,7 @@ class ZepAdapter {
             query: searchQuery,
             ...nodeSearchOptions
           });
-          
+
           if (nodeResults?.nodes && nodeResults.nodes.length > 0) {
             nodes = nodeResults.nodes;
           }
@@ -444,7 +444,7 @@ class ZepAdapter {
             query: searchQuery,
             ...edgeSearchOptions
           });
-          
+
           if (edgeResults?.edges && edgeResults.edges.length > 0) {
             edges = edgeResults.edges;
           }
@@ -549,14 +549,14 @@ class ZepAdapter {
     // Define these outside try block so they're accessible in catch
     const formattedEntities: Record<string, any> = {};
     const formattedRelations: Record<string, any> = {};
-    
+
     try {
       logger.info('Setting graph ontology - input data', {
         userId,
         entities,
         relations
       });
-      
+
       // Validation: Check entity count (max 10 custom types)
       const entityCount = Object.keys(entities).length;
       if (entityCount > 10) {
@@ -567,7 +567,7 @@ class ZepAdapter {
         });
         throw new Error(`Cannot create more than 10 custom entity types. You provided ${entityCount}.`);
       }
-      
+
       // Validation: Check relation/edge count (max 10 custom types)
       const relationCount = Object.keys(relations).length;
       if (relationCount > 10) {
@@ -578,7 +578,7 @@ class ZepAdapter {
         });
         throw new Error(`Cannot create more than 10 custom edge types. You provided ${relationCount}.`);
       }
-      
+
       // Format and validate entities
       for (const [name, config] of Object.entries(entities)) {
         // Validation: Check field count per entity (max 10 fields)
@@ -594,10 +594,12 @@ class ZepAdapter {
             throw new Error(`Entity "${name}" cannot have more than 10 fields. It has ${fieldCount}.`);
           }
         }
+        // Pass the entity config directly
         formattedEntities[name] = config;
       }
-      
-      // Format and validate relations
+
+      // Format and validate relations/edges
+      // Edges need to be in format: { name: [model, [sourceTargets]] }
       for (const [name, config] of Object.entries(relations)) {
         // Validation: Check field count per relation (max 10 fields)
         if (config && typeof config === 'object' && config.fields) {
@@ -612,25 +614,53 @@ class ZepAdapter {
             throw new Error(`Edge type "${name}" cannot have more than 10 fields. It has ${fieldCount}.`);
           }
         }
-        formattedRelations[name] = config;
+
+        // Extract source and target from config if provided
+        // Default to User as source if not specified
+        const sourceTargets = [];
+        if (config.source || config.target) {
+          sourceTargets.push({
+            source: config.source || "User",
+            target: config.target || undefined
+          });
+        } else {
+          // Default configuration: User as source
+          sourceTargets.push({
+            source: "User"
+          });
+        }
+
+        // Remove source/target from the config before passing as model
+        const edgeModel = { ...config };
+        delete edgeModel.source;
+        delete edgeModel.target;
+
+        // Format as tuple: [model, sourceTargets]
+        formattedRelations[name] = [edgeModel, sourceTargets];
       }
-      
+
+      logger.info('Formatted ontology for Zep', {
+        userId,
+        formattedEntities,
+        formattedRelations
+      });
+
       // Set ontology for the specific user
       // Note: TypeScript SDK uses camelCase for parameters
-      await this.client.graph.setOntology(
+      let success = await this.client.graph.setOntology(
         formattedEntities,  // entities
-        formattedRelations, // edges/relations
+        formattedRelations, // edges/relations as tuples
         {
           userIds: [userId]  // Use camelCase, not snake_case
         }
       );
-      
+
       logger.info('Set graph ontology for user', {
         userId,
         entityCount: Object.keys(entities).length,
         relationCount: Object.keys(relations).length
       });
-      
+
       return true;
     } catch (error: any) {
       logger.error('Failed to set graph ontology', {
@@ -656,7 +686,7 @@ class ZepAdapter {
   ): Promise<boolean> {
     try {
       await this.ensureUser(userId);
-      
+
       // Update user with fact rating instructions
       await this.client.user.update(userId, {
         fact_rating_instruction: {
@@ -668,12 +698,12 @@ class ZepAdapter {
           ]
         }
       });
-      
+
       logger.info('Updated fact rating instructions', {
         userId,
         instruction: instruction.substring(0, 50) + '...'
       });
-      
+
       return true;
     } catch (error: any) {
       logger.error('Failed to update fact rating instructions', {
@@ -850,7 +880,7 @@ class ZepAdapter {
     assistantMessage: string,
     userName?: string
   ): Promise<boolean> {
-    
+
     try {
       logger.info({
         userId,
@@ -955,12 +985,12 @@ function emitZepTelemetry(
 ) {
   // Use the actual user ID if provided (for playground users), otherwise use the authenticated user
   const userId = actualUserId || req.user.id;
-  
+
   // Skip telemetry for playground users (handled by telemetry service)
   if (userId.startsWith('playground_')) {
     return;
   }
-  
+
   const basePayload = {
     user_id: userId,
     session_id: payload.session_id || null,
@@ -1203,21 +1233,21 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
     }
   }, async (request: FastifyRequest<{ Body: { userId: string } }>, reply: FastifyReply) => {
     const { userId } = request.body;
-    
+
     try {
       logger.info(`Checking graph status for user ${userId}`);
-      
+
       // Use the existing Zep adapter instance
-      
+
       try {
         // Get episodes for the user
         const episodes = await zepAdapter.client.graph.episode.getByUserId(userId);
-        
-        logger.info(`Found episodes for user ${userId}`, { 
+
+        logger.info(`Found episodes for user ${userId}`, {
           count: episodes?.episodes?.length,
           firstEpisode: episodes?.episodes?.[0]
         });
-        
+
         if (!episodes || episodes.episodes.length === 0) {
           return reply.send({
             episodeStatus: 'no_episodes',
@@ -1225,26 +1255,26 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
             message: 'No episodes found for this user'
           });
         }
-        
+
         // Check status of all episodes
-        const allComplete = episodes.episodes.every((ep: any) => 
+        const allComplete = episodes.episodes.every((ep: any) =>
           ep.processed
         );
-        
+
         const episodeStatus = allComplete ? 'complete' : 'incomplete';
-        
+
         return reply.send({
           episodeStatus,
           episodeCount: episodes.episodes.length,
-          message: allComplete 
-            ? 'All episodes have been processed successfully' 
+          message: allComplete
+            ? 'All episodes have been processed successfully'
             : `Processing in progress. ${episodes.episodes.filter((ep: any) => ep.processed).length}/${episodes.episodes.length} episodes complete`,
           episodes: episodes.episodes.map((ep: any) => ({
             id: ep.episodeId || ep.episode_id || ep.id || '',
             status: ep.status || 'unknown'
           }))
         });
-        
+
       } catch (error: any) {
         // Handle case where user doesn't exist or has no graph data
         if (error.statusCode === 404 || error.message?.includes('not found')) {
@@ -1256,7 +1286,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         }
         throw error;
       }
-      
+
     } catch (error) {
       logger.error('Error checking graph status:', error);
       return reply.status(500).send({
@@ -1299,7 +1329,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
     const startTime = Date.now();
     const authReq = request as FastifyRequest & { user: { id: string; role: string } };
     let zapStartTime = Date.now();
-    
+
     try {
       logger.info({
         req_id: reqId,
@@ -1307,23 +1337,23 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         type,
         dataLength: data.length
       }, 'Adding data directly to graph');
-      
+
       // Ensure user exists in Zep
       await zepAdapter.ensureUser(userId);
-      
+
       // Measure Zep operation time
       zapStartTime = Date.now();
-      
+
       // Add data to the graph
       const episode = await zepAdapter.client.graph.add({
         userId,
         type,
         data
       });
-      
+
       const zepMs = Date.now() - zapStartTime;
       const totalMs = Date.now() - startTime;
-      
+
       // Emit successful telemetry
       emitZepTelemetry(authReq, 'zep_upsert', {
         session_id: null,
@@ -1334,7 +1364,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         total_ms: totalMs,
         success: true
       }, userId);
-      
+
       logger.info({
         req_id: reqId,
         userId,
@@ -1343,18 +1373,18 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         zep_ms: zepMs,
         total_ms: totalMs
       }, 'Data added to graph successfully');
-      
+
       return reply.send({
         ok: true,
         episodeId: episode?.episodeId,
         message: 'Data successfully added to the graph'
       });
-      
+
     } catch (error: any) {
       const zepMs = Date.now() - zapStartTime;
       const totalMs = Date.now() - startTime;
       const mappedError = mapZepError(error);
-      
+
       // Emit error telemetry
       emitZepTelemetry(authReq, 'zep_error', {
         session_id: null,
@@ -1367,7 +1397,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         error_message: mappedError.message,
         original_error: error.message
       }, userId);
-      
+
       logger.error({
         req_id: reqId,
         userId,
@@ -1376,14 +1406,14 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         zep_ms: zepMs,
         total_ms: totalMs
       }, 'Failed to add data to graph');
-      
+
       if (error.statusCode === 404) {
         return reply.status(400).send({
           error: 'USER_NOT_FOUND',
           message: 'User not found in Zep. Please initialize the user first.'
         });
       }
-      
+
       return reply.status(mappedError.status).send({
         error: 'GRAPH_ADD_ERROR',
         message: mappedError.message || 'Failed to add data to graph'
@@ -1421,20 +1451,20 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
     const { userId, entities, relations } = request.body;
     const reqId = request.id;
     const startTime = Date.now();
-    
+
     try {
       // Ensure user is initialized
       await zepAdapter.ensureUser(userId);
-      
+
       // Set ontology
       const success = await zepAdapter.setOntology(userId, entities, relations);
-      
+
       if (!success) {
         throw new Error('Failed to set graph ontology');
       }
-      
+
       const totalMs = Date.now() - startTime;
-      
+
       logger.info({
         req_id: reqId,
         userId,
@@ -1442,15 +1472,15 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         relationCount: Object.keys(relations).length,
         total_ms: totalMs
       }, 'Graph ontology updated');
-      
+
       return reply.send({
         ok: true,
         message: 'Graph ontology updated successfully'
       });
-      
+
     } catch (error: any) {
       const totalMs = Date.now() - startTime;
-      
+
       logger.error({
         req_id: reqId,
         userId,
@@ -1458,14 +1488,14 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         stack: error.stack,
         total_ms: totalMs
       }, 'Failed to update graph ontology');
-      
+
       if (error.statusCode === 404) {
         return reply.status(400).send({
           error: 'USER_NOT_FOUND',
           message: 'User not found. Please initialize the user first.'
         });
       }
-      
+
       return reply.status(500).send({
         error: 'ONTOLOGY_UPDATE_ERROR',
         message: error.message || 'Failed to update graph ontology'
@@ -1507,34 +1537,34 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
     const { userId, instruction, examples } = request.body;
     const reqId = request.id;
     const startTime = Date.now();
-    
+
     try {
       // Ensure user is initialized
       await zepAdapter.ensureUser(userId);
-      
+
       // Update fact rating instructions
       const success = await zepAdapter.updateFactRatingInstructions(userId, instruction, examples);
-      
+
       if (!success) {
         throw new Error('Failed to update fact rating instructions');
       }
-      
+
       const totalMs = Date.now() - startTime;
-      
+
       logger.info({
         req_id: reqId,
         userId,
         total_ms: totalMs
       }, 'Fact rating instructions updated');
-      
+
       return reply.send({
         ok: true,
         message: 'Fact rating instructions updated successfully'
       });
-      
+
     } catch (error: any) {
       const totalMs = Date.now() - startTime;
-      
+
       logger.error({
         req_id: reqId,
         userId,
@@ -1542,14 +1572,14 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         stack: error.stack,
         total_ms: totalMs
       }, 'Failed to update fact rating instructions');
-      
+
       if (error.statusCode === 404) {
         return reply.status(400).send({
           error: 'USER_NOT_FOUND',
           message: 'User not found. Please initialize the user first.'
         });
       }
-      
+
       return reply.status(500).send({
         error: 'FACT_RATING_UPDATE_ERROR',
         message: error.message || 'Failed to update fact rating instructions'
@@ -1586,15 +1616,15 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
   }, async (request: FastifyRequest<{ Body: { userId: string; sessionId: string } }>, reply: FastifyReply) => {
     const startTime = Date.now();
     const { userId, sessionId } = request.body;
-    
+
     try {
       logger.info(`Initializing Zep for user ${userId} with session ${sessionId}`);
-      
+
       // Initialize Zep client
       const zepClient = new ZepClient({
         apiKey: config.zep.apiKey
       });
-      
+
       // Create or get user
       try {
         await zepClient.user.add({
@@ -1608,7 +1638,7 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
           throw userError;
         }
       }
-      
+
       // Create thread/session
       try {
         await zepClient.thread.create({
@@ -1623,10 +1653,10 @@ export const memoryRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
           throw threadError;
         }
       }
-      
+
       const totalMs = Date.now() - startTime;
       logger.info(`Zep initialization completed in ${totalMs}ms`);
-      
+
       return reply.send({
         ok: true,
         userId,
