@@ -5,7 +5,7 @@
   "description": "Admin dashboard - web-based management interface",
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "cd ../../packages/shared && pnpm run build && cd ../../apps/admin && next build",
+    "build": "pnpm --filter @prototype/shared build && next build",
     "start": "next start -p 3001",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
