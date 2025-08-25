@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @prototype/shared build && pnpm --filter @prototype/admin build",
+  "buildCommand": "cd ../.. && cd packages/shared && pnpm run build && cd ../../apps/admin && pnpm run build",
   "outputDirectory": ".next",
-  "installCommand": "pnpm install --frozen-lockfile",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
   "framework": "nextjs",
   "env": {
     "NEXT_PUBLIC_APP_NAME": "AI Chat Admin",
